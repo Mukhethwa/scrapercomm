@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gabs-scraper"
+version = "0.1.0"
+description = "Scrape Golden Arrow (GABS) timetable PDFs into PostgreSQL"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "pdfplumber>=0.11",
+    "python-dotenv>=1.0",
+    "psycopg[binary]>=3.1",
+    "pg8000>=1.30",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

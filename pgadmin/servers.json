@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "GABS (local)",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "gabs",
+      "Username": "gabs",
+      "SSLMode": "prefer",
+      "Comment": "GABS timetable database (this docker-compose stack)"
+    }
+  }
+}

@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16
+    container_name: gabs_pg
+    environment:
+      POSTGRES_DB: gabs
+      POSTGRES_USER: gabs
+      POSTGRES_PASSWORD: gabs
+    ports:
+      # Host 5432 is often taken by another local Postgres; use 5433 on the host.
+      - "5433:5432"
+    volumes:
+      - gabs_pgdata:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gabs -d gabs"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: gabs_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@gabs.co.za
+      PGADMIN_DEFAULT_PASSWORD: gabs1234
+      # Desktop mode: no pgAdmin login screen for local single-user use.
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      # Pre-registers the "GABS (local)" server connection on first start.
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - gabs_pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+
+volumes:
+  gabs_pgdata:
+  gabs_pgadmin_data:

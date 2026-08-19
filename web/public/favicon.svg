@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <rect width="100" height="100" rx="24" fill="#000000"/>
+  <!-- smile arc -->
+  <path d="M30 54 A22 22 0 0 0 70 54" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+  <!-- right eye: white bar -->
+  <rect x="59" y="32" width="8" height="17" rx="4" fill="#ffffff"/>
+  <!-- left eye: the orange destination dot -->
+  <circle cx="40" cy="41" r="8" fill="#ff4500"/>
+</svg>
