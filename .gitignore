@@ -1,0 +1,11 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# Java / Maven
+backend/target/
+
+# Node
+web/node_modules/
