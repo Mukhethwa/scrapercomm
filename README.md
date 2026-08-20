@@ -77,21 +77,49 @@ The default connection string is `postgresql://gabs:gabs@localhost:5433/gabs`
 `src/` is the import root. On Windows PowerShell use `$env:PYTHONPATH="src"`.
 
 ```bash
-# Everything: harvest + download + load
+# Everything: harvest + download + load + prune
 PYTHONPATH=src python -m gabs_scraper.pipeline --all
 
-# Smoke test on the first 20 PDFs
+# Smoke test on the first 20 PDFs (never prunes -- see below)
 PYTHONPATH=src python -m gabs_scraper.pipeline --load --limit 20
 
 # Individual stages
 PYTHONPATH=src python -m gabs_scraper.pipeline --harvest
 PYTHONPATH=src python -m gabs_scraper.pipeline --download
 PYTHONPATH=src python -m gabs_scraper.pipeline --load
+
+# Keep timetables GABS no longer publishes (not recommended)
+PYTHONPATH=src python -m gabs_scraper.pipeline --all --no-prune
 ```
 
 Re-running is safe and cheap: downloads skip existing files, and loads upsert on
-the PDF filename. To refresh from the site, run `--all` again (new/updated
-timetables get new filenames and are added; existing ones are updated in place).
+the PDF filename. To refresh from the site, run `--all` again.
+
+### Pruning: why a full load also deletes
+
+GABS republishes timetables constantly — in one August 2026 check, only **366 of
+1,868** stored versions were still published, while the site had moved on to 1,878.
+Loading alone is upsert-only, so without a reconciliation step the database only ever
+grows: the new versions get added and every superseded one stays, and the app keeps
+serving departure times the operator has already withdrawn. That is worse than being
+out of date, because a stale row looks exactly as authoritative as a current one.
+
+So after a **full** load, the pipeline deletes any timetable whose PDF is absent from
+the fresh manifest, plus any route left with no timetables. Deleting a timetable
+cascades to its schedules, trips, stop_times and notes. Stops are deliberately kept:
+they are shared across routes, carry geocoding, and are referenced by `leg_geometry`.
+
+Two guards, because this removes data:
+
+- it **refuses to run against an empty manifest** — that is a harvest failure, not GABS
+  withdrawing everything it publishes;
+- it is **skipped whenever `--limit` is used**, since a sample would delete nearly the
+  whole database. `--no-prune` opts out entirely.
+
+Because the site churns this fast, treat the pipeline as a scheduled job rather than a
+one-off. New routes also need `gabs_scraper.geocode` (stop coordinates) and
+`gabs_scraper.geometry` (road paths for pin planning) afterwards — neither runs as part
+of the pipeline.
 
 ## Web UI (route browser + map)
 
@@ -118,6 +146,13 @@ PYTHONPATH=src python -m uvicorn gabs_scraper.api:app --port 8000
 # then open http://localhost:8000
 ```
 
+Or run the **Java / Spring Boot** port of the same API, which listens on the same port
+and serves the same UI (see [backend/README.md](backend/README.md)):
+
+```bash
+mvn -f backend/pom.xml spring-boot:run
+```
+
 API endpoints: `GET /api/routes?q=`, `GET /api/routes/{id}`, `GET /api/timetables/{id}`,
 `GET /api/stops?q=`, `GET /api/stops/{id}/reachable`, `GET /api/journeys?from=&to=`.
 
@@ -142,6 +177,12 @@ npm run build   # rebuilds web/dist that FastAPI serves
 
 ```bash
 python -m pytest -q
+```
+
+For the Java backend:
+
+```bash
+mvn -f backend/pom.xml test
 ```
 
 The parser tests run against real sample PDFs committed under `tests/samples/`.
