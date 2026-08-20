@@ -107,6 +107,58 @@ def _upsert_timetable(
     return cur.fetchone()[0]
 
 
+def prune_superseded(conn, entries: list[ManifestEntry]) -> tuple[int, int]:
+    """Delete timetables GABS no longer publishes, and any route left with none.
+
+    Loading alone is upsert-only, so without this the database only ever grows: a
+    re-harvest adds the new versions and leaves every superseded one in place, and the
+    app keeps serving departure times that the operator has already withdrawn. That is
+    worse than being out of date, because the stale rows look exactly as authoritative
+    as the current ones.
+
+    Deleting a timetable cascades to its schedules, schedule_stops, trips, stop_times
+    and notes via the existing foreign keys. Stops are deliberately left alone: they are
+    shared across routes, carry geocoding, and are referenced by leg_geometry.
+
+    Returns (timetables_deleted, routes_deleted).
+    """
+    names = [e.pdf_filename for e in entries]
+    if not names:
+        # Refuse to empty the database off an empty manifest -- that is a harvest
+        # failure, not GABS withdrawing every timetable it publishes.
+        raise ValueError("refusing to prune against an empty manifest")
+
+    cur = conn.cursor()
+    cur.execute("DROP TABLE IF EXISTS _current_pdf")
+    cur.execute("CREATE TEMP TABLE _current_pdf (pdf_filename TEXT PRIMARY KEY)")
+    cur.executemany(
+        "INSERT INTO _current_pdf (pdf_filename) VALUES (%s) ON CONFLICT DO NOTHING",
+        [(n,) for n in names],
+    )
+
+    cur.execute(
+        """
+        DELETE FROM timetable t
+        WHERE NOT EXISTS (
+            SELECT 1 FROM _current_pdf c WHERE c.pdf_filename = t.pdf_filename
+        )
+        """
+    )
+    timetables = cur.rowcount or 0
+
+    cur.execute(
+        """
+        DELETE FROM route r
+        WHERE NOT EXISTS (SELECT 1 FROM timetable t WHERE t.route_id = r.id)
+        """
+    )
+    routes = cur.rowcount or 0
+
+    cur.execute("DROP TABLE IF EXISTS _current_pdf")
+    conn.commit()
+    return timetables, routes
+
+
 def load_failed(
     conn, entry: ManifestEntry, dl: DownloadResult | None, error: str
 ) -> int:

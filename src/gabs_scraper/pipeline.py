@@ -44,6 +44,17 @@ def do_download(entries, workers, force):
     return results
 
 
+def do_prune(entries):
+    conn = db.connect()
+    try:
+        gone_tt, gone_routes = load_mod.prune_superseded(conn, entries)
+        print(f"[prune] removed {gone_tt} superseded timetable(s) "
+              f"and {gone_routes} route(s) left with none")
+        return gone_tt, gone_routes
+    finally:
+        conn.close()
+
+
 def do_load(entries, workers, force):
     results = dl_mod.download_all(entries, workers=workers, force=force)
     by_name = {r.pdf_filename: r for r in results}
@@ -95,6 +106,10 @@ def main(argv=None):
     ap.add_argument("--limit", type=int, default=None, help="cap entries (smoke test)")
     ap.add_argument("--workers", type=int, default=12, help="download concurrency")
     ap.add_argument("--force", action="store_true", help="re-download existing PDFs")
+    ap.add_argument(
+        "--no-prune", action="store_true",
+        help="keep timetables GABS no longer publishes (default is to delete them)",
+    )
     args = ap.parse_args(argv)
 
     do_h = args.harvest or args.all
@@ -104,7 +119,9 @@ def main(argv=None):
         ap.error("choose at least one of --harvest, --download, --load, --all")
 
     entries = do_harvest() if do_h else _load_manifest()
-    if args.limit:
+
+    limited = bool(args.limit)
+    if limited:
         entries = entries[: args.limit]
         print(f"[limit] using first {len(entries)} entries")
 
@@ -112,6 +129,14 @@ def main(argv=None):
         do_download(entries, args.workers, args.force)
     if do_l:
         do_load(entries, args.workers, args.force)
+        # Prune only after a successful full load. With --limit the entry list is a
+        # sample, so pruning against it would delete almost the whole database.
+        if limited:
+            print("[prune] skipped: --limit means these entries are only a sample")
+        elif args.no_prune:
+            print("[prune] skipped: --no-prune")
+        else:
+            do_prune(entries)
 
 
 if __name__ == "__main__":

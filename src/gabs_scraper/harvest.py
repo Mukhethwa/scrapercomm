@@ -9,14 +9,18 @@ from __future__ import annotations
 
 import json
 import re
+import string
 from dataclasses import asdict, dataclass
 
 import requests
 
 from .config import settings
 
-# Letters that actually have routes (G, I, J, Q, U, X, Y, Z have none).
-LETTERS = list("ABCDEFHKLMNOPRSTVW")
+# Every letter, always. This used to be pruned to the ones that "have routes", which
+# silently lost data the day GABS added a route under a skipped letter: U gained six UWC
+# timetables and the scraper could never see them. The extra postbacks cost seconds and
+# an empty letter simply returns no links.
+LETTERS = list(string.ascii_uppercase)
 
 _REGULAR = re.compile(
     r"^(?P<route>.+)_from_(?P<frm>\d{8})_to_(?P<to>\d{8})_(?P<tt>\d+)$"
@@ -125,11 +129,22 @@ def fetch_all_paths(session: requests.Session | None = None) -> list[str]:
 
 def harvest(write: bool = True) -> list[ManifestEntry]:
     entries: list[ManifestEntry] = []
+    rejected: list[tuple[str, str]] = []
     for p in fetch_all_paths():
         try:
             entries.append(entry_from_pdf_path(p))
-        except ValueError:
-            continue
+        except ValueError as ex:
+            rejected.append((p, str(ex)))
+
+    # A timetable dropped here never reaches the app, so say so loudly. This used to be
+    # a bare `continue`: any filename GABS published in an unexpected shape vanished
+    # with no log, no count, and no way to notice.
+    if rejected:
+        print(f"[harvest] WARNING: {len(rejected)} published PDF(s) have an unrecognised "
+              f"filename and will be MISSING from the app:")
+        for path, why in rejected:
+            print(f"   SKIPPED {path}: {why}")
+
     entries.sort(key=lambda e: e.pdf_filename)
     if write:
         settings.ensure_dirs()
