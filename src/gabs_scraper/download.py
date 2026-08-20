@@ -85,3 +85,39 @@ def download_all(
         for fut in as_completed(futs):
             results.append(fut.result())
     return results
+
+
+def prune_pdfs(entries: list[ManifestEntry], pdf_dir: Path | None = None) -> tuple[int, int]:
+    """Delete downloaded PDFs that GABS no longer publishes.
+
+    The database is reconciled by ``load.prune_superseded``, but the download cache was
+    not, so every refresh left the previous versions behind: one August 2026 refresh
+    added 1,528 files and stranded 1,518. Nothing reads them -- they are absent from the
+    manifest and from the database -- so they are just an ever-growing pile that makes it
+    impossible to tell by looking which PDFs are current.
+
+    They are also unrecoverable from the operator: a superseded timetable is gone from
+    the site. Where this repository tracks ``data/pdfs`` in git, the deleted files remain
+    in history and can be restored from there; that is the intended archive, not a
+    working directory nobody prunes.
+
+    Returns (deleted, bytes_freed).
+    """
+    pdf_dir = pdf_dir or settings.pdf_dir
+    if not pdf_dir.is_dir():
+        return 0, 0
+
+    current = {e.pdf_filename for e in entries}
+    if not current:
+        # Same guard as the database prune: an empty manifest is a harvest failure, not
+        # GABS withdrawing everything it publishes.
+        raise ValueError("refusing to prune PDFs against an empty manifest")
+
+    deleted = freed = 0
+    for path in pdf_dir.glob("*.pdf"):
+        if path.name in current:
+            continue
+        freed += path.stat().st_size
+        path.unlink()
+        deleted += 1
+    return deleted, freed

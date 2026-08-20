@@ -50,9 +50,13 @@ def do_prune(entries):
         gone_tt, gone_routes = load_mod.prune_superseded(conn, entries)
         print(f"[prune] removed {gone_tt} superseded timetable(s) "
               f"and {gone_routes} route(s) left with none")
-        return gone_tt, gone_routes
     finally:
         conn.close()
+
+    # Reconcile the download cache too, or it grows by the whole delta every refresh.
+    gone_pdfs, freed = dl_mod.prune_pdfs(entries)
+    print(f"[prune] removed {gone_pdfs} superseded PDF(s) ({freed / 1024 / 1024:.0f} MB)")
+    return gone_tt, gone_routes, gone_pdfs
 
 
 def do_load(entries, workers, force):

@@ -109,6 +109,11 @@ the fresh manifest, plus any route left with no timetables. Deleting a timetable
 cascades to its schedules, trips, stop_times and notes. Stops are deliberately kept:
 they are shared across routes, carry geocoding, and are referenced by `leg_geometry`.
 
+The download cache in `data/pdfs` is reconciled the same way, or it would grow by the
+whole delta on every refresh. Superseded PDFs cannot be re-fetched — GABS removes them —
+so the copies committed to git history are the archive; the working directory only holds
+what is currently published.
+
 Two guards, because this removes data:
 
 - it **refuses to run against an empty manifest** — that is a harvest failure, not GABS
