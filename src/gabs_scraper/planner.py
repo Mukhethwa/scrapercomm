@@ -176,32 +176,61 @@ def _segment(conn, schedule_id, from_pos, to_pos):
             for i, n, la, lo, sq in cur.fetchall()]
 
 
-def _road_path(conn, stop_ids):
-    """Stitch the real road geometry across consecutive timing points; fall back to a
-    straight line for any leg without cached geometry."""
-    ids = [i for i in stop_ids if i is not None]
-    if len(ids) < 2:
+def _leg_path(cur, a, b):
+    """Cached road geometry for one leg, or a straight line if none was fetched."""
+    cur.execute(
+        "SELECT path FROM leg_geometry WHERE from_stop_id=%s AND to_stop_id=%s", (a, b)
+    )
+    row = cur.fetchone()
+    path = row[0] if row else None
+    if isinstance(path, str):
+        path = json.loads(path)
+    if not path:
+        cur.execute("SELECT id, lat, lon FROM stop WHERE id IN (%s, %s)", (a, b))
+        coords = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+        ca, cb = coords.get(a), coords.get(b)
+        path = ([[ca[0], ca[1]], [cb[0], cb[1]]]
+                if ca and cb and ca[0] is not None and cb[0] is not None else [])
+    return path
+
+
+def _road_path(conn, seg, from_pos, to_pos):
+    """The road the passenger actually rides — nothing before boarding, nothing after
+    alighting.
+
+    ``seg`` spans the *enclosing* timing points (``int(from_pos)`` to
+    ``int(to_pos) + 1``) because a leg's geometry is only available between two of them.
+    The ride itself starts wherever the boarding endpoint really is: exactly at a timing
+    point, or a fraction along the leg that follows it. Drawing the whole enclosing range
+    put road on the map that the passenger is never on — which is what made the bus look
+    like it detoured to collect them from an unofficial stop.
+    """
+    lo = int(from_pos)
+    hi = int(to_pos) + (1 if to_pos > int(to_pos) else 0)
+    head_f = from_pos - lo          # 0.0 when boarding exactly at a timing point
+    tail_f = to_pos - int(to_pos)   # 0.0 when alighting exactly at a timing point
+
+    ids = [s["stop_id"] for s in seg
+           if s["stop_id"] is not None and lo <= s["stop_sequence"] <= hi]
+    legs = list(zip(ids, ids[1:]))
+    if not legs:
         return []
+
     cur = conn.cursor()
     full: list[list[float]] = []
-    for a, b in zip(ids, ids[1:]):
-        cur.execute(
-            "SELECT path FROM leg_geometry WHERE from_stop_id=%s AND to_stop_id=%s", (a, b)
-        )
-        row = cur.fetchone()
-        path = row[0] if row else None
-        if isinstance(path, str):
-            path = json.loads(path)
+    for i, (a, b) in enumerate(legs):
+        path = _leg_path(cur, a, b)
         if not path:
-            cur.execute("SELECT id, lat, lon FROM stop WHERE id IN (%s, %s)", (a, b))
-            coords = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
-            ca, cb = coords.get(a), coords.get(b)
-            path = ([[ca[0], ca[1]], [cb[0], cb[1]]]
-                    if ca and cb and ca[0] is not None and cb[0] is not None else [])
-        if path:
-            if full and full[-1] == path[0]:
-                path = path[1:]
-            full.extend(path)
+            continue
+        start_f = head_f if i == 0 else 0.0
+        end_f = tail_f if (i == len(legs) - 1 and tail_f > 0) else 1.0
+        if start_f > 0 or end_f < 1:
+            path = geo.slice_path(path, start_f, end_f)
+        if not path:
+            continue
+        if full and full[-1] == path[0]:
+            path = path[1:]
+        full.extend(path)
     return full
 
 
@@ -211,9 +240,15 @@ def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
     board = endpoint_anchors(conn, from_ep, threshold_m)
     alight = endpoint_anchors(conn, to_ep, threshold_m)
 
-    # candidate journeys per (schedule, trip): earliest board, first alight after it
+    # Candidate journeys per (schedule, trip): earliest board, first alight after it.
+    #
+    # Iterate in (schedule, trip) order rather than set order. Python does not define the
+    # iteration order of a set, and it decided real output: which trip a departure was
+    # attributed to, and — because departures are sorted only by board time and the sort
+    # is stable — the order of any departures that leave at the same minute. Sorting here
+    # makes the result reproducible and identical to the Java service.
     raw = []
-    for key in set(board) & set(alight):
+    for key in sorted(set(board) & set(alight)):
         sch, ti = key
         b = min(board[key], key=lambda x: x["position"])
         later = [a for a in alight[key] if a["position"] > b["position"]
@@ -240,7 +275,7 @@ def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
                 "timetable_number": m["timetable_number"], "route_label": m["direction_label"],
                 "day_type": m["day_type"], "day_label": m["day_label"],
                 "segment_stops": seg,
-                "road_path": _road_path(conn, [s["stop_id"] for s in seg]),
+                "road_path": _road_path(conn, seg, b["position"], a["position"]),
                 "departures": [], "_seen": set(),
                 "board_approx": b["approx"], "alight_approx": a["approx"],
                 "board_label": b["label"], "alight_label": a["label"],

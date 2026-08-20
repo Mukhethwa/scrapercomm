@@ -41,6 +41,57 @@ def point_to_segment_m(plat, plon, alat, alon, blat, blon) -> tuple[float, float
     return math.hypot(px - cx, py - cy), t
 
 
+def _interp(a, b, t: float) -> list[float]:
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+
+
+def slice_path(path, start_f: float = 0.0, end_f: float = 1.0) -> list[list[float]]:
+    """The sub-polyline between two fractions of a path's length.
+
+    Both cut points are interpolated onto the line, so the result begins and ends
+    exactly where asked rather than at the nearest vertex. Used to trim a bus leg down
+    to the part a passenger actually rides when they board or alight at an unofficial
+    stop partway along it.
+    """
+    if not path or len(path) < 2:
+        return [list(p) for p in path] if path else []
+    if start_f <= 0.0 and end_f >= 1.0:
+        return [list(p) for p in path]
+
+    start_f = max(0.0, min(1.0, start_f))
+    end_f = max(0.0, min(1.0, end_f))
+    if end_f <= start_f:
+        return []
+
+    seglen = [haversine_m(path[i][0], path[i][1], path[i + 1][0], path[i + 1][1])
+              for i in range(len(path) - 1)]
+    total = sum(seglen)
+    if total <= 0:
+        return [list(path[0])]
+
+    start_m, end_m = start_f * total, end_f * total
+    out: list[list[float]] = []
+    cum = 0.0
+    for i, length in enumerate(seglen):
+        nxt = cum + length
+        # Skip segments entirely before the start or after the end of the window.
+        if nxt < start_m or cum > end_m or length <= 0:
+            cum = nxt
+            continue
+        a, b = path[i], path[i + 1]
+        t0 = max(0.0, (start_m - cum) / length)
+        t1 = min(1.0, (end_m - cum) / length)
+        p0 = list(a) if t0 <= 0 else _interp(a, b, t0)
+        p1 = list(b) if t1 >= 1 else _interp(a, b, t1)
+        if not out:
+            out.append(p0)
+        if p1 != out[-1]:
+            out.append(p1)
+        cum = nxt
+
+    return out
+
+
 def locate_on_path(path, length_m, plat: float, plon: float) -> tuple[float, float]:
     """Nearest distance (m) from P to the polyline, and fraction f in [0,1] along it
     (along-path distance to the closest projection / total length)."""
