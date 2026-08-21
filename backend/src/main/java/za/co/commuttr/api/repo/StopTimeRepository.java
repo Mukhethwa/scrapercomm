@@ -197,6 +197,57 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                                                 @Param("tripIndex") Integer tripIndex,
                                                 @Param("afterPosition") double afterPosition);
 
+    /**
+     * GET /api/reachable_point, in one statement.
+     *
+     * <p>Previously the caller resolved the pin to anchors in Java and then asked, per
+     * anchor, what lay downstream — and a Cape Town CBD pin matches ~185 legs which
+     * resolve to ~61,000 (schedule, trip) anchors, so the endpoint fired ~61,000 tiny
+     * queries and took 30-50 seconds.
+     *
+     * <p>The anchors are derivable from the legs, and there are only ~185 of those, so
+     * the legs arrive as one JSON parameter and the database derives the anchors and
+     * walks downstream itself. Leg matching stays in Java because the distance-to-
+     * polyline maths lives there.
+     */
+    @Query(value = """
+            WITH legs AS (
+                SELECT * FROM jsonb_to_recordset(CAST(:legsJson AS jsonb))
+                    AS x(a integer, b integer, f double precision)
+            ),
+            anchors AS (
+                SELECT ssa.schedule_id AS schedule_id,
+                       tr.trip_index   AS trip_index,
+                       min(ssa.stop_sequence + l.f) AS pos
+                FROM legs l
+                JOIN schedule_stop ssa ON ssa.stop_id = l.a
+                JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
+                                      AND ssb.stop_sequence = ssa.stop_sequence + 1
+                                      AND ssb.stop_id = l.b
+                JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
+                JOIN stop_time sa ON sa.trip_id = tr.id AND sa.schedule_stop_id = ssa.id
+                                 AND sa.cell_type <> 'NONE'
+                JOIN stop_time sb ON sb.trip_id = tr.id AND sb.schedule_stop_id = ssb.id
+                                 AND sb.cell_type <> 'NONE'
+                GROUP BY ssa.schedule_id, tr.trip_index
+            )
+            SELECT s.id       AS "id",
+                   s.name     AS "name",
+                   s.lat      AS "lat",
+                   s.lon      AS "lon",
+                   count(*)   AS "tripCount"
+            FROM anchors a
+            JOIN trip tr          ON tr.schedule_id = a.schedule_id
+                                 AND tr.trip_index = a.trip_index
+            JOIN stop_time st     ON st.trip_id = tr.id AND st.cell_type <> 'NONE'
+            JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+                                 AND ss.stop_sequence > a.pos
+            JOIN stop s           ON s.id = ss.stop_id
+            GROUP BY s.id, s.name, s.lat, s.lon
+            ORDER BY s.name
+            """, nativeQuery = true)
+    List<ReachableRow> findReachableFromLegs(@Param("legsJson") String legsJson);
+
     /** GET /api/nearby_origins: does this candidate stop have a direct bus to the target? */
     @Query(value = """
             SELECT min(b.departure_time) AS "earliest", count(*) AS "tripCount"

@@ -355,31 +355,88 @@ def nearby_origins(conn, lat, lon, to_stop_id, radius_m=2500, limit=8,
 
 
 def reachable_from(conn, ep, threshold_m=DEFAULT_THRESHOLD_M):
-    """Distinct downstream stops reachable from an endpoint on a single bus."""
-    board = endpoint_anchors(conn, ep, threshold_m)
-    if not board:
+    """Distinct downstream stops reachable from an endpoint on a single bus.
+
+    One query, not one per bus run. This used to resolve the endpoint to anchors in
+    Python and then ask the database, per anchor, what lay downstream of it. A pin in
+    the Cape Town CBD matches ~185 legs, which resolve to ~61,000 (schedule, trip)
+    anchors, so the endpoint fired ~61,000 tiny queries and took 30-50 seconds.
+
+    The anchors are derivable from the legs, and there are only ~185 of those. So the
+    legs go in as one JSON parameter and the database derives the anchors and walks
+    downstream in a single statement. The legs are still matched in Python because the
+    distance-to-polyline maths lives there, not in SQL.
+    """
+    if ep["kind"] == "stop":
+        return _reachable_from_stop(conn, ep["stop_id"])
+    legs = locate_point(conn, ep["lat"], ep["lon"], threshold_m)
+    if not legs:
         return []
+    return _reachable_from_legs(conn, legs)
+
+
+def _reachable_from_stop(conn, stop_id):
     cur = conn.cursor()
-    dest = {}
-    for (sch, ti), anchors in board.items():
-        pos = min(a["position"] for a in anchors)
-        cur.execute(
-            """
-            SELECT s.id, s.name, s.lat, s.lon
-            FROM stop_time st
-            JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
-            JOIN stop s ON s.id = ss.stop_id
-            JOIN trip tr ON tr.id = st.trip_id
-            WHERE tr.schedule_id = %s AND tr.trip_index = %s
-              AND st.cell_type <> 'NONE' AND ss.stop_sequence > %s
-            """,
-            (sch, ti, pos),
+    cur.execute(
+        """
+        SELECT s2.id, s2.name, s2.lat, s2.lon, count(*) AS trip_count
+        FROM schedule_stop ssx
+        JOIN stop_time bx      ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
+        JOIN stop_time byy     ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
+        JOIN schedule_stop ssy ON ssy.id = byy.schedule_stop_id
+                              AND ssy.stop_sequence > ssx.stop_sequence
+        JOIN stop s2           ON s2.id = ssy.stop_id
+        WHERE ssx.stop_id = %s AND s2.id <> %s
+        GROUP BY s2.id, s2.name, s2.lat, s2.lon
+        ORDER BY s2.name
+        """,
+        (stop_id, stop_id),
+    )
+    return [{"id": i, "name": n, "lat": la, "lon": lo, "trip_count": c}
+            for i, n, la, lo, c in cur.fetchall()]
+
+
+def _reachable_from_legs(conn, legs):
+    """The pin case: legs in as JSON, anchors derived and walked inside the database."""
+    payload = json.dumps([
+        {"a": l["from_stop_id"], "b": l["to_stop_id"], "f": l["fraction"]} for l in legs
+    ])
+    cur = conn.cursor()
+    cur.execute(
+        """
+        WITH legs AS (
+            SELECT * FROM jsonb_to_recordset(CAST(%s AS jsonb))
+                AS x(a integer, b integer, f double precision)
+        ),
+        anchors AS (
+            -- Where the pin sits on each bus run, taking the earliest match when a run
+            -- passes it more than once, exactly as min(position) did in Python.
+            SELECT ssa.schedule_id, tr.trip_index,
+                   min(ssa.stop_sequence + l.f) AS pos
+            FROM legs l
+            JOIN schedule_stop ssa ON ssa.stop_id = l.a
+            JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
+                                  AND ssb.stop_sequence = ssa.stop_sequence + 1
+                                  AND ssb.stop_id = l.b
+            JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
+            JOIN stop_time sa ON sa.trip_id = tr.id AND sa.schedule_stop_id = ssa.id
+                             AND sa.cell_type <> 'NONE'
+            JOIN stop_time sb ON sb.trip_id = tr.id AND sb.schedule_stop_id = ssb.id
+                             AND sb.cell_type <> 'NONE'
+            GROUP BY ssa.schedule_id, tr.trip_index
         )
-        for sid, name, la, lo in cur.fetchall():
-            d = dest.get(sid)
-            if d is None:
-                d = dest[sid] = {"id": sid, "name": name, "lat": la, "lon": lo, "trip_count": 0}
-            d["trip_count"] += 1
-    out = list(dest.values())
-    out.sort(key=lambda r: r["name"])
-    return out
+        SELECT s.id, s.name, s.lat, s.lon, count(*) AS trip_count
+        FROM anchors a
+        JOIN trip tr          ON tr.schedule_id = a.schedule_id
+                             AND tr.trip_index = a.trip_index
+        JOIN stop_time st     ON st.trip_id = tr.id AND st.cell_type <> 'NONE'
+        JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+                             AND ss.stop_sequence > a.pos
+        JOIN stop s           ON s.id = ss.stop_id
+        GROUP BY s.id, s.name, s.lat, s.lon
+        ORDER BY s.name
+        """,
+        (payload,),
+    )
+    return [{"id": i, "name": n, "lat": la, "lon": lo, "trip_count": c}
+            for i, n, la, lo, c in cur.fetchall()]

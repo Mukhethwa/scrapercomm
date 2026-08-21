@@ -1,5 +1,6 @@
 package za.co.commuttr.api.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ import za.co.commuttr.api.repo.projection.Projections.DirectServiceRow;
 import za.co.commuttr.api.repo.projection.Projections.DownstreamStopRow;
 import za.co.commuttr.api.repo.projection.Projections.LegGeometryRow;
 import za.co.commuttr.api.repo.projection.Projections.PinAnchorRow;
+import za.co.commuttr.api.repo.projection.Projections.ReachableRow;
 import za.co.commuttr.api.repo.projection.Projections.ScheduleMetaRow;
 import za.co.commuttr.api.repo.projection.Projections.SegmentStopWithIdRow;
 import za.co.commuttr.api.repo.projection.Projections.StopAnchorRow;
@@ -492,35 +494,40 @@ public class PlannerService {
         return new ReachablePointResponse(PinDto.of(lat, lon), reachableFrom(ep, DEFAULT_THRESHOLD_M));
     }
 
-    /** {@code planner.reachable_from} — distinct downstream stops on a single bus. */
+    /**
+     * {@code planner.reachable_from} — distinct downstream stops on a single bus.
+     *
+     * <p>One query, not one per bus run. See
+     * {@link StopTimeRepository#findReachableFromLegs} for why.
+     */
     public List<DownstreamStopDto> reachableFrom(EndpointRef ep, double thresholdM) {
-        Map<AnchorKey, List<Anchor>> board = endpointAnchors(ep, thresholdM);
-        if (board.isEmpty()) {
+        List<ReachableRow> rows = ep.isStop()
+                ? stopTimes.findReachableFromStop(ep.stopId())
+                : reachableFromPin(ep, thresholdM);
+
+        return rows.stream()
+                .map(r -> new DownstreamStopDto(r.getId(), r.getName(), r.getLat(), r.getLon(),
+                        r.getTripCount() == null ? 0 : r.getTripCount().intValue()))
+                .toList();
+    }
+
+    private List<ReachableRow> reachableFromPin(EndpointRef ep, double thresholdM) {
+        List<LegHitDto> legs = locatePoint(ep.lat(), ep.lon(), thresholdM);
+        if (legs.isEmpty()) {
             return List.of();
         }
-
-        // Mutable accumulator: trip_count is incremented as anchors are walked.
-        record Destination(Integer id, String name, Double lat, Double lon) { }
-        Map<Integer, Destination> found = new LinkedHashMap<>();
-        Map<Integer, Integer> tripCounts = new HashMap<>();
-
-        for (Map.Entry<AnchorKey, List<Anchor>> entry : board.entrySet()) {
-            double pos = entry.getValue().stream()
-                    .mapToDouble(Anchor::position).min().orElseThrow();
-            for (DownstreamStopRow row : stopTimes.findDownstreamStops(
-                    entry.getKey().scheduleId(), entry.getKey().tripIndex(), pos)) {
-                found.putIfAbsent(row.getId(),
-                        new Destination(row.getId(), row.getName(), row.getLat(), row.getLon()));
-                tripCounts.merge(row.getId(), 1, Integer::sum);
-            }
+        try {
+            // {"a": fromStopId, "b": toStopId, "f": fractionAlongTheLeg}
+            List<Map<String, Object>> payload = legs.stream()
+                    .map(l -> Map.<String, Object>of(
+                            "a", l.fromStopId(), "b", l.toStopId(), "f", l.fraction()))
+                    .toList();
+            return stopTimes.findReachableFromLegs(objectMapper.writeValueAsString(payload));
+        } catch (JsonProcessingException ex) {
+            log.warn("Could not encode {} matched legs for reachability: {}",
+                    legs.size(), ex.toString());
+            return List.of();
         }
-
-        return found.values().stream()
-                .map(d -> new DownstreamStopDto(d.id(), d.name(), d.lat(), d.lon(),
-                        tripCounts.get(d.id())))
-                .sorted(Comparator.comparing(DownstreamStopDto::name,
-                        Comparator.nullsFirst(Comparator.naturalOrder())))
-                .toList();
     }
 
     /** GET /api/trip_stops */
