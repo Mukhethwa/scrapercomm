@@ -345,12 +345,11 @@ Cape Town at 08:00 and reaching Town Centre at 06:10 — and because results sor
 journey time those impossible connections went straight to the top. The cost is that a
 leg genuinely crossing midnight is excluded, which is the safer trade.
 
-### Java only
+### Java only, by design
 
-This endpoint has no FastAPI counterpart. The Python service is being retired, and
-duplicating a non-trivial engine into it would be waste. `parity_check.py` still passes
-45/45, because it compares the endpoints both services share and none of those changed —
-but the legacy service cannot answer connection queries.
+This endpoint has no FastAPI counterpart and is not meant to. Java is the application
+engine; Python's remaining job is scraping. `parity_check.py` still passes 45/45, because
+it compares the endpoints both services share and none of those changed.
 
 ## Determinism: why both services sort the same way
 

@@ -36,8 +36,8 @@ Four separate pieces. You can run them independently.
 | Piece | What it is | Lives in |
 | --- | --- | --- |
 | **The database** | PostgreSQL, running inside Docker. Holds every route, timetable and departure time. | `docker-compose.yml` |
-| **The scraper** | Python. Fetches PDFs from the Golden Arrow site and loads them into the database. Run occasionally, not continuously. | `src/gabs_scraper/` |
-| **The API** | Serves the data over HTTP. **Two versions exist** — a Java/Spring Boot one and the original Python one. They behave identically; run either. | `backend/` (Java), `src/gabs_scraper/api.py` (Python) |
+| **The scraper** | Python. Fetches PDFs from the Golden Arrow site and loads them into the database. Run occasionally, not continuously — it is not part of serving the app. | `src/gabs_scraper/` |
+| **The API** | Java / Spring Boot. Serves the data over HTTP and hosts the web app. | `backend/` |
 | **The web app** | React. What a commuter actually sees — search, map, departure times. | `web/` |
 
 ### Which ports things use
@@ -46,7 +46,7 @@ Four separate pieces. You can run them independently.
 | --- | --- |
 | **5433** | PostgreSQL (the database itself) |
 | **5050** | pgAdmin — click around the database in a browser |
-| **8000** | The API (Java *or* Python — they use the same port, so run one at a time) |
+| **8000** | The API, and the web app it serves |
 | **5173** | The React app in development mode |
 
 Port 5433 rather than the usual 5432, so this doesn't clash with any PostgreSQL you
@@ -110,21 +110,11 @@ Around **1,878** is right.
 
 ### Step 3 — Start the API
 
-Pick **one**. Both serve identical responses on port 8000.
-
-**Java / Spring Boot** — the current backend:
-
 ```bash
 mvn -f backend/pom.xml spring-boot:run
 ```
 
-**Python / FastAPI** — the original, still maintained:
-
-```bash
-PYTHONPATH=src python -m uvicorn gabs_scraper.api:app --port 8000
-```
-
-On Windows PowerShell, set the path separately first: `$env:PYTHONPATH="src"`.
+It listens on port 8000 and also serves the web app.
 
 Check it's alive:
 
@@ -217,13 +207,13 @@ with `Ctrl+C`.
 mvn -f backend/pom.xml spring-boot:run
 ```
 
-### `PYTHONPATH=src python -m uvicorn gabs_scraper.api:app --port 8000`
+### `PYTHONPATH=src python -m uvicorn gabs_scraper.api:app --port 8001`
 
-**Starts the Python API on port 8000.** The original backend. Same responses as the Java
-one — run one or the other, not both.
+**Starts the legacy FastAPI service.** Not needed to run the app — only to compare it
+against the Java one with `parity_check.py`, which is why it is shown on port 8001.
 
 ```bash
-PYTHONPATH=src python -m uvicorn gabs_scraper.api:app --port 8000
+PYTHONPATH=src python -m uvicorn gabs_scraper.api:app --port 8001
 ```
 
 ### `npm run dev`
@@ -564,11 +554,15 @@ PYTHONPATH=src python -m gabs_scraper.pipeline --load       # read them into the
 Searches flow the other way too: each one writes a row into the analytics tables, in the
 background, without delaying the answer.
 
-### Why there are two APIs
+### About the Python API in `src/gabs_scraper/api.py`
 
-The backend is being migrated from Python to Java. Both exist, both work, both return
-byte-identical responses — `backend/parity_check.py` verifies that automatically. The
-Python one is the fallback until the migration is signed off.
+That file is the original FastAPI service, kept from the migration. **It is not how you
+run the app.** Java serves the API; Python's job here is scraping.
+
+It survives only as a rollback while the Java service beds in, and as the comparison
+target for `backend/parity_check.py`, which proves the two return byte-identical
+responses across every shared endpoint. Newer work — the connections engine, for
+instance — exists only in Java, by design.
 
 Technical detail on the Java service is in [backend/README.md](backend/README.md).
 
