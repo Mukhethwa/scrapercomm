@@ -15,9 +15,9 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand" aria-label="commuttr">
+        <button className="brand" onClick={() => setTab('plan')} aria-label="commuttr home">
           commuttr<span className="flare">.</span>
-        </div>
+        </button>
         <nav className="tabs">
           <button className={`tab ${tab === 'plan' ? 'active' : ''}`} onClick={() => setTab('plan')}>
             Plan a trip

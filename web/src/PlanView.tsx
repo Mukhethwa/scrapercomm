@@ -3,7 +3,7 @@ import {
   getStops, getGeocode, getAreas, reachableFor, getPlan, getTripStops, getNearbyOrigins,
   getConnections,
   type StopHit, type GeoHit, type ReachableStop, type Endpoint, type PlanOption,
-  type PlanDeparture, type TripStop, type NearbyOrigin, type Connection,
+  type PlanDeparture, type TripStop, type TripNote, type NearbyOrigin, type Connection,
 } from './api'
 import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
@@ -115,6 +115,7 @@ export default function PlanView() {
 
   const [openDep, setOpenDep] = useState<{ oi: number; di: number } | null>(null)
   const [tripStops, setTripStops] = useState<TripStop[] | null>(null)
+  const [tripNotes, setTripNotes] = useState<TripNote[]>([])
   const [loadingTrip, setLoadingTrip] = useState(false)
 
   const [dayAlts, setDayAlts] = useState<Record<string, NearbyOrigin[]>>({})
@@ -206,7 +207,8 @@ export default function PlanView() {
     setOpenDep({ oi, di }); setTripStops(null); setLoadingTrip(true)
     // fetch the WHOLE trip (origin -> terminus) so we can show official start/end times + every via
     getTripStops(d.schedule_id, d.trip_index, 0, 9999)
-      .then((r) => setTripStops(r.stops)).finally(() => setLoadingTrip(false))
+      .then((r) => { setTripStops(r.stops); setTripNotes(r.notes ?? []) })
+      .finally(() => setLoadingTrip(false))
   }
 
   const filteredReach = useMemo(() => {
@@ -410,7 +412,7 @@ export default function PlanView() {
                     )}
                     {openDep?.oi === i && (
                       <TripStrip
-                        stops={tripStops} loading={loadingTrip}
+                        stops={tripStops} loading={loadingTrip} notes={tripNotes}
                         riderFromSeq={o.departures[openDep.di]?.from_seq ?? 0}
                         riderToSeq={o.departures[openDep.di]?.to_seq ?? 9999}
                         boardPin={from?.kind === 'pin' ? { name: from.name, time: o.departures[openDep.di]?.board_raw } : null}

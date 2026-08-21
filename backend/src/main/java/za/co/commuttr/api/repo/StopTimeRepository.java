@@ -9,6 +9,7 @@ import za.co.commuttr.api.repo.projection.Projections.CellRow;
 import za.co.commuttr.api.repo.projection.Projections.DirectServiceRow;
 import za.co.commuttr.api.repo.projection.Projections.DownstreamStopRow;
 import za.co.commuttr.api.repo.projection.Projections.JourneyConnRow;
+import za.co.commuttr.api.repo.projection.Projections.NoteRow;
 import za.co.commuttr.api.repo.projection.Projections.JourneyDepartureRow;
 import za.co.commuttr.api.repo.projection.Projections.PinAnchorRow;
 import za.co.commuttr.api.repo.projection.Projections.ReachableRow;
@@ -146,6 +147,27 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                                     @Param("tripIndex") Integer tripIndex,
                                     @Param("fromSeq") Integer fromSeq,
                                     @Param("toSeq") Integer toSeq);
+
+    /**
+     * The footnote codes a specific trip actually uses, with their meanings.
+     *
+     * <p>A time printed as "16:20b" runs only on the days note "b" describes. The letters
+     * are meaningless without the timetable's own abbreviation list, and each timetable
+     * defines its own, so they are looked up per trip rather than assumed.
+     */
+    @Query(value = """
+            SELECT DISTINCT tn.code AS "code", tn.description AS "description"
+            FROM stop_time st
+            JOIN trip tr        ON tr.id = st.trip_id
+            JOIN schedule sc    ON sc.id = tr.schedule_id
+            JOIN timetable_note tn ON tn.timetable_id = sc.timetable_id
+                                  AND tn.code = st.note_code
+            WHERE tr.schedule_id = :scheduleId AND tr.trip_index = :tripIndex
+              AND st.note_code IS NOT NULL
+            ORDER BY tn.code
+            """, nativeQuery = true)
+    List<NoteRow> findTripNotes(@Param("scheduleId") Integer scheduleId,
+                                @Param("tripIndex") Integer tripIndex);
 
     /** Planner: every (schedule, trip) anchor of a named stop. */
     @Query(value = """

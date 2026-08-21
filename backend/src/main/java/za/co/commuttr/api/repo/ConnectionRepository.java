@@ -63,7 +63,8 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
                                     t1.departure_time, t2.departure_time)
                        sc.day_type, ssb.stop_id AS x, sc.direction_label AS route, tt.timetable_number AS ttn,
-                       t1.departure_time AS dep, t2.departure_time AS arr,
+                       t1.departure_time AS dep, t1.raw_value AS dep_raw,
+                       t2.departure_time AS arr,
                        sc.id AS sched, tr.trip_index AS trip,
                        ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
                 FROM schedule_stop ssa
@@ -73,10 +74,11 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 JOIN timetable tt ON tt.id = sc.timetable_id
                 JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
                 JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
-                                 AND t1.cell_type = 'TIME'
+                                 AND t1.cell_type <> 'NONE'
                 JOIN stop_time t2 ON t2.trip_id = tr.id AND t2.schedule_stop_id = ssb.id
                                  AND t2.cell_type = 'TIME'
-                                 AND t2.departure_time > t1.departure_time
+                                 AND (t1.departure_time IS NULL
+                                      OR t2.departure_time > t1.departure_time)
                 WHERE ssa.stop_id = :fromId AND ssb.stop_id IN (SELECT id FROM ix)
                 ORDER BY sc.day_type, ssb.stop_id, sc.direction_label,
                          t1.departure_time, t2.departure_time, sc.id, tr.trip_index
@@ -111,6 +113,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                    l1.route             AS "route1",
                    l1.ttn               AS "ttn1",
                    l1.dep               AS "dep1",
+                   l1.dep_raw           AS "depRaw1",
                    l1.arr               AS "arr1",
                    l1.sched             AS "sched1",
                    l1.trip              AS "trip1",
@@ -131,7 +134,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             JOIN leg2 l2 ON l2.x = l1.x AND l2.day_type = l1.day_type
                         AND l2.dep >= l1.arr + (:bufferMinutes * interval '1 minute')
             JOIN stop x ON x.id = l1.x
-            ORDER BY "totalMinutes" NULLS LAST, "waitMinutes", l1.dep
+            ORDER BY "totalMinutes" NULLS LAST, "waitMinutes", l1.arr
             LIMIT :maxResults
             """, nativeQuery = true)
     List<TwoLegRow> findTwoLegConnections(@Param("fromId") Integer fromId,
@@ -168,7 +171,8 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
                                     t1.departure_time, t2.departure_time)
                        sc.day_type, ssb.stop_id AS x, sc.direction_label AS route, tt.timetable_number AS ttn,
-                       t1.departure_time AS dep, t2.departure_time AS arr,
+                       t1.departure_time AS dep, t1.raw_value AS dep_raw,
+                       t2.departure_time AS arr,
                        sc.id AS sched, tr.trip_index AS trip,
                        ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
                 FROM schedule_stop ssa
@@ -178,10 +182,11 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 JOIN timetable tt ON tt.id = sc.timetable_id
                 JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
                 JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
-                                 AND t1.cell_type = 'TIME'
+                                 AND t1.cell_type <> 'NONE'
                 JOIN stop_time t2 ON t2.trip_id = tr.id AND t2.schedule_stop_id = ssb.id
                                  AND t2.cell_type = 'TIME'
-                                 AND t2.departure_time > t1.departure_time
+                                 AND (t1.departure_time IS NULL
+                                      OR t2.departure_time > t1.departure_time)
                 WHERE ssa.stop_id = :fromId
                   AND ssb.stop_id IN (SELECT x FROM mid)
                 ORDER BY sc.day_type, ssb.stop_id, sc.direction_label,
@@ -247,6 +252,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                    l1.route      AS "route1",
                    l1.ttn        AS "ttn1",
                    l1.dep        AS "dep1",
+                   l1.dep_raw    AS "depRaw1",
                    l1.arr        AS "arr1",
                    l1.sched      AS "sched1",
                    l1.trip       AS "trip1",
@@ -279,7 +285,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                         AND l3.dep >= l2.arr + (:bufferMinutes * interval '1 minute')
             JOIN stop x1 ON x1.id = l1.x
             JOIN stop x2 ON x2.id = l2.y
-            ORDER BY "totalMinutes" NULLS LAST, "waitMinutes", l1.dep
+            ORDER BY "totalMinutes" NULLS LAST, "waitMinutes", l1.arr
             LIMIT :maxResults
             """, nativeQuery = true)
     List<ThreeLegRow> findThreeLegConnections(@Param("fromId") Integer fromId,

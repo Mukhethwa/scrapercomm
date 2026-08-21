@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ArrowRight, ArrowUp, ArrowDown, GripVertical } from 'lucide-react'
-import { getPlan, getTripStops, type PlanOption, type TripStop } from './api'
+import { getPlan, getTripStops, type PlanOption, type TripNote, type TripStop } from './api'
 import {
   buildJourney, connectionIssues, rideKey, toEndpoint, usePlanner,
   type SavedJourney,
@@ -37,6 +37,7 @@ export default function PlannerView({ onBrowse }: { onBrowse: () => void }) {
 
   const [openId, setOpenId] = useState<string | null>(null)
   const [stops, setStops] = useState<TripStop[] | null>(null)
+  const [notes, setNotes] = useState<TripNote[]>([])
   const [loadingStops, setLoadingStops] = useState(false)
 
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -56,8 +57,8 @@ export default function PlannerView({ onBrowse }: { onBrowse: () => void }) {
     setLoadingStops(true)
     // The whole trip, origin to terminus, exactly as the search page fetches it.
     getTripStops(j.departure.scheduleId, j.departure.tripIndex, 0, 9999)
-      .then((r) => setStops(r.stops))
-      .catch(() => setStops([]))
+      .then((r) => { setStops(r.stops); setNotes(r.notes ?? []) })
+      .catch(() => { setStops([]); setNotes([]) })
       .finally(() => setLoadingStops(false))
   }
 
@@ -113,6 +114,7 @@ export default function PlannerView({ onBrowse }: { onBrowse: () => void }) {
                 open={openId === j.id}
                 editing={editingId === j.id}
                 stops={openId === j.id ? stops : null}
+                notes={openId === j.id ? notes : []}
                 loadingStops={openId === j.id && loadingStops}
                 onToggleDetail={() => toggleDetail(j)}
                 onToggleEdit={() => { setOpenId(null); setEditingId(editingId === j.id ? null : j.id) }}
@@ -136,6 +138,7 @@ function SortableJourney(props: {
   open: boolean
   editing: boolean
   stops: TripStop[] | null
+  notes: TripNote[]
   loadingStops: boolean
   onToggleDetail: () => void
   onToggleEdit: () => void
@@ -144,7 +147,7 @@ function SortableJourney(props: {
   onReplace: (next: SavedJourney) => void
 }) {
   const {
-    journey: j, position, total, issue, open, editing, stops, loadingStops,
+    journey: j, position, total, issue, open, editing, stops, notes, loadingStops,
     onToggleDetail, onToggleEdit, onRemove, onMove, onReplace,
   } = props
 
@@ -221,6 +224,7 @@ function SortableJourney(props: {
       {open && (
         <TripStrip
           stops={stops}
+          notes={notes}
           loading={loadingStops}
           riderFromSeq={j.departure.fromSeq}
           riderToSeq={j.departure.toSeq}

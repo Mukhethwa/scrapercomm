@@ -203,6 +203,8 @@ public final class Projections {
         String getRoute1();
         String getTtn1();
         LocalTime getDep1();
+        /** Literal cell: "via" where the origin has no published time. */
+        String getDepRaw1();
         LocalTime getArr1();
         Integer getSched1();
         Integer getTrip1();
@@ -234,6 +236,8 @@ public final class Projections {
         String getRoute1();
         String getTtn1();
         LocalTime getDep1();
+        /** Literal cell: "via" where the origin has no published time. */
+        String getDepRaw1();
         LocalTime getArr1();
         Integer getSched1();
         Integer getTrip1();

@@ -181,8 +181,13 @@ export interface TripStop {
   departure_time: string | null
 }
 
+export interface TripNote {
+  code: string
+  description: string
+}
+
 export const getTripStops = (scheduleId: number, tripIndex: number, fromSeq: number, toSeq: number) =>
-  getJSON<{ stops: TripStop[] }>(
+  getJSON<{ stops: TripStop[]; notes: TripNote[] }>(
     `${API}/trip_stops?schedule_id=${scheduleId}&trip_index=${tripIndex}&from_seq=${fromSeq}&to_seq=${toSeq}`,
   )
 

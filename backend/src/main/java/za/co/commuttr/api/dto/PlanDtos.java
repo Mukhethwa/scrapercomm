@@ -29,7 +29,10 @@ public final class PlanDtos {
                               String cellType,
                               String departureTime) { }
 
-    public record TripStopsResponse(List<TripStopDto> stops) { }
+    /** A footnote letter and what it means, e.g. "b" -> "Fridays". */
+    public record TripNoteDto(String code, String description) { }
+
+    public record TripStopsResponse(List<TripStopDto> stops, List<TripNoteDto> notes) { }
 
     /** GET /api/nearby_origins row. distanceM is a whole number of metres. */
     public record NearbyOriginDto(Integer id,

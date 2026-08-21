@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
-import type { TripStop } from './api'
+import type { TripNote, TripStop } from './api'
 
 export interface PinEnd { name: string; time?: string }
 
@@ -13,11 +13,12 @@ export interface PinEnd { name: string; time?: string }
  * Shared by the search results and the Planner, so a journey reads identically in both.
  */
 export default function TripStrip(
-  { stops, loading, boardPin, alightPin, riderFromSeq, riderToSeq }:
+  { stops, loading, boardPin, alightPin, riderFromSeq, riderToSeq, notes }:
   {
     stops: TripStop[] | null; loading: boolean
     boardPin: PinEnd | null; alightPin: PinEnd | null
     riderFromSeq: number; riderToSeq: number
+    notes?: TripNote[]
   },
 ) {
   if (loading) return <div className="tripstrip"><div className="tsloading">Loading the full trip…</div></div>
@@ -76,28 +77,54 @@ export default function TripStrip(
           )
         })}
       </ol>
-      <TripNote />
+      <TripNotes notes={notes} />
     </div>
   )
 }
 
 /**
- * The "via" explanation is worth reading once and then never again, so it sits behind an
- * info button rather than taking up room under every trip a commuter opens.
+ * Reading a timetable cell: what "via" means, and what a letter after a time means.
+ * Worth reading once and then never again, so it sits behind an info button rather than
+ * taking up room under every trip a commuter opens.
+ *
+ * The letters are not fixed across the network — each timetable defines its own — so the
+ * meanings come from the trip's own footnotes rather than being hardcoded.
  */
-function TripNote() {
+function TripNotes({ notes }: { notes?: TripNote[] }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="tsnote">
       <button className="infobtn" onClick={() => setOpen(!open)} aria-expanded={open}>
         <Info size={13} aria-hidden="true" />
-        <span>What does "via" mean?</span>
+        <span>How to read these times</span>
       </button>
       {open && (
         <div className="tsfoot" role="note">
-          "Via" means the bus passes this stop, but the timetable does not publish an exact
-          time for it. The times shown before you get on, and after you get off, are the
-          bus's official schedule.
+          <p>
+            <b>"Via"</b> means the bus passes this stop, but the timetable does not publish
+            an exact time for it. The times shown before you get on, and after you get off,
+            are the bus's official schedule.
+          </p>
+          {notes && notes.length > 0 ? (
+            <>
+              <p>
+                <b>A letter after a time</b>, like <code>16:20b</code>, means that departure
+                only runs on certain days:
+              </p>
+              <ul className="notelist">
+                {notes.map((n) => (
+                  <li key={n.code}>
+                    <b>{n.code}</b> — {n.description}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p>
+              <b>A letter after a time</b>, like <code>16:20b</code>, means that departure
+              only runs on certain days. This trip does not use any.
+            </p>
+          )}
         </div>
       )}
     </div>

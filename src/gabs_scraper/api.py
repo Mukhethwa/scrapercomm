@@ -492,7 +492,24 @@ def trip_stops(schedule_id: int, trip_index: int, from_seq: int, to_seq: int):
         rows = planner.order_by_time(_rows(cur))
         for r in rows:
             r["departure_time"] = _fmt_time(r["departure_time"])
-        return {"stops": rows}
+
+        # The footnote letters this trip uses, with their meanings. "16:20b" runs only on
+        # the days note "b" describes, and each timetable defines its own letters.
+        cur.execute(
+            """
+            SELECT DISTINCT tn.code, tn.description
+            FROM stop_time st
+            JOIN trip tr        ON tr.id = st.trip_id
+            JOIN schedule sc    ON sc.id = tr.schedule_id
+            JOIN timetable_note tn ON tn.timetable_id = sc.timetable_id
+                                  AND tn.code = st.note_code
+            WHERE tr.schedule_id = %s AND tr.trip_index = %s
+              AND st.note_code IS NOT NULL
+            ORDER BY tn.code
+            """,
+            (schedule_id, trip_index),
+        )
+        return {"stops": rows, "notes": _rows(cur)}
     finally:
         conn.close()
 

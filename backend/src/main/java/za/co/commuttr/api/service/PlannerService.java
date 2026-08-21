@@ -17,6 +17,7 @@ import za.co.commuttr.api.dto.PlanDtos.PlanDepartureDto;
 import za.co.commuttr.api.dto.PlanDtos.PlanOptionDto;
 import za.co.commuttr.api.dto.PlanDtos.PlanResponse;
 import za.co.commuttr.api.dto.PlanDtos.PlanSegmentStopDto;
+import za.co.commuttr.api.dto.PlanDtos.TripNoteDto;
 import za.co.commuttr.api.dto.PlanDtos.TripStopDto;
 import za.co.commuttr.api.dto.PlanDtos.TripStopsResponse;
 import za.co.commuttr.api.dto.StopDtos.DownstreamStopDto;
@@ -585,7 +586,10 @@ public class PlannerService {
                 .map(r -> new TripStopDto(r.getName(), r.getLat(), r.getLon(), r.getStopSequence(),
                         r.getRawValue(), r.getCellType(), ApiFormat.time(r.getDepartureTime())))
                 .toList();
-        return new TripStopsResponse(rows);
+        List<TripNoteDto> notes = stopTimes.findTripNotes(scheduleId, tripIndex).stream()
+                .map(note -> new TripNoteDto(note.getCode(), note.getDescription()))
+                .toList();
+        return new TripStopsResponse(rows, notes);
     }
 
     /**

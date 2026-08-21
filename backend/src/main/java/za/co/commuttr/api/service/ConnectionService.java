@@ -96,7 +96,7 @@ public class ConnectionService {
         ConnectionLegDto leg1 = new ConnectionLegDto(
                 from.getId(), from.getName(), from.getLat(), from.getLon(),
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
-                r.getRoute1(), r.getTtn1(), ApiFormat.time(r.getDep1()), ApiFormat.time(r.getArr1()),
+                r.getRoute1(), r.getTtn1(), r.getDepRaw1(), ApiFormat.time(r.getArr1()),
                 ApiFormat.minutes(r.getDep1()), ApiFormat.minutes(r.getArr1()),
                 r.getSched1(), r.getTrip1(), r.getFromSeq1(), r.getToSeq1());
 
@@ -115,7 +115,7 @@ public class ConnectionService {
         ConnectionLegDto leg1 = new ConnectionLegDto(
                 from.getId(), from.getName(), from.getLat(), from.getLon(),
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
-                r.getRoute1(), r.getTtn1(), ApiFormat.time(r.getDep1()), ApiFormat.time(r.getArr1()),
+                r.getRoute1(), r.getTtn1(), r.getDepRaw1(), ApiFormat.time(r.getArr1()),
                 ApiFormat.minutes(r.getDep1()), ApiFormat.minutes(r.getArr1()),
                 r.getSched1(), r.getTrip1(), r.getFromSeq1(), r.getToSeq1());
 
