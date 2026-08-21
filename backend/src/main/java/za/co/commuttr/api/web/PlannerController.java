@@ -4,6 +4,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import za.co.commuttr.api.dto.ConnectionDtos.ConnectionsResponse;
 import za.co.commuttr.api.dto.JourneyDtos.JourneysResponse;
 import za.co.commuttr.api.dto.PlanDtos.GeocodeResponse;
 import za.co.commuttr.api.dto.PlanDtos.LocateResponse;
@@ -11,6 +12,7 @@ import za.co.commuttr.api.dto.PlanDtos.NearbyOriginsResponse;
 import za.co.commuttr.api.dto.PlanDtos.PlanResponse;
 import za.co.commuttr.api.dto.PlanDtos.TripStopsResponse;
 import za.co.commuttr.api.service.EndpointRef;
+import za.co.commuttr.api.service.ConnectionService;
 import za.co.commuttr.api.service.GeocodeService;
 import za.co.commuttr.api.service.JourneyService;
 import za.co.commuttr.api.service.PlannerService;
@@ -27,13 +29,16 @@ public class PlannerController {
     private final JourneyService journeyService;
     private final PlannerService planner;
     private final GeocodeService geocodeService;
+    private final ConnectionService connectionService;
 
     public PlannerController(JourneyService journeyService,
                              PlannerService planner,
-                             GeocodeService geocodeService) {
+                             GeocodeService geocodeService,
+                             ConnectionService connectionService) {
         this.journeyService = journeyService;
         this.planner = planner;
         this.geocodeService = geocodeService;
+        this.connectionService = connectionService;
     }
 
     /** Direct single-bus journeys, grouped by connecting schedule. */
@@ -61,6 +66,16 @@ public class PlannerController {
             throw PlannerService.missingEndpoints();
         }
         return planner.plan(fromEp, toEp);
+    }
+
+    /**
+     * How to get there when no single bus does it: two buses if possible, three if not.
+     * Named stops only. Consulted after /api/plan comes back empty.
+     */
+    @GetMapping("/connections")
+    public ConnectionsResponse connections(@RequestParam("from") Integer from,
+                                           @RequestParam("to") Integer to) {
+        return connectionService.connections(from, to);
     }
 
     /** Legs whose real road path passes near a point. */

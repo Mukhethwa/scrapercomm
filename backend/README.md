@@ -301,9 +301,56 @@ Bring the database up the way README.md documents — `docker compose up -d`, th
 | `GET /api/trip_stops` | `api.trip_stops` | `PlannerController` |
 | `GET /api/nearby_origins` | `api.nearby_origins` | `PlannerController` |
 | `GET /api/geocode` | `api.geocode_place` | `PlannerController` → `GeocodeService` |
+| `GET /api/connections` | *(new — Java only)* | `PlannerController` → `ConnectionService` |
 
 `planner.py` maps onto `service/PlannerService.java`, and `geo.py` onto
 `service/GeoUtils.java`.
+
+## Connections: getting there when no single bus does
+
+`GET /api/connections?from=&to=` answers "no direct bus — so what do I catch instead".
+Named stops only, and the client consults it after `/api/plan` returns nothing.
+
+Two legs are searched first and three only if two finds nothing, since a commuter would
+rather change once than twice. Within a leg count, results are ordered by total journey
+time, then by waiting time.
+
+Three things make it work:
+
+- **Narrow to interchanges first.** Stops reachable from the origin that also reach the
+  destination — a set of single figures to low hundreds, found in milliseconds. Bounding
+  the leg searches by it took one query from 10.7s to 80ms.
+- **Drive the middle leg from that set, not a tuple `IN`.** `(a, b) IN (SELECT x, y …)`
+  stops PostgreSQL using the `stop_id` index and it scans the whole self-join instead:
+  the same 31,578 rows took 23.9s that way versus 1.1s as a join.
+- **`DISTINCT ON` per leg.** Without it a connection repeats once per timetable version,
+  exactly as the direct planner would without its grouping.
+
+Measured: two legs 0.1–0.2s, three legs 1.9–4.2s, unreachable 1.3s.
+
+### Which times have to exist
+
+Only 28% of timetable cells carry a real time; 19% are "via", meaning the bus passes but
+no time is published. So a leg's departure and its arrival **at an interchange** must be
+real times — you cannot plan a change you cannot time — but arrival at the final
+destination may be "via", because for many stops that is all Golden Arrow publishes.
+Requiring a time there finds nothing across a large part of the network: BELLVILLE to
+STRANDFONTEIN, for instance, has zero fully-timed legs.
+
+### Every leg moves forward in time
+
+A leg's arrival must be later than its departure. The between-leg checks alone were
+satisfied by a bus that "arrived" hours before it left — one result had leg 2 departing
+Cape Town at 08:00 and reaching Town Centre at 06:10 — and because results sort by total
+journey time those impossible connections went straight to the top. The cost is that a
+leg genuinely crossing midnight is excluded, which is the safer trade.
+
+### Java only
+
+This endpoint has no FastAPI counterpart. The Python service is being retired, and
+duplicating a non-trivial engine into it would be waste. `parity_check.py` still passes
+45/45, because it compares the endpoints both services share and none of those changed —
+but the legacy service cannot answer connection queries.
 
 ## Determinism: why both services sort the same way
 

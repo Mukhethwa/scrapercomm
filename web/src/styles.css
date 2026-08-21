@@ -352,3 +352,33 @@ body { background: var(--bg); color: var(--ink); }
 .movebtn { display: inline-flex; align-items: center; justify-content: center; }
 .parrow, .dragdots { display: inline-block; vertical-align: middle; }
 .arrow svg { display: block; }
+
+/* ---- Result banners: direct (green), needs a change (orange), impossible (red) ---- */
+.banner { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border-radius: 9px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; border: 1px solid; }
+.banner svg { flex: none; margin-top: 1px; }
+.banner.good { background: #eefaf1; border-color: #9ed8b0; color: #12683a; }
+.banner.warn { background: var(--accent-soft); border-color: #ffb494; color: #a32b00; }
+.banner.bad  { background: #fdeeee; border-color: #eaa7a7; color: #9c1c1c; }
+.banner.info { background: #f2f4f7; border-color: var(--line); color: var(--muted); }
+
+.connlist { display: flex; flex-direction: column; gap: 10px; }
+.conncard { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 11px 12px; }
+.conncard.planned { border-color: var(--accent); }
+.connhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.connsummary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.connvia { color: var(--muted); }
+.conntotals { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.conntotal { font-size: 14px; font-weight: 700; }
+.connwait { font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+.connwait.long { color: var(--accent); font-weight: 700; }
+
+.connlegs { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.connleg { display: flex; align-items: center; gap: 9px; padding: 7px 9px; background: #fafbfc; border-radius: 8px; }
+.connlegno { width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+.connlegbody { flex: 1; min-width: 0; }
+.connlegstops { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; flex-wrap: wrap; }
+.connlegroute { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.connlegtimes { display: flex; align-items: center; gap: 5px; font-size: 13px; white-space: nowrap; }
+.connlegdash { font-size: 11px; color: var(--muted); }
+
+.addbtn.wide { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px; font-size: 12px; }

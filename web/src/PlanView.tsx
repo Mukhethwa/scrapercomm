@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   getStops, getGeocode, getAreas, reachableFor, getPlan, getTripStops, getNearbyOrigins,
+  getConnections,
   type StopHit, type GeoHit, type ReachableStop, type Endpoint, type PlanOption,
-  type PlanDeparture, type TripStop, type NearbyOrigin,
+  type PlanDeparture, type TripStop, type NearbyOrigin, type Connection,
 } from './api'
 import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
 import { buildJourney, usePlanner } from './planner'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react'
+import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
 
 const DAY_LABEL: Record<string, string> = {
@@ -119,6 +121,11 @@ export default function PlanView() {
 
   const planner = usePlanner()
 
+  // Connections are only consulted once a direct search comes back empty.
+  const [conns, setConns] = useState<Connection[] | null>(null)
+  const [connLegs, setConnLegs] = useState<number | null>(null)
+  const [connLoading, setConnLoading] = useState(false)
+
   /** Add this departure to the planner, or take it off again if it is already there. */
   function togglePlanned(o: PlanOption, d: PlanDeparture) {
     if (!from || !to) return
@@ -149,9 +156,19 @@ export default function PlanView() {
 
   function runPlan(f: Endpoint, t: Endpoint) {
     setPlan(null); setDayAlts({}); setOpenDep(null); setTripStops(null); setLoading(true)
+    setConns(null); setConnLegs(null); setConnLoading(false)
     getPlan(f, t)
       .then((r) => {
         setPlan(r.options)
+        // No direct bus. Look for one that needs a change, which the connections
+        // engine can only work out between named stops.
+        if (r.options.length === 0 && f.kind === 'stop' && t.kind === 'stop') {
+          setConnLoading(true)
+          getConnections(f.id!, t.id!)
+            .then((c) => { setConns(c.connections); setConnLegs(c.legs_required) })
+            .catch(() => { setConns([]); setConnLegs(null) })
+            .finally(() => setConnLoading(false))
+        }
         if (t.kind === 'stop') {
           const present = new Set(r.options.map((o) => o.day_type))
           CORE_DAYS.filter((d) => !present.has(d)).forEach((day) => {
@@ -294,8 +311,51 @@ export default function PlanView() {
               </div>
               {loading && <div className="placeholder">Finding buses…</div>}
 
-              {plan && !loading && plan.length === 0 && (
-                <div className="noservice">No <b>direct</b> bus from {from!.name} to {to!.name}.</div>
+              {plan && !loading && plan.length > 0 && (
+                <div className="banner good">
+                  <CircleCheck size={16} aria-hidden="true" />
+                  <span><b>Direct bus.</b> You can travel from {from!.name} to {to!.name} without changing.</span>
+                </div>
+              )}
+
+              {plan && !loading && plan.length === 0 && connLoading && (
+                <div className="banner info">
+                  <Info size={16} aria-hidden="true" />
+                  <span>No direct bus. Looking for a journey with a change…</span>
+                </div>
+              )}
+
+              {plan && !loading && plan.length === 0 && !connLoading && conns && conns.length > 0 && (
+                <>
+                  <div className="banner warn">
+                    <TriangleAlert size={16} aria-hidden="true" />
+                    <span>
+                      <b>No direct bus</b> from {from!.name} to {to!.name}. You can still get there
+                      by taking <b>{connLegs} buses</b>, changing at <b>{conns[0].change_at.join(' then ')}</b>.
+                    </span>
+                  </div>
+                  <ConnectionsPanel connections={conns} legsRequired={connLegs} />
+                </>
+              )}
+
+              {plan && !loading && plan.length === 0 && !connLoading && conns && conns.length === 0 && (
+                <div className="banner bad">
+                  <CircleX size={16} aria-hidden="true" />
+                  <span>
+                    <b>No way to get there by bus.</b> There is no direct service from {from!.name} to{' '}
+                    {to!.name}, and no combination of up to three buses connects them either.
+                  </span>
+                </div>
+              )}
+
+              {plan && !loading && plan.length === 0 && !connLoading && conns === null && (
+                <div className="banner bad">
+                  <CircleX size={16} aria-hidden="true" />
+                  <span>
+                    <b>No direct bus.</b> Journeys with a change can only be worked out between
+                    named bus stops, not dropped pins.
+                  </span>
+                </div>
               )}
 
               {plan && !loading && plan.map((o, i) => {

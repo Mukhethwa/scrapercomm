@@ -244,3 +244,45 @@ export const reachableFor = (ep: Endpoint) =>
   ep.kind === 'stop'
     ? getReachable(ep.id!).then((r) => r.reachable)
     : getReachablePoint(ep.lat, ep.lon).then((r) => r.reachable)
+
+// ---- connections: journeys that need a change of bus ----
+
+export interface ConnectionLeg {
+  from_stop_id: number
+  from_name: string
+  from_lat: number | null
+  from_lon: number | null
+  to_stop_id: number
+  to_name: string
+  to_lat: number | null
+  to_lon: number | null
+  route_label: string
+  board_raw: string
+  /** The literal timetable cell: "via" where no arrival time is published. */
+  arrive_raw: string
+  board_minutes: number | null
+  arrive_minutes: number | null
+  schedule_id: number
+  trip_index: number
+  from_seq: number
+  to_seq: number
+}
+
+export interface Connection {
+  day_type: string
+  change_at: string[]
+  legs: ConnectionLeg[]
+  wait_minutes: number | null
+  total_minutes: number | null
+}
+
+export interface ConnectionsResponse {
+  from: StopHit
+  to: StopHit
+  /** How many buses the best answer needs, or null if none was found. */
+  legs_required: number | null
+  connections: Connection[]
+}
+
+export const getConnections = (from: number, to: number) =>
+  getJSON<ConnectionsResponse>(`${API}/connections?from=${from}&to=${to}`)

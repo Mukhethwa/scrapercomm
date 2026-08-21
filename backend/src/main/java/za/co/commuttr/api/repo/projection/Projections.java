@@ -194,6 +194,69 @@ public final class Projections {
         Double getLon();
     }
 
+    /** One two-leg connection: A -> change -> B. */
+    public interface TwoLegRow {
+        String getDayType();
+        Integer getChangeId();
+        String getChangeName();
+
+        String getRoute1();
+        LocalTime getDep1();
+        LocalTime getArr1();
+        Integer getSched1();
+        Integer getTrip1();
+        Integer getFromSeq1();
+        Integer getToSeq1();
+
+        String getRoute2();
+        LocalTime getDep2();
+        /** Raw cell text: may be "via" where no arrival time is published. */
+        String getArrRaw2();
+        Integer getSched2();
+        Integer getTrip2();
+        Integer getFromSeq2();
+        Integer getToSeq2();
+
+        Integer getWaitMinutes();
+        Integer getTotalMinutes();
+    }
+
+    /** One three-leg connection: A -> change -> change2 -> B. */
+    public interface ThreeLegRow {
+        String getDayType();
+        Integer getChangeId();
+        String getChangeName();
+        Integer getChange2Id();
+        String getChange2Name();
+
+        String getRoute1();
+        LocalTime getDep1();
+        LocalTime getArr1();
+        Integer getSched1();
+        Integer getTrip1();
+        Integer getFromSeq1();
+        Integer getToSeq1();
+
+        String getRoute2();
+        LocalTime getDep2();
+        LocalTime getArr2();
+        Integer getSched2();
+        Integer getTrip2();
+        Integer getFromSeq2();
+        Integer getToSeq2();
+
+        String getRoute3();
+        LocalTime getDep3();
+        String getArrRaw3();
+        Integer getSched3();
+        Integer getTrip3();
+        Integer getFromSeq3();
+        Integer getToSeq3();
+
+        Integer getWaitMinutes();
+        Integer getTotalMinutes();
+    }
+
     /** Aggregate for GET /api/nearby_origins: does this stop reach the destination? */
     public interface DirectServiceRow {
         LocalTime getEarliest();

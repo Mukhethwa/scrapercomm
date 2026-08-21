@@ -19,7 +19,11 @@ import za.co.commuttr.api.dto.PlanDtos.PlanResponse;
 import za.co.commuttr.api.dto.PlanDtos.PlanSegmentStopDto;
 import za.co.commuttr.api.dto.StopDtos.PinDto;
 import za.co.commuttr.api.dto.StopDtos.StopDto;
+import za.co.commuttr.api.dto.ConnectionDtos.ConnectionDto;
+import za.co.commuttr.api.dto.ConnectionDtos.ConnectionLegDto;
+import za.co.commuttr.api.dto.ConnectionDtos.ConnectionsResponse;
 import za.co.commuttr.api.service.CatalogService;
+import za.co.commuttr.api.service.ConnectionService;
 import za.co.commuttr.api.service.GeocodeService;
 import za.co.commuttr.api.service.JourneyService;
 import za.co.commuttr.api.service.PlannerService;
@@ -50,6 +54,7 @@ class ApiContractTest {
     @MockitoBean JourneyService journeys;
     @MockitoBean PlannerService planner;
     @MockitoBean GeocodeService geocode;
+    @MockitoBean ConnectionService connections;
 
     @Test
     @DisplayName("GET /api/routes keeps letter_group and timetable_count in snake_case")
@@ -126,6 +131,53 @@ class ApiContractTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail")
                         .value("provide from (stop id) or from_lat/from_lon, and to likewise"));
+    }
+
+    @Test
+    @DisplayName("GET /api/connections keeps snake_case keys and nests legs in travel order")
+    void connectionsResponseShape() throws Exception {
+        ConnectionLegDto leg1 = new ConnectionLegDto(
+                24696, "MALMESBURY", -33.45, 18.73, 101, "CAPE TOWN", -33.92, 18.42,
+                "MALMESBURY - KILLARNEY - CAPE TOWN", "07:45", "10:00", 465, 600,
+                14230, 4, 0, 8);
+        ConnectionLegDto leg2 = new ConnectionLegDto(
+                101, "CAPE TOWN", -33.92, 18.42, 3370, "BUH REIN", -33.82, 18.71,
+                "CAPE TOWN - NORTHPINE - KRAAIFONTEIN", "14:50", "via", 890, null,
+                13987, 0, 0, 6);
+        given(connections.connections(anyInt(), anyInt())).willReturn(new ConnectionsResponse(
+                new StopDto(24696, "MALMESBURY", -33.45, 18.73),
+                new StopDto(3370, "BUH REIN", -33.82, 18.71),
+                2,
+                List.of(new ConnectionDto("WEEKDAY", List.of("CAPE TOWN"),
+                        List.of(leg1, leg2), 290, 425))));
+
+        mvc.perform(get("/api/connections").param("from", "24696").param("to", "3370"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.from.name").value("MALMESBURY"))
+                .andExpect(jsonPath("$.legs_required").value(2))
+                .andExpect(jsonPath("$.connections[0].change_at[0]").value("CAPE TOWN"))
+                .andExpect(jsonPath("$.connections[0].total_minutes").value(425))
+                .andExpect(jsonPath("$.connections[0].wait_minutes").value(290))
+                .andExpect(jsonPath("$.connections[0].legs[0].from_name").value("MALMESBURY"))
+                .andExpect(jsonPath("$.connections[0].legs[0].board_raw").value("07:45"))
+                .andExpect(jsonPath("$.connections[0].legs[1].to_name").value("BUH REIN"))
+                // an unpublished arrival stays the literal cell rather than becoming null
+                .andExpect(jsonPath("$.connections[0].legs[1].arrive_raw").value("via"))
+                .andExpect(jsonPath("$.connections[0].legs[1].schedule_id").value(13987));
+    }
+
+    @Test
+    @DisplayName("nothing reachable answers 200 with legs_required null, not an error")
+    void connectionsWhenUnreachable() throws Exception {
+        given(connections.connections(anyInt(), anyInt())).willReturn(new ConnectionsResponse(
+                new StopDto(24696, "MALMESBURY", -33.45, 18.73),
+                new StopDto(9099, "KHAYELITSHA", -34.0, 18.65),
+                null, List.of()));
+
+        mvc.perform(get("/api/connections").param("from", "24696").param("to", "9099"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.legs_required").doesNotExist())
+                .andExpect(jsonPath("$.connections").isEmpty());
     }
 
     @Test
