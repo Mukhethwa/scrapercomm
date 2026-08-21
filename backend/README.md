@@ -6,7 +6,7 @@ code is preserved, so the React client and the Python scraper both keep working 
 
 - **Java 21** with **Virtual Threads** (`spring.threads.virtual.enabled=true`)
 - **Spring Boot 3.5.16**, Spring Web, Spring Data JPA
-- **PostgreSQL** — the scraper's existing database, read-only apart from one new table
+- **PostgreSQL** — the scraper's existing database, read-only apart from two additive analytics tables
 
 ## Run it
 
@@ -25,8 +25,8 @@ Configuration (all overridable by environment variable):
 | `PGUSER` / `PGPASSWORD` | `gabs` / `gabs` | database credentials |
 | `PORT` | `8000` | HTTP port |
 | `COMMUTTR_WEB_DIST` | `../web/dist` | built React bundle to serve at `/` |
-| `ANALYTICS_ENABLED` | `true` | write `search_analytics` rows |
-| `ANALYTICS_SCHEMA_INIT` | `always` | create `search_analytics` at startup |
+| `ANALYTICS_ENABLED` | `true` | write search analytics rows |
+| `ANALYTICS_SCHEMA_INIT` | `always` | create the analytics tables at startup |
 | `LEGACY_FALLBACK_ENABLED` | `false` | proxy unmigrated paths to FastAPI |
 | `LEGACY_BASE_URL` | `http://localhost:8001` | where the legacy app listens |
 
@@ -134,6 +134,7 @@ PlannerService.plan()
 
 SearchAnalyticsListener.onSearch()          @Async @EventListener
    └─ INSERT INTO search_analytics          on a virtual thread, REQUIRES_NEW
+   └─ INSERT INTO search_analytics_option   one row per route offered
 ```
 
 `analytics/SearchAnalyticsEvent.java` is published the moment options are resolved, by
@@ -147,13 +148,88 @@ Analytics is best-effort by design: the listener catches and logs every failure,
 analytics table can never affect a commuter's journey search. Set `ANALYTICS_ENABLED=false`
 to turn it off.
 
-### The one schema addition
+### The schema additions
 
-The analytics insert needs somewhere to go, and no such table exists today — the scraper
-schema has no analytics table. `sql/analytics.sql` adds `search_analytics` and nothing
-else. It is purely additive (`CREATE TABLE IF NOT EXISTS`), touches no scraper-owned
-table, and is applied automatically at startup via `spring.sql.init`. Apply it by hand and
-set `ANALYTICS_SCHEMA_INIT=never` if you would rather manage it out-of-band.
+The analytics inserts need somewhere to go, and the scraper schema has no analytics
+tables. `sql/analytics.sql` adds two and nothing else. Both are purely additive
+(`CREATE TABLE IF NOT EXISTS`), touch no scraper-owned table, and are applied at startup
+via `spring.sql.init`. Apply them by hand and set `ANALYTICS_SCHEMA_INIT=never` if you
+would rather manage them out-of-band.
+
+| table | one row per | answers |
+| --- | --- | --- |
+| `search_analytics` | search | who searched what, from where to where, how many results, how long it took |
+| `search_analytics_option` | journey option returned | **which routes** were surfaced, and how many departures each offered |
+
+The second table exists because the first cannot answer route demand: it records
+`option_count`, not which options. Without it you can say "Bellville to Nyanga was
+searched 400 times" but never "route 004401 is the most sought-after service". That is
+not backfillable, so it records from the first search onward.
+
+### Reading the data
+
+pgAdmin is at <http://localhost:5050> once `docker compose up -d` is running (server
+*GABS (local)*, password `gabs`), or query directly:
+
+```bash
+docker exec -it gabs_pg psql -U gabs -d gabs
+```
+
+**Which routes are commuters searching for**
+
+```sql
+SELECT o.route_label, o.timetable_number, o.day_type,
+       count(DISTINCT o.search_id) AS searches,
+       sum(o.departure_count)      AS departures_offered
+FROM search_analytics_option o
+GROUP BY 1, 2, 3
+ORDER BY searches DESC;
+```
+
+**Most-searched origin/destination pairs, with stop names resolved**
+
+```sql
+SELECT COALESCE(so.name, 'pin') AS origin,
+       COALESCE(sd.name, 'pin') AS destination,
+       count(*) AS searches, round(avg(sa.option_count), 1) AS avg_options
+FROM search_analytics sa
+LEFT JOIN stop so ON so.id = sa.from_stop_id
+LEFT JOIN stop sd ON sd.id = sa.to_stop_id
+GROUP BY 1, 2
+ORDER BY searches DESC;
+```
+
+**Unmet demand — journeys people want that no bus makes.** Probably the most valuable
+query here: every row is a commuter who searched and got nothing.
+
+```sql
+SELECT COALESCE(so.name, 'pin ' || round(sa.from_lat::numeric, 3) || ',' ||
+                                   round(sa.from_lon::numeric, 3)) AS origin,
+       COALESCE(sd.name, 'pin ' || round(sa.to_lat::numeric, 3) || ',' ||
+                                   round(sa.to_lon::numeric, 3))   AS destination,
+       count(*) AS failed_searches
+FROM search_analytics sa
+LEFT JOIN stop so ON so.id = sa.from_stop_id
+LEFT JOIN stop sd ON sd.id = sa.to_stop_id
+WHERE sa.option_count = 0
+GROUP BY 1, 2
+ORDER BY failed_searches DESC;
+```
+
+**Official stops versus dropped pins, and what each costs**
+
+```sql
+SELECT endpoint, from_kind, count(*) AS searches,
+       round(avg(option_count), 1) AS avg_options,
+       round(avg(duration_ms))     AS avg_ms
+FROM search_analytics
+GROUP BY 1, 2 ORDER BY 1, 2;
+```
+
+**What is deliberately not recorded:** no user or session identifier, so these are counts
+of searches rather than of people; and no record of which option a commuter actually
+chose, only what was offered. Both would need the React client to send something, which
+this migration did not touch.
 
 ## The Strangler Fig facade
 

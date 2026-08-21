@@ -9,15 +9,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.commuttr.api.domain.SearchAnalytics;
+import za.co.commuttr.api.domain.SearchAnalyticsOption;
+import za.co.commuttr.api.repo.SearchAnalyticsOptionRepository;
 import za.co.commuttr.api.repo.SearchAnalyticsRepository;
 import za.co.commuttr.api.service.EndpointRef;
 
+import java.util.List;
+
 /**
- * Writes the search_analytics row off the request thread.
+ * Writes the search_analytics rows off the request thread.
  *
  * <p>{@code @Async} hands the work to the application task executor, which (with
  * {@code spring.threads.virtual.enabled=true}) is virtual-thread backed — so the
- * blocking INSERT parks a virtual thread instead of occupying a platform one, and the
+ * blocking INSERTs park a virtual thread instead of occupying a platform one, and the
  * planner response goes out without waiting for the database round trip.
  *
  * <p>Analytics is strictly best-effort: every failure is logged and swallowed so a
@@ -28,12 +32,15 @@ public class SearchAnalyticsListener {
 
     private static final Logger log = LoggerFactory.getLogger(SearchAnalyticsListener.class);
 
-    private final SearchAnalyticsRepository repository;
+    private final SearchAnalyticsRepository searches;
+    private final SearchAnalyticsOptionRepository options;
     private final boolean enabled;
 
-    public SearchAnalyticsListener(SearchAnalyticsRepository repository,
+    public SearchAnalyticsListener(SearchAnalyticsRepository searches,
+                                   SearchAnalyticsOptionRepository options,
                                    @Value("${commuttr.analytics.enabled:true}") boolean enabled) {
-        this.repository = repository;
+        this.searches = searches;
+        this.options = options;
         this.enabled = enabled;
     }
 
@@ -47,7 +54,8 @@ public class SearchAnalyticsListener {
         try {
             EndpointRef from = event.from();
             EndpointRef to = event.to();
-            repository.save(new SearchAnalytics(
+
+            SearchAnalytics search = searches.save(new SearchAnalytics(
                     event.endpoint(),
                     from == null ? null : from.kind(),
                     from == null ? null : from.stopId(),
@@ -60,6 +68,16 @@ public class SearchAnalyticsListener {
                     event.optionCount(),
                     event.durationMs(),
                     event.searchedAt()));
+
+            // One row per option, so "which routes are people searching for" is a
+            // GROUP BY rather than a question the data cannot answer.
+            List<SearchAnalyticsOption> rows = event.options().stream()
+                    .map(o -> new SearchAnalyticsOption(search.getId(), o.timetableNumber(),
+                            o.routeLabel(), o.dayType(), o.departureCount()))
+                    .toList();
+            if (!rows.isEmpty()) {
+                options.saveAll(rows);
+            }
         } catch (RuntimeException ex) {
             log.warn("Could not record search analytics for {} ({} options): {}",
                     event.endpoint(), event.optionCount(), ex.toString());

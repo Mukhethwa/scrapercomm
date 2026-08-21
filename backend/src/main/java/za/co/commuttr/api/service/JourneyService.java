@@ -133,7 +133,11 @@ public class JourneyService {
                 "/api/journeys",
                 EndpointRef.stop(from),
                 EndpointRef.stop(to),
-                options.size(),
+                options.stream()
+                        .map(o -> new SearchAnalyticsEvent.OptionSummary(
+                                o.timetableNumber(), o.routeLabel(), o.dayType(),
+                                o.departures().size()))
+                        .toList(),
                 (System.nanoTime() - startedAt) / 1_000_000));
 
         return new JourneysResponse(StopService.toDto(found.get(from)),

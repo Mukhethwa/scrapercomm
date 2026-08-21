@@ -464,7 +464,12 @@ public class PlannerService {
         List<PlanOptionDto> options = resolveJourneys(fromEp, toEp, DEFAULT_THRESHOLD_M);
 
         // The route is found — hand the analytics off and return without waiting for it.
-        events.publishEvent(SearchAnalyticsEvent.of("/api/plan", fromEp, toEp, options.size(),
+        events.publishEvent(SearchAnalyticsEvent.of("/api/plan", fromEp, toEp,
+                options.stream()
+                        .map(o -> new SearchAnalyticsEvent.OptionSummary(
+                                o.timetableNumber(), o.routeLabel(), o.dayType(),
+                                o.departures().size()))
+                        .toList(),
                 (System.nanoTime() - startedAt) / 1_000_000));
 
         return new PlanResponse(describe(fromEp), describe(toEp), options);

@@ -42,8 +42,13 @@ SCHEDULE_ID_DIFF = re.compile(r"^\$\.options\[\d+\]\.departures\[\d+\]\.schedule
 
 
 def fetch(base: str, path: str) -> tuple[int, object]:
+    # Generous, because this is a correctness gate and not a latency assertion.
+    # /api/reachable_point currently takes 30-50s for a pin in a dense area: it issues one
+    # query per (schedule, trip) anchor, and a Cape Town CBD pin matches ~61,000 of them.
+    # A tighter timeout here would fail the gate for a reason that has nothing to do with
+    # whether the two services agree.
     try:
-        with urllib.request.urlopen(base + path, timeout=60) as r:
+        with urllib.request.urlopen(base + path, timeout=300) as r:
             return r.status, json.loads(r.read() or b"null")
     except urllib.error.HTTPError as e:
         body = e.read()
