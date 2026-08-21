@@ -17,7 +17,7 @@ planner.
 
 - [What's in the box](#whats-in-the-box)
 - [Before you start](#before-you-start)
-- [Getting it running](#getting-it-running) — start to finish, five steps
+- [Getting it running](#getting-it-running) — start to finish, six steps
 - [Command reference](#command-reference) — every command, what it does, when you need it
 - [Looking inside the database](#looking-inside-the-database)
 - [Reading the search analytics](#reading-the-search-analytics)
@@ -61,7 +61,7 @@ already have installed.
 | **Docker Desktop**, running | Provides the database. Nothing works without it. | `docker version` |
 | **Java 21+** and **Maven** | Only if running the Java API | `java -version` and `mvn -v` |
 | **Python 3.11+** | Only if running the scraper, the Python API, or the tests | `python --version` |
-| **Node 18+** | Only if changing the React app | `node --version` |
+| **Node 18+** | To build the web app (`web/dist` is not committed, so you build it once) | `node --version` |
 
 You do **not** need to install PostgreSQL. Docker provides it.
 
@@ -69,7 +69,7 @@ You do **not** need to install PostgreSQL. Docker provides it.
 
 ## Getting it running
 
-Five steps, in order. Steps 1–3 are all you need to see the app working.
+Six steps, in order. Steps 1–5 get you a working app; step 6 is only for frontend work.
 
 ### Step 1 — Start the database
 
@@ -132,20 +132,34 @@ Check it's alive:
 curl http://localhost:8000/api/health
 ```
 
-### Step 4 — Open the app
+### Step 4 — Build the web app, once
 
-The React app is already built into `web/dist`, and whichever API you started serves it.
-
-**Open <http://localhost:8000>.** That's the whole app — nothing else to run.
-
-### Step 5 — Only if you're changing the React code
-
-Skip this unless you're editing the frontend. It gives you hot reload.
+The built app is **not** stored in the repository, so build it before the first run.
+After that you only repeat this when the frontend changes.
 
 ```bash
 cd web
 npm install     # first time only
-npm run dev
+npm run build
+```
+
+That writes `web/dist`, which the API serves. **Restart the API afterwards** — it only
+looks for the built app at startup, so a running one will not pick it up.
+
+### Step 5 — Open the app
+
+**Open <http://localhost:8000>.** That's the whole app.
+
+If you see `{"detail":"Not Found"}` instead, the API started before `web/dist` existed.
+Restart it and reload.
+
+### Step 6 — Only if you're changing the React code
+
+Skip this unless you're editing the frontend. It gives you hot reload, so you don't have
+to rebuild after every change.
+
+```bash
+cd web && npm run dev
 ```
 
 Now use **<http://localhost:5173>** instead. It forwards API calls to port 8000, so
@@ -223,8 +237,9 @@ cd web && npm run dev
 
 ### `npm run build`
 
-**Rebuilds the React app** into `web/dist`. Run this after changing frontend code so the
-API serves your changes at port 8000.
+**Builds the React app** into `web/dist`, which the API serves at port 8000. Required
+once before the first run, since `web/dist` is not committed, and again after any
+frontend change. Restart the API afterwards — it looks for the built app only at startup.
 
 ```bash
 cd web && npm run build
@@ -648,6 +663,16 @@ wsl --install
 
 Another API is already running. Stop it, or start yours elsewhere with `--port 8001`
 (Python) or `PORT=8001` (Java).
+
+### Opening localhost:8000 shows `{"detail":"Not Found"}`
+
+Either the web app has not been built, or the API started before it was.
+
+```bash
+cd web && npm install && npm run build
+```
+
+Then restart the API. It checks for `web/dist` only at startup.
 
 ### The web app loads but shows no data
 
