@@ -232,6 +232,8 @@ def reachable(stop_id: int):
             FROM schedule_stop ssx
             JOIN stop_time bx       ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
             JOIN stop_time byy      ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
+                                   AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                                        OR byy.departure_time >= bx.departure_time)
             JOIN schedule_stop ssy  ON ssy.id = byy.schedule_stop_id
                                    AND ssy.stop_sequence > ssx.stop_sequence
             JOIN stop s2            ON s2.id = ssy.stop_id
@@ -280,6 +282,8 @@ def journeys(from_: int = Query(..., alias="from"), to: int = Query(...)):
                 JOIN stop_time byy ON byy.trip_id = bx.trip_id
                 WHERE bx.schedule_stop_id = ssx.id AND byy.schedule_stop_id = ssy.id
                   AND bx.cell_type <> 'NONE' AND byy.cell_type <> 'NONE'
+                  AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                       OR byy.departure_time >= bx.departure_time)
               )
             """,
             (from_, to),
@@ -324,6 +328,11 @@ def journeys(from_: int = Query(..., alias="from"), to: int = Query(...)):
                 JOIN stop_time byy ON byy.trip_id = tr.id AND byy.schedule_stop_id = %s
                 WHERE tr.schedule_id = %s
                   AND bx.cell_type <> 'NONE' AND byy.cell_type <> 'NONE'
+                  -- A stop later in the PDF is not necessarily later in the journey:
+                  -- GABS prints alternative origins as the bottom rows of a grid, so
+                  -- roughly one trip in twenty has times that run backwards by sequence.
+                  AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                       OR byy.departure_time >= bx.departure_time)
                 """,
                 (c["ssx"], c["ssy"], c["schedule_id"]),
             )
@@ -457,7 +466,11 @@ def reachable_point(lat: float, lon: float):
 @app.get("/api/trip_stops")
 def trip_stops(schedule_id: int, trip_index: int, from_seq: int, to_seq: int):
     """The stops a specific trip actually serves between two sequence positions,
-    with times — for the 'where do I get on / off' breakdown."""
+    with times — for the 'where do I get on / off' breakdown.
+
+    Returned in travel order rather than PDF row order; see planner.order_by_time.
+    """
+    from . import planner
     conn = db.connect()
     try:
         cur = conn.cursor()
@@ -476,7 +489,7 @@ def trip_stops(schedule_id: int, trip_index: int, from_seq: int, to_seq: int):
             """,
             (schedule_id, trip_index, from_seq, to_seq),
         )
-        rows = _rows(cur)
+        rows = planner.order_by_time(_rows(cur))
         for r in rows:
             r["departure_time"] = _fmt_time(r["departure_time"])
         return {"stops": rows}

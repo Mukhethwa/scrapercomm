@@ -62,7 +62,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             leg1 AS (
                 SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
                                     t1.departure_time, t2.departure_time)
-                       sc.day_type, ssb.stop_id AS x, sc.direction_label AS route,
+                       sc.day_type, ssb.stop_id AS x, sc.direction_label AS route, tt.timetable_number AS ttn,
                        t1.departure_time AS dep, t2.departure_time AS arr,
                        sc.id AS sched, tr.trip_index AS trip,
                        ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
@@ -70,6 +70,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
                                       AND ssb.stop_sequence > ssa.stop_sequence
                 JOIN schedule sc  ON sc.id = ssa.schedule_id
+                JOIN timetable tt ON tt.id = sc.timetable_id
                 JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
                 JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                                  AND t1.cell_type = 'TIME'
@@ -83,7 +84,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             leg2 AS (
                 SELECT DISTINCT ON (sc.day_type, ssa.stop_id, sc.direction_label,
                                     t1.departure_time, t2.raw_value)
-                       sc.day_type, ssa.stop_id AS x, sc.direction_label AS route,
+                       sc.day_type, ssa.stop_id AS x, sc.direction_label AS route, tt.timetable_number AS ttn,
                        t1.departure_time AS dep, t2.raw_value AS arr_raw,
                        t2.departure_time AS arr_time,
                        sc.id AS sched, tr.trip_index AS trip,
@@ -92,6 +93,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
                                       AND ssb.stop_sequence > ssa.stop_sequence
                 JOIN schedule sc  ON sc.id = ssa.schedule_id
+                JOIN timetable tt ON tt.id = sc.timetable_id
                 JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
                 JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                                  AND t1.cell_type = 'TIME'
@@ -107,6 +109,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                    x.id                 AS "changeId",
                    x.name               AS "changeName",
                    l1.route             AS "route1",
+                   l1.ttn               AS "ttn1",
                    l1.dep               AS "dep1",
                    l1.arr               AS "arr1",
                    l1.sched             AS "sched1",
@@ -114,6 +117,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                    l1.from_seq          AS "fromSeq1",
                    l1.to_seq            AS "toSeq1",
                    l2.route             AS "route2",
+                   l2.ttn               AS "ttn2",
                    l2.dep               AS "dep2",
                    l2.arr_raw           AS "arrRaw2",
                    l2.sched             AS "sched2",
@@ -163,7 +167,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             leg1 AS (
                 SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
                                     t1.departure_time, t2.departure_time)
-                       sc.day_type, ssb.stop_id AS x, sc.direction_label AS route,
+                       sc.day_type, ssb.stop_id AS x, sc.direction_label AS route, tt.timetable_number AS ttn,
                        t1.departure_time AS dep, t2.departure_time AS arr,
                        sc.id AS sched, tr.trip_index AS trip,
                        ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
@@ -171,6 +175,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
                                       AND ssb.stop_sequence > ssa.stop_sequence
                 JOIN schedule sc  ON sc.id = ssa.schedule_id
+                JOIN timetable tt ON tt.id = sc.timetable_id
                 JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
                 JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                                  AND t1.cell_type = 'TIME'
@@ -186,7 +191,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 SELECT DISTINCT ON (sc.day_type, ssa.stop_id, ssb.stop_id,
                                     sc.direction_label, t1.departure_time, t2.departure_time)
                        sc.day_type, ssa.stop_id AS x, ssb.stop_id AS y,
-                       sc.direction_label AS route,
+                       sc.direction_label AS route, tt.timetable_number AS ttn,
                        t1.departure_time AS dep, t2.departure_time AS arr,
                        sc.id AS sched, tr.trip_index AS trip,
                        ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
@@ -199,6 +204,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                                       AND ssb.stop_id = m.y
                                       AND ssb.stop_sequence > ssa.stop_sequence
                 JOIN schedule sc  ON sc.id = ssa.schedule_id
+                JOIN timetable tt ON tt.id = sc.timetable_id
                 JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
                 JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                                  AND t1.cell_type = 'TIME'
@@ -211,7 +217,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             leg3 AS (
                 SELECT DISTINCT ON (sc.day_type, ssa.stop_id, sc.direction_label,
                                     t1.departure_time, t2.raw_value)
-                       sc.day_type, ssa.stop_id AS y, sc.direction_label AS route,
+                       sc.day_type, ssa.stop_id AS y, sc.direction_label AS route, tt.timetable_number AS ttn,
                        t1.departure_time AS dep, t2.raw_value AS arr_raw,
                        t2.departure_time AS arr_time,
                        sc.id AS sched, tr.trip_index AS trip,
@@ -220,6 +226,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
                                       AND ssb.stop_sequence > ssa.stop_sequence
                 JOIN schedule sc  ON sc.id = ssa.schedule_id
+                JOIN timetable tt ON tt.id = sc.timetable_id
                 JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
                 JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                                  AND t1.cell_type = 'TIME'
@@ -238,6 +245,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                    x2.id         AS "change2Id",
                    x2.name       AS "change2Name",
                    l1.route      AS "route1",
+                   l1.ttn        AS "ttn1",
                    l1.dep        AS "dep1",
                    l1.arr        AS "arr1",
                    l1.sched      AS "sched1",
@@ -245,6 +253,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                    l1.from_seq   AS "fromSeq1",
                    l1.to_seq     AS "toSeq1",
                    l2.route      AS "route2",
+                   l2.ttn        AS "ttn2",
                    l2.dep        AS "dep2",
                    l2.arr        AS "arr2",
                    l2.sched      AS "sched2",
@@ -252,6 +261,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                    l2.from_seq   AS "fromSeq2",
                    l2.to_seq     AS "toSeq2",
                    l3.route      AS "route3",
+                   l3.ttn        AS "ttn3",
                    l3.dep        AS "dep3",
                    l3.arr_raw    AS "arrRaw3",
                    l3.sched      AS "sched3",

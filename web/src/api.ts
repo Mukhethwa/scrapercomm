@@ -257,6 +257,7 @@ export interface ConnectionLeg {
   to_lat: number | null
   to_lon: number | null
   route_label: string
+  timetable_number: string | null
   board_raw: string
   /** The literal timetable cell: "via" where no arrival time is published. */
   arrive_raw: string

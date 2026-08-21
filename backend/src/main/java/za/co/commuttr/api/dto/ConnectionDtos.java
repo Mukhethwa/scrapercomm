@@ -31,6 +31,7 @@ public final class ConnectionDtos {
                                    Double toLat,
                                    Double toLon,
                                    String routeLabel,
+                                   String timetableNumber,
                                    String boardRaw,
                                    String arriveRaw,
                                    Integer boardMinutes,

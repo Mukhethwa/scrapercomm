@@ -23,7 +23,7 @@ function legToJourney(leg: ConnectionLeg, dayType: string, dayLabel: string): Sa
             lat: leg.from_lat ?? 0, lon: leg.from_lon ?? 0 },
     to: { kind: 'stop', id: leg.to_stop_id, name: leg.to_name,
           lat: leg.to_lat ?? 0, lon: leg.to_lon ?? 0 },
-    route: { label: leg.route_label, timetableNumber: '', dayType, dayLabel },
+    route: { label: leg.route_label, timetableNumber: leg.timetable_number ?? '', dayType, dayLabel },
     approx: { board: false, alight: false },
     departure: {
       boardRaw: leg.board_raw, arriveRaw: leg.arrive_raw,

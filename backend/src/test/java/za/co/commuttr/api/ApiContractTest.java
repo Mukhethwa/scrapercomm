@@ -138,11 +138,11 @@ class ApiContractTest {
     void connectionsResponseShape() throws Exception {
         ConnectionLegDto leg1 = new ConnectionLegDto(
                 24696, "MALMESBURY", -33.45, 18.73, 101, "CAPE TOWN", -33.92, 18.42,
-                "MALMESBURY - KILLARNEY - CAPE TOWN", "07:45", "10:00", 465, 600,
+                "MALMESBURY - KILLARNEY - CAPE TOWN", "013501", "07:45", "10:00", 465, 600,
                 14230, 4, 0, 8);
         ConnectionLegDto leg2 = new ConnectionLegDto(
                 101, "CAPE TOWN", -33.92, 18.42, 3370, "BUH REIN", -33.82, 18.71,
-                "CAPE TOWN - NORTHPINE - KRAAIFONTEIN", "14:50", "via", 890, null,
+                "CAPE TOWN - NORTHPINE - KRAAIFONTEIN", "001501", "14:50", "via", 890, null,
                 13987, 0, 0, 6);
         given(connections.connections(anyInt(), anyInt())).willReturn(new ConnectionsResponse(
                 new StopDto(24696, "MALMESBURY", -33.45, 18.73),
@@ -163,7 +163,10 @@ class ApiContractTest {
                 .andExpect(jsonPath("$.connections[0].legs[1].to_name").value("BUH REIN"))
                 // an unpublished arrival stays the literal cell rather than becoming null
                 .andExpect(jsonPath("$.connections[0].legs[1].arrive_raw").value("via"))
-                .andExpect(jsonPath("$.connections[0].legs[1].schedule_id").value(13987));
+                .andExpect(jsonPath("$.connections[0].legs[1].schedule_id").value(13987))
+                // Each leg carries its own timetable number; the planner shows it per leg.
+                .andExpect(jsonPath("$.connections[0].legs[0].timetable_number").value("013501"))
+                .andExpect(jsonPath("$.connections[0].legs[1].timetable_number").value("001501"));
     }
 
     @Test

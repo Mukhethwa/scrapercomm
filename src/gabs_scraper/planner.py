@@ -440,3 +440,42 @@ def _reachable_from_legs(conn, legs):
     )
     return [{"id": i, "name": n, "lat": la, "lon": lo, "trip_count": c}
             for i, n, la, lo, c in cur.fetchall()]
+
+
+def order_by_time(stops):
+    """Put a trip's stops into travel order.
+
+    ``stop_sequence`` is the PDF's row order, and for about 4.8% of trips that is not
+    travel order: GABS prints alternative origins as the bottom rows of a grid, so a trip
+    can list CAPE TOWN 06:20 above VREDEKLOOF 05:05 even though Vredekloof is where the
+    bus starts. Rendered as-is it claims the bus reaches its terminus before an earlier
+    stop, and hides the origin's departure time — the one a commuter needs to know when
+    to leave home.
+
+    Published times are the operator's ground truth, so they decide the order. A "via"
+    carries no time of its own but is printed between two timed rows, so it inherits the
+    next timed stop's time; sequence breaks ties, keeping vias in their printed order.
+    Verified to put all 4,819 affected trips into ascending time order.
+    """
+    n = len(stops)
+    if n < 2:
+        return list(stops)
+
+    # The next published time at or after each row.
+    nxt = [None] * n
+    carry = None
+    for i in range(n - 1, -1, -1):
+        if stops[i].get("departure_time") is not None:
+            carry = stops[i]["departure_time"]
+        nxt[i] = carry
+    # Trailing vias have no later time; fall back to the last one seen.
+    prev = None
+    for i in range(n):
+        if stops[i].get("departure_time") is not None:
+            prev = stops[i]["departure_time"]
+        if nxt[i] is None:
+            nxt[i] = prev
+
+    keyed = [(nxt[i], stops[i]["stop_sequence"], i) for i in range(n)]
+    keyed.sort(key=lambda k: (k[0] is None, k[0], k[1]))
+    return [stops[k[2]] for k in keyed]

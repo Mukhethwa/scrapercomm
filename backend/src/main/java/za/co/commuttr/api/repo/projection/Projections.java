@@ -201,6 +201,7 @@ public final class Projections {
         String getChangeName();
 
         String getRoute1();
+        String getTtn1();
         LocalTime getDep1();
         LocalTime getArr1();
         Integer getSched1();
@@ -209,6 +210,7 @@ public final class Projections {
         Integer getToSeq1();
 
         String getRoute2();
+        String getTtn2();
         LocalTime getDep2();
         /** Raw cell text: may be "via" where no arrival time is published. */
         String getArrRaw2();
@@ -230,6 +232,7 @@ public final class Projections {
         String getChange2Name();
 
         String getRoute1();
+        String getTtn1();
         LocalTime getDep1();
         LocalTime getArr1();
         Integer getSched1();
@@ -238,6 +241,7 @@ public final class Projections {
         Integer getToSeq1();
 
         String getRoute2();
+        String getTtn2();
         LocalTime getDep2();
         LocalTime getArr2();
         Integer getSched2();
@@ -246,6 +250,7 @@ public final class Projections {
         Integer getToSeq2();
 
         String getRoute3();
+        String getTtn3();
         LocalTime getDep3();
         String getArrRaw3();
         Integer getSched3();

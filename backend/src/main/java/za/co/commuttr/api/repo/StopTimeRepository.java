@@ -51,6 +51,8 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
             FROM schedule_stop ssx
             JOIN stop_time bx       ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
             JOIN stop_time byy      ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
+                                   AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                                        OR byy.departure_time >= bx.departure_time)
             JOIN schedule_stop ssy  ON ssy.id = byy.schedule_stop_id
                                    AND ssy.stop_sequence > ssx.stop_sequence
             JOIN stop s2            ON s2.id = ssy.stop_id
@@ -89,6 +91,8 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                 JOIN stop_time byy ON byy.trip_id = bx.trip_id
                 WHERE bx.schedule_stop_id = ssx.id AND byy.schedule_stop_id = ssy.id
                   AND bx.cell_type <> 'NONE' AND byy.cell_type <> 'NONE'
+                  AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                       OR byy.departure_time >= bx.departure_time)
               )
             """, nativeQuery = true)
     List<JourneyConnRow> findConnectingSchedules(@Param("fromStopId") Integer fromStopId,
@@ -108,6 +112,13 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
             JOIN stop_time byy ON byy.trip_id = tr.id AND byy.schedule_stop_id = :alightScheduleStopId
             WHERE tr.schedule_id = :scheduleId
               AND bx.cell_type <> 'NONE' AND byy.cell_type <> 'NONE'
+              -- A stop later in the PDF is not necessarily later in the journey: GABS
+              -- prints alternative origins as the bottom rows of a grid, so 4.8% of trips
+              -- have times that run backwards by stop_sequence. Without this the planner
+              -- offered CAPE TOWN 06:20 -> VREDEKLOOF 05:05, a bus arriving before you
+              -- board it. "via" cells carry no time and are left alone.
+              AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                   OR byy.departure_time >= bx.departure_time)
             """, nativeQuery = true)
     List<JourneyDepartureRow> findDepartures(@Param("boardScheduleStopId") Integer boardScheduleStopId,
                                              @Param("alightScheduleStopId") Integer alightScheduleStopId,

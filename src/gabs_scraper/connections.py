@@ -55,6 +55,7 @@ leg1 AS (
     SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
                         t1.departure_time, t2.departure_time)
            sc.day_type, ssb.stop_id AS x, sc.direction_label AS route,
+           tt.timetable_number AS ttn,
            t1.departure_time AS dep, t2.departure_time AS arr,
            sc.id AS sched, tr.trip_index AS trip,
            ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
@@ -62,6 +63,7 @@ leg1 AS (
     JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
                           AND ssb.stop_sequence > ssa.stop_sequence
     JOIN schedule sc  ON sc.id = ssa.schedule_id
+    JOIN timetable tt ON tt.id = sc.timetable_id
     JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
     JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                      AND t1.cell_type = 'TIME'
@@ -76,6 +78,7 @@ leg2 AS (
     SELECT DISTINCT ON (sc.day_type, ssa.stop_id, sc.direction_label,
                         t1.departure_time, t2.raw_value)
            sc.day_type, ssa.stop_id AS x, sc.direction_label AS route,
+           tt.timetable_number AS ttn,
            t1.departure_time AS dep, t2.raw_value AS arr_raw,
            t2.departure_time AS arr_time,
            sc.id AS sched, tr.trip_index AS trip,
@@ -84,6 +87,7 @@ leg2 AS (
     JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
                           AND ssb.stop_sequence > ssa.stop_sequence
     JOIN schedule sc  ON sc.id = ssa.schedule_id
+    JOIN timetable tt ON tt.id = sc.timetable_id
     JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
     JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                      AND t1.cell_type = 'TIME'
@@ -96,8 +100,8 @@ leg2 AS (
              t1.departure_time, t2.raw_value, sc.id, tr.trip_index
 )
 SELECT l1.day_type, x.id, x.name,
-       l1.route, l1.dep, l1.arr, l1.sched, l1.trip, l1.from_seq, l1.to_seq,
-       l2.route, l2.dep, l2.arr_raw, l2.sched, l2.trip, l2.from_seq, l2.to_seq,
+       l1.route, l1.ttn, l1.dep, l1.arr, l1.sched, l1.trip, l1.from_seq, l1.to_seq,
+       l2.route, l2.ttn, l2.dep, l2.arr_raw, l2.sched, l2.trip, l2.from_seq, l2.to_seq,
        CAST(EXTRACT(EPOCH FROM (l2.dep - l1.arr)) / 60 AS integer) AS wait_minutes,
        CAST(EXTRACT(EPOCH FROM (COALESCE(l2.arr_time, l2.dep) - l1.dep)) / 60
             AS integer) AS total_minutes
@@ -139,6 +143,7 @@ leg1 AS (
     SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
                         t1.departure_time, t2.departure_time)
            sc.day_type, ssb.stop_id AS x, sc.direction_label AS route,
+           tt.timetable_number AS ttn,
            t1.departure_time AS dep, t2.departure_time AS arr,
            sc.id AS sched, tr.trip_index AS trip,
            ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
@@ -146,6 +151,7 @@ leg1 AS (
     JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
                           AND ssb.stop_sequence > ssa.stop_sequence
     JOIN schedule sc  ON sc.id = ssa.schedule_id
+    JOIN timetable tt ON tt.id = sc.timetable_id
     JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
     JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                      AND t1.cell_type = 'TIME'
@@ -161,7 +167,7 @@ leg2 AS (
     SELECT DISTINCT ON (sc.day_type, ssa.stop_id, ssb.stop_id,
                         sc.direction_label, t1.departure_time, t2.departure_time)
            sc.day_type, ssa.stop_id AS x, ssb.stop_id AS y,
-           sc.direction_label AS route,
+           sc.direction_label AS route, tt.timetable_number AS ttn,
            t1.departure_time AS dep, t2.departure_time AS arr,
            sc.id AS sched, tr.trip_index AS trip,
            ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
@@ -172,6 +178,7 @@ leg2 AS (
                           AND ssb.stop_id = m.y
                           AND ssb.stop_sequence > ssa.stop_sequence
     JOIN schedule sc  ON sc.id = ssa.schedule_id
+    JOIN timetable tt ON tt.id = sc.timetable_id
     JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
     JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                      AND t1.cell_type = 'TIME'
@@ -185,6 +192,7 @@ leg3 AS (
     SELECT DISTINCT ON (sc.day_type, ssa.stop_id, sc.direction_label,
                         t1.departure_time, t2.raw_value)
            sc.day_type, ssa.stop_id AS y, sc.direction_label AS route,
+           tt.timetable_number AS ttn,
            t1.departure_time AS dep, t2.raw_value AS arr_raw,
            t2.departure_time AS arr_time,
            sc.id AS sched, tr.trip_index AS trip,
@@ -193,6 +201,7 @@ leg3 AS (
     JOIN schedule_stop ssb ON ssb.schedule_id = ssa.schedule_id
                           AND ssb.stop_sequence > ssa.stop_sequence
     JOIN schedule sc  ON sc.id = ssa.schedule_id
+    JOIN timetable tt ON tt.id = sc.timetable_id
     JOIN trip tr      ON tr.schedule_id = ssa.schedule_id
     JOIN stop_time t1 ON t1.trip_id = tr.id AND t1.schedule_stop_id = ssa.id
                      AND t1.cell_type = 'TIME'
@@ -206,9 +215,9 @@ leg3 AS (
              t1.departure_time, t2.raw_value, sc.id, tr.trip_index
 )
 SELECT l1.day_type, x1.id, x1.name, x2.id, x2.name,
-       l1.route, l1.dep, l1.arr, l1.sched, l1.trip, l1.from_seq, l1.to_seq,
-       l2.route, l2.dep, l2.arr, l2.sched, l2.trip, l2.from_seq, l2.to_seq,
-       l3.route, l3.dep, l3.arr_raw, l3.sched, l3.trip, l3.from_seq, l3.to_seq,
+       l1.route, l1.ttn, l1.dep, l1.arr, l1.sched, l1.trip, l1.from_seq, l1.to_seq,
+       l2.route, l2.ttn, l2.dep, l2.arr, l2.sched, l2.trip, l2.from_seq, l2.to_seq,
+       l3.route, l3.ttn, l3.dep, l3.arr_raw, l3.sched, l3.trip, l3.from_seq, l3.to_seq,
        CAST(EXTRACT(EPOCH FROM ((l2.dep - l1.arr) + (l3.dep - l2.arr))) / 60
             AS integer) AS wait_minutes,
        CAST(EXTRACT(EPOCH FROM (COALESCE(l3.arr_time, l3.dep) - l1.dep)) / 60
@@ -247,7 +256,7 @@ def _coords(cur, stop_ids):
     return {r[0]: (r[1], r[2]) for r in cur.fetchall()}
 
 
-def _leg(from_id, from_name, from_ll, to_id, to_name, to_ll, route,
+def _leg(from_id, from_name, from_ll, to_id, to_name, to_ll, route, ttn,
          board, arrive_raw, arrive_time, sched, trip, from_seq, to_seq):
     return {
         "from_stop_id": from_id, "from_name": from_name,
@@ -255,6 +264,7 @@ def _leg(from_id, from_name, from_ll, to_id, to_name, to_ll, route,
         "to_stop_id": to_id, "to_name": to_name,
         "to_lat": to_ll[0], "to_lon": to_ll[1],
         "route_label": route,
+        "timetable_number": ttn,
         "board_raw": _fmt_time(board),
         "arrive_raw": arrive_raw,
         "board_minutes": _minutes(board),
@@ -283,17 +293,17 @@ def connections(conn, from_id, to_id,
     if rows:
         coords = _coords(cur, [r[1] for r in rows])
         out = []
-        for (day, xid, xname, r1, d1, a1, s1, t1, f1, e1,
-             r2, d2, araw2, s2, t2, f2, e2, wait, total) in rows:
+        for (day, xid, xname, r1, n1, d1, a1, s1, t1, f1, e1,
+             r2, n2, d2, araw2, s2, t2, f2, e2, wait, total) in rows:
             xll = coords.get(xid, (None, None))
             out.append({
                 "day_type": day,
                 "change_at": [xname],
                 "legs": [
                     _leg(from_id, origin["name"], from_ll, xid, xname, xll,
-                         r1, d1, _fmt_time(a1), a1, s1, t1, f1, e1),
+                         r1, n1, d1, _fmt_time(a1), a1, s1, t1, f1, e1),
                     _leg(xid, xname, xll, to_id, dest["name"], to_ll,
-                         r2, d2, araw2, None, s2, t2, f2, e2),
+                         r2, n2, d2, araw2, None, s2, t2, f2, e2),
                 ],
                 "wait_minutes": wait,
                 "total_minutes": total,
@@ -306,9 +316,9 @@ def connections(conn, from_id, to_id,
         coords = _coords(cur, [r[1] for r in rows] + [r[3] for r in rows])
         out = []
         for (day, xid, xname, yid, yname,
-             r1, d1, a1, s1, t1, f1, e1,
-             r2, d2, a2, s2, t2, f2, e2,
-             r3, d3, araw3, s3, t3, f3, e3, wait, total) in rows:
+             r1, n1, d1, a1, s1, t1, f1, e1,
+             r2, n2, d2, a2, s2, t2, f2, e2,
+             r3, n3, d3, araw3, s3, t3, f3, e3, wait, total) in rows:
             xll = coords.get(xid, (None, None))
             yll = coords.get(yid, (None, None))
             out.append({
@@ -316,11 +326,11 @@ def connections(conn, from_id, to_id,
                 "change_at": [xname, yname],
                 "legs": [
                     _leg(from_id, origin["name"], from_ll, xid, xname, xll,
-                         r1, d1, _fmt_time(a1), a1, s1, t1, f1, e1),
+                         r1, n1, d1, _fmt_time(a1), a1, s1, t1, f1, e1),
                     _leg(xid, xname, xll, yid, yname, yll,
-                         r2, d2, _fmt_time(a2), a2, s2, t2, f2, e2),
+                         r2, n2, d2, _fmt_time(a2), a2, s2, t2, f2, e2),
                     _leg(yid, yname, yll, to_id, dest["name"], to_ll,
-                         r3, d3, araw3, None, s3, t3, f3, e3),
+                         r3, n3, d3, araw3, None, s3, t3, f3, e3),
                 ],
                 "wait_minutes": wait,
                 "total_minutes": total,

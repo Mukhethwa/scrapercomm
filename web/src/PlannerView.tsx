@@ -192,7 +192,9 @@ function SortableJourney(props: {
           </div>
           <div className="plannersign">
             Bus to <b>{terminusOf(j.route.label)}</b>
-            <span className="plannerttn"> · timetable #{j.route.timetableNumber}</span>
+            {j.route.timetableNumber
+              ? <span className="plannerttn"> · timetable #{j.route.timetableNumber}</span>
+              : null}
           </div>
         </button>
 

@@ -36,8 +36,10 @@ import za.co.commuttr.api.repo.projection.Projections.ScheduleMetaRow;
 import za.co.commuttr.api.repo.projection.Projections.SegmentStopWithIdRow;
 import za.co.commuttr.api.repo.projection.Projections.StopAnchorRow;
 import za.co.commuttr.api.repo.projection.Projections.StopRow;
+import za.co.commuttr.api.repo.projection.Projections.TripStopRow;
 import za.co.commuttr.api.web.ApiException;
 
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -530,9 +532,56 @@ public class PlannerService {
         }
     }
 
-    /** GET /api/trip_stops */
+    /**
+     * GET /api/trip_stops, in travel order.
+     *
+     * <p>{@code stop_sequence} is the PDF's row order, and for about 4.8% of trips that is
+     * not travel order: GABS prints alternative origins as the bottom rows of a grid, so a
+     * trip can list CAPE TOWN 06:20 above VREDEKLOOF 05:05 even though Vredekloof is where
+     * the bus starts. Rendered as printed it claims the bus reaches its terminus before an
+     * earlier stop, and hides the origin's departure time — the one a commuter needs in
+     * order to know when to leave home.
+     *
+     * <p>Published times are the operator's ground truth, so they decide the order. A
+     * "via" carries no time of its own but is printed between two timed rows, so it
+     * inherits the next timed stop's time; sequence breaks ties, keeping vias in their
+     * printed order. Verified to put all 4,819 affected trips into ascending time order.
+     */
     public TripStopsResponse tripStops(Integer scheduleId, Integer tripIndex, Integer fromSeq, Integer toSeq) {
-        List<TripStopDto> rows = stopTimes.findTripStops(scheduleId, tripIndex, fromSeq, toSeq).stream()
+        List<TripStopRow> raw = stopTimes.findTripStops(scheduleId, tripIndex, fromSeq, toSeq);
+        int n = raw.size();
+
+        // The next published time at or after each row.
+        LocalTime[] next = new LocalTime[n];
+        LocalTime carry = null;
+        for (int i = n - 1; i >= 0; i--) {
+            if (raw.get(i).getDepartureTime() != null) {
+                carry = raw.get(i).getDepartureTime();
+            }
+            next[i] = carry;
+        }
+        // Trailing vias have no later time; fall back to the last one seen.
+        LocalTime prev = null;
+        for (int i = 0; i < n; i++) {
+            if (raw.get(i).getDepartureTime() != null) {
+                prev = raw.get(i).getDepartureTime();
+            }
+            if (next[i] == null) {
+                next[i] = prev;
+            }
+        }
+
+        List<Integer> order = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            order.add(i);
+        }
+        order.sort(Comparator
+                .comparing((Integer i) -> next[i] == null)
+                .thenComparing(i -> next[i], Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(i -> raw.get(i).getStopSequence()));
+
+        List<TripStopDto> rows = order.stream()
+                .map(raw::get)
                 .map(r -> new TripStopDto(r.getName(), r.getLat(), r.getLon(), r.getStopSequence(),
                         r.getRawValue(), r.getCellType(), ApiFormat.time(r.getDepartureTime())))
                 .toList();

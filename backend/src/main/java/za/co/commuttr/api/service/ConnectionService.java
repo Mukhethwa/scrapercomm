@@ -96,14 +96,14 @@ public class ConnectionService {
         ConnectionLegDto leg1 = new ConnectionLegDto(
                 from.getId(), from.getName(), from.getLat(), from.getLon(),
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
-                r.getRoute1(), ApiFormat.time(r.getDep1()), ApiFormat.time(r.getArr1()),
+                r.getRoute1(), r.getTtn1(), ApiFormat.time(r.getDep1()), ApiFormat.time(r.getArr1()),
                 ApiFormat.minutes(r.getDep1()), ApiFormat.minutes(r.getArr1()),
                 r.getSched1(), r.getTrip1(), r.getFromSeq1(), r.getToSeq1());
 
         ConnectionLegDto leg2 = new ConnectionLegDto(
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
                 to.getId(), to.getName(), to.getLat(), to.getLon(),
-                r.getRoute2(), ApiFormat.time(r.getDep2()), r.getArrRaw2(),
+                r.getRoute2(), r.getTtn2(), ApiFormat.time(r.getDep2()), r.getArrRaw2(),
                 ApiFormat.minutes(r.getDep2()), null,
                 r.getSched2(), r.getTrip2(), r.getFromSeq2(), r.getToSeq2());
 
@@ -115,21 +115,21 @@ public class ConnectionService {
         ConnectionLegDto leg1 = new ConnectionLegDto(
                 from.getId(), from.getName(), from.getLat(), from.getLon(),
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
-                r.getRoute1(), ApiFormat.time(r.getDep1()), ApiFormat.time(r.getArr1()),
+                r.getRoute1(), r.getTtn1(), ApiFormat.time(r.getDep1()), ApiFormat.time(r.getArr1()),
                 ApiFormat.minutes(r.getDep1()), ApiFormat.minutes(r.getArr1()),
                 r.getSched1(), r.getTrip1(), r.getFromSeq1(), r.getToSeq1());
 
         ConnectionLegDto leg2 = new ConnectionLegDto(
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
                 r.getChange2Id(), r.getChange2Name(), lat(c, r.getChange2Id()), lon(c, r.getChange2Id()),
-                r.getRoute2(), ApiFormat.time(r.getDep2()), ApiFormat.time(r.getArr2()),
+                r.getRoute2(), r.getTtn2(), ApiFormat.time(r.getDep2()), ApiFormat.time(r.getArr2()),
                 ApiFormat.minutes(r.getDep2()), ApiFormat.minutes(r.getArr2()),
                 r.getSched2(), r.getTrip2(), r.getFromSeq2(), r.getToSeq2());
 
         ConnectionLegDto leg3 = new ConnectionLegDto(
                 r.getChange2Id(), r.getChange2Name(), lat(c, r.getChange2Id()), lon(c, r.getChange2Id()),
                 to.getId(), to.getName(), to.getLat(), to.getLon(),
-                r.getRoute3(), ApiFormat.time(r.getDep3()), r.getArrRaw3(),
+                r.getRoute3(), r.getTtn3(), ApiFormat.time(r.getDep3()), r.getArrRaw3(),
                 ApiFormat.minutes(r.getDep3()), null,
                 r.getSched3(), r.getTrip3(), r.getFromSeq3(), r.getToSeq3());
 
