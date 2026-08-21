@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { Info } from 'lucide-react'
 import type { TripStop } from './api'
 
 export interface PinEnd { name: string; time?: string }
@@ -74,7 +76,30 @@ export default function TripStrip(
           )
         })}
       </ol>
-      <div className="tsfoot">"Via" means the bus passes this stop, but the timetable does not publish an exact time for it. The times shown before you get on, and after you get off, are the bus's official schedule.</div>
+      <TripNote />
+    </div>
+  )
+}
+
+/**
+ * The "via" explanation is worth reading once and then never again, so it sits behind an
+ * info button rather than taking up room under every trip a commuter opens.
+ */
+function TripNote() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="tsnote">
+      <button className="infobtn" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <Info size={13} aria-hidden="true" />
+        <span>What does "via" mean?</span>
+      </button>
+      {open && (
+        <div className="tsfoot" role="note">
+          "Via" means the bus passes this stop, but the timetable does not publish an exact
+          time for it. The times shown before you get on, and after you get off, are the
+          bus's official schedule.
+        </div>
+      )}
     </div>
   )
 }

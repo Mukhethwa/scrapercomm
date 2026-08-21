@@ -7,6 +7,7 @@ import {
 import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
 import { buildJourney, usePlanner } from './planner'
+import { ArrowRight } from 'lucide-react'
 import { PinIcon } from './icons'
 
 const DAY_LABEL: Record<string, string> = {
@@ -227,7 +228,7 @@ export default function PlanView() {
           </div>
         </div>
 
-        <div className="arrow">→</div>
+        <div className="arrow"><ArrowRight size={16} aria-hidden="true" /></div>
 
         <div className="field">
           <label>Destination</label>

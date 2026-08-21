@@ -8,6 +8,7 @@ import {
   useSortable, verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { ArrowRight, ArrowUp, ArrowDown, GripVertical } from 'lucide-react'
 import { getPlan, getTripStops, type PlanOption, type TripStop } from './api'
 import {
   buildJourney, connectionIssues, rideKey, toEndpoint, usePlanner,
@@ -173,13 +174,13 @@ function SortableJourney(props: {
           {...listeners}
         >
           <span className="posnum">{position}</span>
-          <span className="dragdots" aria-hidden="true">⠿</span>
+          <GripVertical size={14} className="dragdots" aria-hidden="true" />
         </button>
 
         <button className="plannermain" onClick={onToggleDetail} aria-expanded={open}>
           <div className="plannerroute">
             <span className="pfrom">{j.from.name}</span>
-            <span className="parrow">→</span>
+            <ArrowRight size={14} className="parrow" aria-hidden="true" />
             <span className="pto">{j.to.name}</span>
           </div>
           <div className="plannertimes">
@@ -198,9 +199,13 @@ function SortableJourney(props: {
         <div className="plannerside">
           <div className="movebtns">
             <button className="movebtn" disabled={position === 1}
-              onClick={() => onMove(-1)} aria-label="Move up">↑</button>
+              onClick={() => onMove(-1)} aria-label="Move up">
+              <ArrowUp size={13} aria-hidden="true" />
+            </button>
             <button className="movebtn" disabled={position === total}
-              onClick={() => onMove(1)} aria-label="Move down">↓</button>
+              onClick={() => onMove(1)} aria-label="Move down">
+              <ArrowDown size={13} aria-hidden="true" />
+            </button>
           </div>
           <button className="link" onClick={onToggleEdit}>
             {editing ? 'Cancel' : 'Change time'}
