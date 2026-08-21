@@ -5,6 +5,8 @@ import {
   type PlanDeparture, type TripStop, type NearbyOrigin,
 } from './api'
 import PlanMap from './PlanMap'
+import TripStrip from './TripStrip'
+import { buildJourney, usePlanner } from './planner'
 import { PinIcon } from './icons'
 
 const DAY_LABEL: Record<string, string> = {
@@ -67,6 +69,16 @@ async function mergedSearch(q: string, areas: string[]): Promise<Hit[]> {
   return [...areaHits, ...stops, ...places]
 }
 
+/**
+ * The suggestion menu floats over the content below it (position: absolute, up to 280px
+ * tall), so leaving it open once the field loses focus hides real information.
+ *
+ * Visibility is tied to whether the field has focus rather than to clearing the results
+ * array: a search started on focus can resolve after the user has already left the
+ * field, and clearing the array would simply be undone when that promise lands. Menu
+ * items use onMouseDown, which fires before blur, so clicking a suggestion still
+ * registers. Escape blurs, which closes the menu by the same rule.
+ */
 export default function PlanView() {
   const [from, setFrom] = useState<Endpoint | null>(null)
   const [to, setTo] = useState<Endpoint | null>(null)
@@ -77,6 +89,10 @@ export default function PlanView() {
 
   const [fromHits, setFromHits] = useState<Hit[]>([])
   const [toHits, setToHits] = useState<Hit[]>([])
+  // Whether each field has focus. The menu renders only while it does, so a search that
+  // resolves after the field was left cannot pop it open again.
+  const [fromOpen, setFromOpen] = useState(false)
+  const [toOpen, setToOpen] = useState(false)
   const [areas, setAreas] = useState<string[]>([])
 
   useEffect(() => { getAreas().then((r) => setAreas(r.areas)).catch(() => {}) }, [])
@@ -99,6 +115,19 @@ export default function PlanView() {
   const [loadingTrip, setLoadingTrip] = useState(false)
 
   const [dayAlts, setDayAlts] = useState<Record<string, NearbyOrigin[]>>({})
+
+  const planner = usePlanner()
+
+  /** Add this departure to the planner, or take it off again if it is already there. */
+  function togglePlanned(o: PlanOption, d: PlanDeparture) {
+    if (!from || !to) return
+    const existing = planner.find({
+      scheduleId: d.schedule_id, tripIndex: d.trip_index,
+      fromSeq: d.from_seq, toSeq: d.to_seq,
+    })
+    if (existing) planner.remove(existing.id)
+    else planner.add(buildJourney(from, to, o, d))
+  }
 
   useEffect(() => {
     if (!debFrom || (from && from.name === debFrom)) { setFromHits([]); return }
@@ -180,9 +209,12 @@ export default function PlanView() {
           <label>Starting point</label>
           <div className="ac">
             <input value={fromText} placeholder="Bus stop, place, or address"
-              onChange={(e) => { setFromText(e.target.value); if (from) { setFrom(null); setReachable(null); setPlan(null); setTo(null); setDayAlts({}) } }} />
+              onChange={(e) => { setFromText(e.target.value); if (from) { setFrom(null); setReachable(null); setPlan(null); setTo(null); setDayAlts({}) } }}
+              onFocus={() => setFromOpen(true)}
+              onBlur={() => setFromOpen(false)}
+              onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.blur() }} />
             <button className={`pinbtn ${armed === 'from' ? 'armed' : ''}`} onClick={() => setArmed(armed === 'from' ? null : 'from')}><PinIcon /> Map</button>
-            {fromHits.length > 0 && (
+            {fromOpen && fromHits.length > 0 && (
               <div className="acmenu">
                 {fromHits.map((h, i) => (
                   <button key={i} className="acitem" onMouseDown={() => resolveHit(h).then((ep) => ep && pickFrom(ep))}>
@@ -202,9 +234,12 @@ export default function PlanView() {
           <div className="ac">
             <input value={toText} disabled={!from}
               placeholder={!from ? 'Choose a starting point first' : 'Where do you want to go?'}
-              onChange={(e) => { setToText(e.target.value); if (to) { setTo(null); setPlan(null); setDayAlts({}) } }} />
+              onChange={(e) => { setToText(e.target.value); if (to) { setTo(null); setPlan(null); setDayAlts({}) } }}
+              onFocus={() => setToOpen(true)}
+              onBlur={() => setToOpen(false)}
+              onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.blur() }} />
             <button className={`pinbtn ${armed === 'to' ? 'armed' : ''}`} disabled={!from} onClick={() => setArmed(armed === 'to' ? null : 'to')}><PinIcon /> Map</button>
-            {toHits.length > 0 && (
+            {toOpen && toHits.length > 0 && (
               <div className="acmenu">
                 {toHits.map((h, i) => (
                   <button key={i} className="acitem" onMouseDown={() => resolveHit(h).then((ep) => ep && pickTo(ep))}>
@@ -284,14 +319,30 @@ export default function PlanView() {
                         <div key={g.key} className="depgroup">
                           <div className="depgrouplbl">{g.label}</div>
                           <div className="depsgrid">
-                            {groups[g.key].map(({ d, j }) => (
-                              <button key={j} className={`dep ${openDep?.oi === i && openDep?.di === j ? 'on' : ''}`}
-                                onClick={() => selectDep(i, j, d)}>
-                                <span className="bt">{d.board_raw}</span>
-                                <span className="da">to</span>
-                                <span className="at">{d.arrive_raw}</span>
-                              </button>
-                            ))}
+                            {groups[g.key].map(({ d, j }) => {
+                              const planned = planner.has({
+                                scheduleId: d.schedule_id, tripIndex: d.trip_index,
+                                fromSeq: d.from_seq, toSeq: d.to_seq,
+                              })
+                              return (
+                                <div key={j} className={`depwrap ${planned ? 'planned' : ''}`}>
+                                  <button className={`dep ${openDep?.oi === i && openDep?.di === j ? 'on' : ''}`}
+                                    onClick={() => selectDep(i, j, d)}>
+                                    <span className="bt">{d.board_raw}</span>
+                                    <span className="da">to</span>
+                                    <span className="at">{d.arrive_raw}</span>
+                                  </button>
+                                  <button
+                                    className={`addbtn ${planned ? 'on' : ''}`}
+                                    onClick={() => togglePlanned(o, d)}
+                                    title={planned ? 'Remove from your planner' : 'Add to your planner'}
+                                    aria-pressed={planned}
+                                  >
+                                    {planned ? '✓ Added' : '+ Add'}
+                                  </button>
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       ) : null,
@@ -346,83 +397,6 @@ export default function PlanView() {
           />
         </section>
       </div>
-    </div>
-  )
-}
-
-interface PinEnd { name: string; time?: string }
-
-/**
- * Shows the whole trip the bus makes (its official first stop to terminus), with the
- * real published times and "via" markers straight from the timetable, and your own
- * boarding and alighting points highlighted. Times before you board and after you
- * alight are the bus's official schedule; your unofficial-stop time is approximate.
- */
-function TripStrip(
-  { stops, loading, boardPin, alightPin, riderFromSeq, riderToSeq }:
-  {
-    stops: TripStop[] | null; loading: boolean
-    boardPin: PinEnd | null; alightPin: PinEnd | null
-    riderFromSeq: number; riderToSeq: number
-  },
-) {
-  if (loading) return <div className="tripstrip"><div className="tsloading">Loading the full trip…</div></div>
-  if (!stops || stops.length === 0)
-    return <div className="tripstrip"><div className="tsloading">No stop detail for this trip.</div></div>
-
-  type Row = { name: string; time: string; approx: boolean; role: 'board' | 'alight' | 'mid' }
-  const rows: Row[] = []
-  let boardInserted = false
-  stops.forEach((s, i) => {
-    // your (unofficial) boarding point goes just before the first stop at/after it
-    if (boardPin && !boardInserted && s.stop_sequence >= riderFromSeq) {
-      rows.push({ name: boardPin.name, time: boardPin.time ?? '', approx: true, role: 'board' })
-      boardInserted = true
-    }
-    const isBoardStop = !boardPin && s.stop_sequence === riderFromSeq
-    const isAlightStop = !alightPin && s.stop_sequence === riderToSeq
-    rows.push({
-      name: s.name,
-      time: s.cell_type === 'TIME' ? s.raw_value : 'via',
-      approx: false,
-      role: isBoardStop ? 'board' : isAlightStop ? 'alight' : 'mid',
-    })
-    // your (unofficial) alighting point goes just after the last stop within your segment
-    const next = stops[i + 1]
-    if (alightPin && s.stop_sequence <= riderToSeq && (!next || next.stop_sequence > riderToSeq)) {
-      rows.push({ name: alightPin.name, time: alightPin.time ?? '', approx: true, role: 'alight' })
-    }
-  })
-
-  const boardIdx = rows.findIndex((r) => r.role === 'board')
-  const alightIdx = rows.map((r) => r.role).lastIndexOf('alight')
-
-  return (
-    <div className="tripstrip">
-      <div className="tsttitle">The whole bus trip. You ride the highlighted part.</div>
-      <ol className="tslist">
-        {rows.map((r, i) => {
-          const before = boardIdx >= 0 && i < boardIdx
-          const after = alightIdx >= 0 && i > alightIdx
-          const isFirst = i === 0
-          const isLast = i === rows.length - 1
-          return (
-            <li key={i} className={`tsrow ${r.role === 'board' ? 'get-on' : ''} ${r.role === 'alight' ? 'get-off' : ''} ${before || after ? 'context' : ''}`}>
-              <span className="tsdot" />
-              <span className="tsname">
-                {r.name}
-                {r.approx && <span className="yourstop"> (your stop)</span>}
-                {r.role === 'board' && <span className="tstag on">get on here</span>}
-                {r.role === 'alight' && <span className="tstag off">get off here</span>}
-                {isFirst && before && <span className="tstag ctx">bus starts</span>}
-                {isLast && after && <span className="tstag ctx">terminus</span>}
-              </span>
-              <span className="tstime">{r.approx ? `about ${r.time}`.trim() : r.time}</span>
-            </li>
-          )
-        })}
-      </ol>
-      <div className="tsfoot">"Via" means the bus passes this stop, but the timetable does not publish an exact time for it. The times shown before you get on, and after you get off, are the bus's official schedule.</div>
     </div>
   )
 }

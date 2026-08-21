@@ -22,6 +22,21 @@ function Fit({ pts }: { pts: [number, number][] }) {
   return null
 }
 
+/**
+ * Leaflet caches its container size, so a map that was hidden (display:none) comes back
+ * blank or half-drawn. Watching the container and re-measuring covers both that and
+ * ordinary window resizes.
+ */
+function KeepSized() {
+  const map = useMap()
+  useEffect(() => {
+    const ro = new ResizeObserver(() => map.invalidateSize())
+    ro.observe(map.getContainer())
+    return () => ro.disconnect()
+  }, [map])
+  return null
+}
+
 function Clicker({ onClick }: { onClick?: (lat: number, lon: number) => void }) {
   useMapEvents({
     click(e) {
@@ -69,6 +84,7 @@ export default function PlanMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        <KeepSized />
         <Clicker onClick={onMapClick} />
         {line.length > 1 && (
           <Polyline positions={line} pathOptions={{ color: '#ff4500', weight: 4, opacity: 0.9 }} />

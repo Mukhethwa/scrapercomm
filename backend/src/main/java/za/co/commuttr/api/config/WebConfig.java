@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
+import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.resource.PathResourceResolver;
 
@@ -53,6 +54,21 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedMethods(allowedMethods)
                 .allowedHeaders("*")
                 .maxAge(3600);
+    }
+
+    /**
+     * Serve index.html for "/" itself.
+     *
+     * <p>The resource handler below covers every other path, but Spring's
+     * {@code ResourceHttpRequestHandler} rejects an empty resource path before any
+     * resolver sees it, so the bare root would 404 while {@code /index.html} worked.
+     * FastAPI's {@code StaticFiles(..., html=True)} served the root, so this restores it.
+     */
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        if (Files.isDirectory(webDist)) {
+            registry.addViewController("/").setViewName("forward:/index.html");
+        }
     }
 
     @Override

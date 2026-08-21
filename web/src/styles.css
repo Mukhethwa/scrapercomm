@@ -267,3 +267,77 @@ body { background: var(--bg); color: var(--ink); }
 .nearbyitem .rtrips { font-size: 12px; color: var(--muted); }
 .dayalt { margin-bottom: 10px; }
 .dayaltlbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); margin-bottom: 5px; }
+
+/* ---- Planner: journeys a commuter has saved, in the order they will travel ---- */
+
+.tabbadge { margin-left: 6px; background: #fff; color: var(--accent); border-radius: 999px; font-size: 11px; font-weight: 700; padding: 1px 7px; }
+.tab.active .tabbadge { background: #fff; color: var(--accent); }
+
+/* Each departure now carries an add/remove control, so the time and the control are
+   siblings inside the grid cell (a button cannot be nested inside another button). */
+.depwrap { display: flex; flex-direction: column; gap: 3px; }
+.depwrap .dep { width: 100%; }
+.addbtn { border: 1px dashed var(--line); background: transparent; color: var(--muted); border-radius: 7px; padding: 3px 6px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.addbtn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.addbtn.on { border-style: solid; border-color: var(--accent); background: var(--accent); color: #fff; }
+.depwrap.planned .dep { box-shadow: inset 0 0 0 2px var(--accent); }
+
+.plannerwrap { flex: 1; overflow-y: auto; padding: 18px 22px 40px; }
+.plannerhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.plannerhead h2 { margin: 0 0 4px; font-size: 19px; }
+.plannersub { margin: 0; font-size: 13px; color: var(--muted); max-width: 60ch; }
+.link.danger { color: var(--ink); }
+.link.danger:hover { color: var(--accent); }
+
+.plannerempty { max-width: 46ch; margin: 48px auto; text-align: center; }
+.plannerempty h2 { margin: 0 0 8px; font-size: 19px; }
+.plannerempty p { font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+.primary { margin-top: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+.primary:hover { background: #e03d00; }
+
+.plannerlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.plannercard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.plannercard.dragging { box-shadow: 0 10px 28px rgba(0,0,0,.16); }
+.plannercard.clash { border-color: var(--accent); }
+
+.clashnote { background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; padding: 7px 12px; border-bottom: 1px solid var(--line); }
+
+.plannertop { display: flex; align-items: stretch; gap: 10px; padding: 10px 12px; }
+
+/* touch-action:none lets the pointer sensor drag on a phone instead of scrolling. */
+.draghandle { touch-action: none; cursor: grab; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: transparent; border: none; padding: 0 4px; color: var(--muted); }
+.draghandle:active { cursor: grabbing; }
+.posnum { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.dragdots { font-size: 14px; line-height: 1; opacity: .5; }
+
+.plannermain { flex: 1; text-align: left; background: transparent; border: none; padding: 0; font: inherit; cursor: pointer; min-width: 0; }
+.plannerroute { font-size: 14.5px; font-weight: 700; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.parrow { color: var(--accent); }
+.plannertimes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.ptime { font-size: 15px; font-weight: 700; }
+.pdash { font-size: 12px; color: var(--muted); }
+.plannersign { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.plannerttn { opacity: .75; }
+
+.plannerside { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.movebtns { display: flex; gap: 3px; }
+.movebtn { width: 26px; height: 24px; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; cursor: pointer; font-size: 12px; line-height: 1; }
+.movebtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.movebtn:disabled { opacity: .35; cursor: default; }
+
+.changebox { border-top: 1px solid var(--line); padding: 10px 12px 12px; background: #fafbfc; }
+.changehead { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+.changeopt { margin-bottom: 10px; }
+.changeoptlbl { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dep.current { background: var(--ink); color: #fff; cursor: default; }
+.dep.current .da, .dep.current .at { color: #fff; }
+.curtag { font-size: 10px; font-weight: 700; margin-left: 4px; opacity: .8; }
+
+@media (max-width: 620px) {
+  .plannertop { flex-wrap: wrap; }
+  .plannerside { flex-direction: row; align-items: center; width: 100%; justify-content: flex-end; gap: 10px; }
+}
+
+/* PlanView stays mounted so a search is not lost when visiting the Planner. */
+.viewhost { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.viewhost.hiddenview { display: none; }
