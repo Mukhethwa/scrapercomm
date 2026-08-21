@@ -271,7 +271,7 @@ codes and JSON bodies across every endpoint, including the error cases, and exit
 on any difference so it can gate the cutover.
 
 **Result against the refreshed database** (793 routes, 1,878 timetables, 527 stops, all
-parsed with zero failures): **45/45 endpoints identical**, no reconciliation required.
+parsed with zero failures): **49/49 endpoints identical**, no reconciliation required.
 That covers every native query, every interface projection, the grouping and sorting
 rules, and the 404/400/422 error paths.
 
@@ -345,11 +345,12 @@ Cape Town at 08:00 and reaching Town Centre at 06:10 — and because results sor
 journey time those impossible connections went straight to the top. The cost is that a
 leg genuinely crossing midnight is excluded, which is the safer trade.
 
-### Java only, by design
+### Kept in both services
 
-This endpoint has no FastAPI counterpart and is not meant to. Java is the application
-engine; Python's remaining job is scraping. `parity_check.py` still passes 45/45, because
-it compares the endpoints both services share and none of those changed.
+`src/gabs_scraper/connections.py` mirrors this engine query for query, and
+`parity_check.py` covers all three outcomes — two legs, three legs, and unreachable — so
+the gate stays complete at 49/49. Java is what serves the app; the FastAPI service exists
+as a rollback, and a rollback that is missing features is not one.
 
 ## Determinism: why both services sort the same way
 

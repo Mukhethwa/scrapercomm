@@ -559,10 +559,10 @@ background, without delaying the answer.
 That file is the original FastAPI service, kept from the migration. **It is not how you
 run the app.** Java serves the API; Python's job here is scraping.
 
-It survives only as a rollback while the Java service beds in, and as the comparison
-target for `backend/parity_check.py`, which proves the two return byte-identical
-responses across every shared endpoint. Newer work — the connections engine, for
-instance — exists only in Java, by design.
+It survives as a rollback while the Java service beds in, and as the comparison target
+for `backend/parity_check.py`, which proves the two return byte-identical responses across
+every endpoint. It is kept fully in step, connections engine included, because a rollback
+missing features is not a rollback.
 
 Technical detail on the Java service is in [backend/README.md](backend/README.md).
 

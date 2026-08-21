@@ -6,6 +6,7 @@ Endpoints (all JSON):
   GET /api/routes/{route_id}            -> route + its timetables
   GET /api/timetables/{timetable_id}    -> full render payload (schedules,
                                            stops w/ coords, trips, stop_times, notes)
+  GET /api/connections?from=&to=        -> journeys needing a change of bus
 
 If a built web UI exists at web/dist it is served at /.
 
@@ -412,6 +413,23 @@ def geocode_place(q: str):
     except Exception:  # noqa: BLE001
         hits = []
     return {"results": hits}
+
+
+@app.get("/api/connections")
+def connections(from_: int = Query(..., alias="from"), to: int = Query(...)):
+    """How to get from A to B when no single bus does it: two buses, or three.
+
+    Named stops only. The client consults this after /api/plan comes back empty.
+    """
+    from . import connections as conn_engine
+    conn = db.connect()
+    try:
+        result = conn_engine.connections(conn, from_, to)
+        if result is None:
+            raise HTTPException(404, "stop not found")
+        return result
+    finally:
+        conn.close()
 
 
 @app.get("/api/locate")

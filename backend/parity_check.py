@@ -157,6 +157,18 @@ def discover(base: str) -> list[str]:
         "/api/plan?from_lat=-33.9249&from_lon=18.4241&to_lat=-33.9022&to_lon=18.6295",
     ]
 
+    # Connections: pairs with no direct bus, so the change-of-bus engine is exercised.
+    # MALMESBURY reaches neither BUH REIN (two legs, via CAPE TOWN), WYNBERG (three legs)
+    # nor KHAYELITSHA (nothing within three), which covers all three outcomes.
+    # High enough to cover every stop: names are ordered alphabetically, so a low cap
+    # silently drops the late letters and with them the three-leg WYNBERG case.
+    _, named = fetch(base, "/api/stops?q=&limit=5000")
+    by_name = {s["name"]: s["id"] for s in named.get("stops", [])}
+    for a, b in (("MALMESBURY", "BUH REIN"), ("MALMESBURY", "WYNBERG"),
+                 ("MALMESBURY", "KHAYELITSHA")):
+        if a in by_name and b in by_name:
+            paths.append(f"/api/connections?from={by_name[a]}&to={by_name[b]}")
+
     # Error contracts.
     paths += [
         "/api/routes/99999999",
@@ -164,6 +176,7 @@ def discover(base: str) -> list[str]:
         "/api/stops/99999999/reachable",
         "/api/journeys?from=1",
         "/api/plan",
+        "/api/connections?from=1",
     ]
     return paths
 
