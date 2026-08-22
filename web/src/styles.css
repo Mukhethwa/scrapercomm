@@ -384,7 +384,10 @@ body { background: var(--bg); color: var(--ink); }
 .addbtn.wide { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px; font-size: 12px; }
 
 /* The brand doubles as a home link back to the search tab. */
-.brand { background: none; border: none; padding: 0; font: inherit; cursor: pointer; }
+/* Strip the button chrome only. "font: inherit" would be a shorthand reset of size,
+   weight and line-height too, which shrank the wordmark to the topbar's font size; the
+   family is the only part a button needs told, since the rule above sets the rest. */
+.brand { background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; }
 .brand:hover .flare { transform: scale(1.35); }
 .flare { display: inline-block; transition: transform .12s ease; }
 
