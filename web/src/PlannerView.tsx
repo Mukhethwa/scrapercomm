@@ -230,6 +230,8 @@ function SortableJourney(props: {
           riderToSeq={j.departure.toSeq}
           boardPin={j.from.kind === 'pin' ? { name: j.from.name, time: j.departure.boardRaw } : null}
           alightPin={j.to.kind === 'pin' ? { name: j.to.name, time: j.departure.arriveRaw } : null}
+          boardTime={j.departure.boardRaw}
+          alightTime={j.departure.arriveRaw}
         />
       )}
     </li>

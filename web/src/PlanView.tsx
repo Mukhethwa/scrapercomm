@@ -417,6 +417,8 @@ export default function PlanView() {
                         riderToSeq={o.departures[openDep.di]?.to_seq ?? 9999}
                         boardPin={from?.kind === 'pin' ? { name: from.name, time: o.departures[openDep.di]?.board_raw } : null}
                         alightPin={to?.kind === 'pin' ? { name: to.name, time: o.departures[openDep.di]?.arrive_raw } : null}
+                        boardTime={o.departures[openDep.di]?.board_raw}
+                        alightTime={o.departures[openDep.di]?.arrive_raw}
                       />
                     )}
                   </div>

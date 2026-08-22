@@ -12,13 +12,31 @@ export interface PinEnd { name: string; time?: string }
  *
  * Shared by the search results and the Planner, so a journey reads identically in both.
  */
+/**
+ * "about 07:14" only makes sense of a real clock time. An unofficial stop between two
+ * timing points can come back as "via" - the timetable simply prints no time there - and
+ * "about via" says nothing. Those are left to speak for themselves.
+ */
+function approxTime(time: string): string {
+  return /^\d{1,2}:\d{2}/.test(time) ? `about ${time}` : time
+}
+
 export default function TripStrip(
-  { stops, loading, boardPin, alightPin, riderFromSeq, riderToSeq, notes }:
+  { stops, loading, boardPin, alightPin, riderFromSeq, riderToSeq, notes,
+    boardTime, alightTime }:
   {
     stops: TripStop[] | null; loading: boolean
     boardPin: PinEnd | null; alightPin: PinEnd | null
     riderFromSeq: number; riderToSeq: number
     notes?: TripNote[]
+    /**
+     * What the departure the rider tapped says about their own two stops. The trip list
+     * is the timetable verbatim, so a stop printed as "via" shows "via" here - but the
+     * departure they chose may carry a lower bound like "from 05:30". Showing the row as
+     * "via" right after they tapped "from 05:30" reads as a contradiction, so the
+     * departure's own wording wins on those two rows.
+     */
+    boardTime?: string; alightTime?: string
   },
 ) {
   if (loading) return <div className="tripstrip"><div className="tsloading">Loading the full trip…</div></div>
@@ -36,9 +54,11 @@ export default function TripStrip(
     }
     const isBoardStop = !boardPin && s.stop_sequence === riderFromSeq
     const isAlightStop = !alightPin && s.stop_sequence === riderToSeq
+    const published = s.cell_type === 'TIME' ? s.raw_value : 'via'
+    const chosen = isBoardStop ? boardTime : isAlightStop ? alightTime : undefined
     rows.push({
       name: s.name,
-      time: s.cell_type === 'TIME' ? s.raw_value : 'via',
+      time: s.cell_type === 'TIME' ? published : chosen ?? published,
       approx: false,
       role: isBoardStop ? 'board' : isAlightStop ? 'alight' : 'mid',
     })
@@ -72,7 +92,7 @@ export default function TripStrip(
                 {isFirst && before && <span className="tstag ctx">bus starts</span>}
                 {isLast && after && <span className="tstag ctx">terminus</span>}
               </span>
-              <span className="tstime">{r.approx ? `about ${r.time}`.trim() : r.time}</span>
+              <span className="tstime">{r.approx ? approxTime(r.time) : r.time}</span>
             </li>
           )
         })}
@@ -104,6 +124,11 @@ function TripNotes({ notes }: { notes?: TripNote[] }) {
             <b>"Via"</b> means the bus passes this stop, but the timetable does not publish
             an exact time for it. The times shown before you get on, and after you get off,
             are the bus's official schedule.
+          </p>
+          <p>
+            <b>"From 05:30"</b> means the bus leaves its last timed stop at 05:30 and reaches
+            this one after that, so it will not come earlier than 05:30. The timetable does
+            not say how much later, so allow a little extra time.
           </p>
           {notes && notes.length > 0 ? (
             <>
