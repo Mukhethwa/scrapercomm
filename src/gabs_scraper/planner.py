@@ -69,26 +69,68 @@ def locate_point(conn, lat, lon, threshold_m=DEFAULT_THRESHOLD_M):
 # ---- anchors ----
 
 def _stop_anchors(conn, stop_id):
+    """Every (schedule, trip) this stop sits on.
+
+    More than half the network's stops (291 of 526) never carry a published time — the
+    timetable prints "via", meaning the bus passes but no time is given. A bare "via"
+    tells a commuter nothing about when to be at the stop, so the neighbouring published
+    times are fetched too. The bus cannot reach you before it has left the previous timed
+    stop, so that time is a lower bound, shown as "from HH:MM". A lower bound is the safe
+    thing to show: an estimate that runs late makes people miss buses.
+    """
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT ss.schedule_id, tr.trip_index, ss.stop_sequence, st.departure_time,
-               st.raw_value, s.name
-        FROM schedule_stop ss
-        JOIN stop s        ON s.id = ss.stop_id
-        JOIN stop_time st  ON st.schedule_stop_id = ss.id AND st.cell_type <> 'NONE'
-        JOIN trip tr       ON tr.id = st.trip_id
-        WHERE ss.stop_id = %s
+        WITH my_trips AS (
+            SELECT DISTINCT st.trip_id
+            FROM stop_time st
+            JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+            WHERE ss.stop_id = %s AND st.cell_type <> 'NONE'
+        ),
+        ctx AS (
+            -- One pass over just the trips that touch this stop. max()/min() ignore
+            -- NULLs, so a "via" contributes nothing and the window naturally yields the
+            -- nearest published times on either side.
+            SELECT st.trip_id, ss.schedule_id, ss.stop_id, ss.stop_sequence,
+                   st.departure_time, st.raw_value,
+                   max(st.departure_time) OVER (
+                       PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                       ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time,
+                   min(st.departure_time) OVER (
+                       PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                       ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_time
+            FROM my_trips m
+            JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
+            JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+        )
+        SELECT c.schedule_id, tr.trip_index, c.stop_sequence, c.departure_time,
+               c.raw_value, s.name, c.prior_time, c.next_time
+        FROM ctx c
+        JOIN trip tr ON tr.id = c.trip_id
+        JOIN stop s  ON s.id = c.stop_id
+        WHERE c.stop_id = %s
         """,
-        (stop_id,),
+        (stop_id, stop_id),
     )
     anchors = {}
-    for sch, ti, seq, dt, raw, name in cur.fetchall():
+    for sch, ti, seq, dt, raw, name, prior, nxt in cur.fetchall():
+        minutes = _min(dt)
+        approx = False
+        if minutes is None:
+            # Guarded against the trips whose printed order runs backwards: a floor later
+            # than the following timed stop would be nonsense, so it is dropped.
+            pm, nm = _min(prior), _min(nxt)
+            if pm is not None and (nm is None or pm <= nm):
+                minutes, raw, approx = pm, f"from {_fmt(prior)}", True
         anchors.setdefault((sch, ti), []).append({
-            "position": float(seq), "minutes": _min(dt), "raw": raw,
-            "approx": False, "label": name, "distance_m": 0.0,
+            "position": float(seq), "minutes": minutes, "raw": raw,
+            "approx": approx, "label": name, "distance_m": 0.0,
         })
     return anchors
+
+
+def _fmt(t):
+    return t.strftime("%H:%M") if t is not None else None
 
 
 def _pin_anchors(conn, lat, lon, threshold_m):
@@ -176,8 +218,16 @@ def _segment(conn, schedule_id, from_pos, to_pos):
             for i, n, la, lo, sq in cur.fetchall()]
 
 
-def _leg_path(cur, a, b):
-    """Cached road geometry for one leg, or a straight line if none was fetched."""
+def _leg_path(cur, a, b, cache=None):
+    """Road geometry for one leg, or a straight line if none was fetched.
+
+    ``cache`` memoises for the life of one request. A plan groups dozens of routes and
+    neighbouring stops repeat across nearly all of them - every route out of the CBD
+    shares its first few legs - so without this the same row is fetched once per group.
+    """
+    key = (a, b)
+    if cache is not None and key in cache:
+        return cache[key]
     cur.execute(
         "SELECT path FROM leg_geometry WHERE from_stop_id=%s AND to_stop_id=%s", (a, b)
     )
@@ -191,10 +241,12 @@ def _leg_path(cur, a, b):
         ca, cb = coords.get(a), coords.get(b)
         path = ([[ca[0], ca[1]], [cb[0], cb[1]]]
                 if ca and cb and ca[0] is not None and cb[0] is not None else [])
+    if cache is not None:
+        cache[key] = path
     return path
 
 
-def _road_path(conn, seg, from_pos, to_pos):
+def _road_path(conn, seg, from_pos, to_pos, leg_cache=None):
     """The road the passenger actually rides — nothing before boarding, nothing after
     alighting.
 
@@ -219,7 +271,7 @@ def _road_path(conn, seg, from_pos, to_pos):
     cur = conn.cursor()
     full: list[list[float]] = []
     for i, (a, b) in enumerate(legs):
-        path = _leg_path(cur, a, b)
+        path = _leg_path(cur, a, b, leg_cache)
         if not path:
             continue
         start_f = head_f if i == 0 else 0.0
@@ -261,6 +313,7 @@ def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
     meta = _schedule_meta(conn, {r[0] for r in raw})
     groups = {}
     seg_cache = {}
+    leg_cache = {}
     for sch, ti, b, a in raw:
         m = meta.get(sch)
         if not m:
@@ -275,7 +328,7 @@ def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
                 "timetable_number": m["timetable_number"], "route_label": m["direction_label"],
                 "day_type": m["day_type"], "day_label": m["day_label"],
                 "segment_stops": seg,
-                "road_path": _road_path(conn, seg, b["position"], a["position"]),
+                "road_path": _road_path(conn, seg, b["position"], a["position"], leg_cache),
                 "departures": [], "_seen": set(),
                 "board_approx": b["approx"], "alight_approx": a["approx"],
                 "board_label": b["label"], "alight_label": a["label"],

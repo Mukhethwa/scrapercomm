@@ -31,11 +31,9 @@ import za.co.commuttr.api.repo.StopTimeRepository;
 import za.co.commuttr.api.repo.projection.Projections.DirectServiceRow;
 import za.co.commuttr.api.repo.projection.Projections.DownstreamStopRow;
 import za.co.commuttr.api.repo.projection.Projections.LegGeometryRow;
-import za.co.commuttr.api.repo.projection.Projections.PinAnchorRow;
 import za.co.commuttr.api.repo.projection.Projections.ReachableRow;
 import za.co.commuttr.api.repo.projection.Projections.ScheduleMetaRow;
 import za.co.commuttr.api.repo.projection.Projections.SegmentStopWithIdRow;
-import za.co.commuttr.api.repo.projection.Projections.StopAnchorRow;
 import za.co.commuttr.api.repo.projection.Projections.StopRow;
 import za.co.commuttr.api.repo.projection.Projections.TripStopRow;
 import za.co.commuttr.api.web.ApiException;
@@ -128,27 +126,75 @@ public class PlannerService {
     private record Anchor(double position, Number minutes, String raw, boolean approx,
                           String label, double distanceM) { }
 
+    // Column positions in the findStopAnchors select list.
+    private static final int A_SCHEDULE_ID = 0;
+    private static final int A_TRIP_INDEX = 1;
+    private static final int A_STOP_SEQUENCE = 2;
+    private static final int A_DEPARTURE_TIME = 3;
+    private static final int A_RAW_VALUE = 4;
+    private static final int A_NAME = 5;
+    private static final int A_PRIOR_TIME = 6;
+    private static final int A_NEXT_TIME = 7;
+
+    /** JDBC hands a {@code time} column back as {@link java.sql.Time} unless asked otherwise. */
+    private static LocalTime asTime(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return value instanceof java.sql.Time t ? t.toLocalTime() : (LocalTime) value;
+    }
+
     /** {@code planner._stop_anchors} */
     private Map<AnchorKey, List<Anchor>> stopAnchors(Integer stopId) {
         Map<AnchorKey, List<Anchor>> anchors = new TreeMap<>();
-        for (StopAnchorRow r : stopTimes.findStopAnchors(stopId)) {
-            anchors.computeIfAbsent(new AnchorKey(r.getScheduleId(), r.getTripIndex()),
-                            k -> new ArrayList<>())
-                    .add(new Anchor(r.getStopSequence().doubleValue(),
-                            ApiFormat.minutes(r.getDepartureTime()),
-                            r.getRawValue(), false, r.getName(), 0.0));
+        for (Object[] r : stopTimes.findStopAnchors(stopId)) {
+            LocalTime own = asTime(r[A_DEPARTURE_TIME]);
+            Integer ownMinutes = ApiFormat.minutes(own);
+            Number minutes = ownMinutes;
+            String raw = (String) r[A_RAW_VALUE];
+            boolean approx = false;
+
+            if (ownMinutes == null) {
+                // "via": the timetable gives no time here. The bus cannot arrive before
+                // it leaves the previous timed stop, so show that as a floor. Guarded
+                // against the trips whose printed order runs backwards: a floor later
+                // than the following timed stop would be nonsense, so it is dropped.
+                LocalTime priorTime = asTime(r[A_PRIOR_TIME]);
+                Integer prior = ApiFormat.minutes(priorTime);
+                Integer next = ApiFormat.minutes(asTime(r[A_NEXT_TIME]));
+                if (prior != null && (next == null || prior <= next)) {
+                    minutes = prior;
+                    raw = "from " + ApiFormat.time(priorTime);
+                    approx = true;
+                }
+            }
+
+            AnchorKey key = new AnchorKey(((Number) r[A_SCHEDULE_ID]).intValue(),
+                    ((Number) r[A_TRIP_INDEX]).intValue());
+            anchors.computeIfAbsent(key, k -> new ArrayList<>())
+                    .add(new Anchor(((Number) r[A_STOP_SEQUENCE]).doubleValue(), minutes, raw,
+                            approx, (String) r[A_NAME], 0.0));
         }
         return anchors;
     }
+
+    // Column positions in the findPinAnchors select list.
+    private static final int P_SCHEDULE_ID = 0;
+    private static final int P_TRIP_INDEX = 1;
+    private static final int P_STOP_SEQUENCE = 2;
+    private static final int P_TIME_A = 3;
+    private static final int P_TIME_B = 4;
+    private static final int P_NAME_A = 5;
+    private static final int P_NAME_B = 6;
 
     /** {@code planner._pin_anchors} */
     private Map<AnchorKey, List<Anchor>> pinAnchors(double lat, double lon, double thresholdM) {
         Map<AnchorKey, List<Anchor>> anchors = new TreeMap<>();
         for (LegHitDto leg : locatePoint(lat, lon, thresholdM)) {
             double f = leg.fraction();
-            for (PinAnchorRow r : stopTimes.findPinAnchors(leg.toStopId(), leg.fromStopId())) {
-                Integer ma = ApiFormat.minutes(r.getTimeA());
-                Integer mb = ApiFormat.minutes(r.getTimeB());
+            for (Object[] r : stopTimes.findPinAnchors(leg.toStopId(), leg.fromStopId())) {
+                Integer ma = ApiFormat.minutes(asTime(r[P_TIME_A]));
+                Integer mb = ApiFormat.minutes(asTime(r[P_TIME_B]));
 
                 Number minutes = null;
                 if (ma != null && mb != null) {
@@ -160,10 +206,11 @@ public class PlannerService {
                 }
 
                 String raw = minutes == null ? "via" : ApiFormat.minutesToClock(minutes);
-                anchors.computeIfAbsent(new AnchorKey(r.getScheduleId(), r.getTripIndex()),
-                                k -> new ArrayList<>())
-                        .add(new Anchor(r.getStopSequence() + f, minutes, raw, true,
-                                "near " + r.getNameA() + "–" + r.getNameB(),
+                AnchorKey key = new AnchorKey(((Number) r[P_SCHEDULE_ID]).intValue(),
+                        ((Number) r[P_TRIP_INDEX]).intValue());
+                anchors.computeIfAbsent(key, k -> new ArrayList<>())
+                        .add(new Anchor(((Number) r[P_STOP_SEQUENCE]).intValue() + f, minutes, raw,
+                                true, "near " + r[P_NAME_A] + "–" + r[P_NAME_B],
                                 leg.distanceM()));
             }
         }
@@ -252,7 +299,8 @@ public class PlannerService {
      * enclosing range put road on the map the passenger is never on, which is what made
      * the bus look like it detoured to collect them from an unofficial stop.
      */
-    private List<double[]> roadPath(List<PlanSegmentStopDto> seg, double fromPos, double toPos) {
+    private List<double[]> roadPath(List<PlanSegmentStopDto> seg, double fromPos, double toPos,
+                                    Map<Long, double[][]> legCache) {
         int lo = (int) fromPos;
         int hi = (int) toPos + (toPos > (int) toPos ? 1 : 0);
         double headF = fromPos - lo;              // 0.0 when boarding at a timing point
@@ -271,7 +319,7 @@ public class PlannerService {
         int legCount = ids.size() - 1;
         List<double[]> full = new ArrayList<>();
         for (int i = 0; i < legCount; i++) {
-            double[][] leg = legPath(ids.get(i), ids.get(i + 1));
+            double[][] leg = legPath(ids.get(i), ids.get(i + 1), legCache);
             if (leg.length == 0) {
                 continue;
             }
@@ -304,9 +352,27 @@ public class PlannerService {
     }
 
     /** Cached road geometry for one leg, or a straight line if none was fetched. */
-    private double[][] legPath(Integer a, Integer b) {
+    /**
+     * Road geometry for one leg, memoised for the life of one request.
+     *
+     * A plan groups dozens of routes, and neighbouring stops repeat across nearly all of
+     * them - every route out of the CBD shares its first few legs. Without this the same
+     * row was fetched and its JSON re-parsed once per group, which is what made a plan
+     * between two busy stops take seconds. The cached array is never mutated: roadPath
+     * either copies it or hands it to slicePath, which allocates its own list.
+     */
+    private double[][] legPath(Integer a, Integer b, Map<Long, double[][]> cache) {
+        long key = ((long) a << 32) | (b & 0xffffffffL);
+        double[][] hit = cache.get(key);
+        if (hit != null) {
+            return hit;
+        }
         double[][] path = parsePath(legGeometry.findPathJson(a, b).orElse(null));
-        return path.length == 0 ? straightLine(a, b) : path;
+        if (path.length == 0) {
+            path = straightLine(a, b);
+        }
+        cache.put(key, path);
+        return path;
     }
 
     private double[][] straightLine(Integer a, Integer b) {
@@ -375,6 +441,7 @@ public class PlannerService {
 
         Map<GroupKey, PlanGroup> groups = new LinkedHashMap<>();
         Map<Integer, List<PlanSegmentStopDto>> segmentCache = new HashMap<>();
+        Map<Long, double[][]> legCache = new HashMap<>();
 
         for (Candidate c : candidates) {
             ScheduleMetaRow m = meta.get(c.key().scheduleId());
@@ -393,7 +460,7 @@ public class PlannerService {
                 g.dayType = m.getDayType();
                 g.dayLabel = m.getDayLabel();
                 g.segmentStops = seg;
-                g.roadPath = roadPath(seg, c.board().position(), c.alight().position());
+                g.roadPath = roadPath(seg, c.board().position(), c.alight().position(), legCache);
                 g.boardApprox = c.board().approx();
                 g.alightApprox = c.alight().approx();
                 g.boardLabel = c.board().label();

@@ -11,9 +11,7 @@ import za.co.commuttr.api.repo.projection.Projections.DownstreamStopRow;
 import za.co.commuttr.api.repo.projection.Projections.JourneyConnRow;
 import za.co.commuttr.api.repo.projection.Projections.NoteRow;
 import za.co.commuttr.api.repo.projection.Projections.JourneyDepartureRow;
-import za.co.commuttr.api.repo.projection.Projections.PinAnchorRow;
 import za.co.commuttr.api.repo.projection.Projections.ReachableRow;
-import za.co.commuttr.api.repo.projection.Projections.StopAnchorRow;
 import za.co.commuttr.api.repo.projection.Projections.TripStopRow;
 
 import java.util.List;
@@ -169,21 +167,65 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
     List<NoteRow> findTripNotes(@Param("scheduleId") Integer scheduleId,
                                 @Param("tripIndex") Integer tripIndex);
 
-    /** Planner: every (schedule, trip) anchor of a named stop. */
+    /**
+     * Planner: every (schedule, trip) anchor of a named stop.
+     *
+     * <p>More than half the network's stops (291 of 526) never carry a published time —
+     * the timetable prints "via", meaning the bus passes but no time is given. A bare
+     * "via" tells a commuter nothing about when to be at the stop, so the neighbouring
+     * published times come back too: the last one before this stop and the first one
+     * after it. The bus cannot reach you before it has left the previous timed stop, so
+     * that time is a lower bound, and a lower bound is the safe thing to show — an
+     * estimate that runs late makes people miss buses.
+     */
     @Query(value = """
-            SELECT ss.schedule_id     AS "scheduleId",
+            WITH my_trips AS (
+                SELECT DISTINCT st.trip_id
+                FROM stop_time st
+                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+                WHERE ss.stop_id = :stopId AND st.cell_type <> 'NONE'
+            ),
+            ctx AS (
+                -- One pass over just the trips that touch this stop. max()/min() ignore
+                -- NULLs, so a "via" contributes nothing and the window naturally yields
+                -- the nearest published times on either side.
+                SELECT st.trip_id, ss.schedule_id, ss.stop_id, ss.stop_sequence,
+                       st.departure_time, st.raw_value,
+                       max(st.departure_time) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time,
+                       min(st.departure_time) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_time
+                FROM my_trips m
+                JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
+                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+            )
+            SELECT c.schedule_id      AS "scheduleId",
                    tr.trip_index      AS "tripIndex",
-                   ss.stop_sequence   AS "stopSequence",
-                   st.departure_time  AS "departureTime",
-                   st.raw_value       AS "rawValue",
-                   s.name             AS "name"
-            FROM schedule_stop ss
-            JOIN stop s        ON s.id = ss.stop_id
-            JOIN stop_time st  ON st.schedule_stop_id = ss.id AND st.cell_type <> 'NONE'
-            JOIN trip tr       ON tr.id = st.trip_id
-            WHERE ss.stop_id = :stopId
+                   c.stop_sequence    AS "stopSequence",
+                   c.departure_time   AS "departureTime",
+                   c.raw_value        AS "rawValue",
+                   s.name             AS "name",
+                   c.prior_time       AS "priorTime",
+                   c.next_time        AS "nextTime"
+            FROM ctx c
+            JOIN trip tr ON tr.id = c.trip_id
+            JOIN stop s  ON s.id = c.stop_id
+            WHERE c.stop_id = :stopId
             """, nativeQuery = true)
-    List<StopAnchorRow> findStopAnchors(@Param("stopId") Integer stopId);
+    /**
+     * Returns raw rows rather than a {@code StopAnchorRow} projection.
+     *
+     * A busy stop such as CAPE TOWN yields ~38,000 of these and a plan reads two stops'
+     * worth. Spring builds one dynamic proxy per row for an interface projection and
+     * resolves every getter reflectively through a map, which measured at roughly 110us
+     * per row - seconds of a journey search spent on nothing but wrapping. Reading the
+     * columns by position keeps the query and its meaning unchanged and drops that cost.
+     * Column order is fixed by the select list above and read by name in
+     * {@code PlannerService.stopAnchors}.
+     */
+    List<Object[]> findStopAnchors(@Param("stopId") Integer stopId);
 
     /**
      * Planner: anchors for a pin, expressed as the consecutive leg A -> B whose road
@@ -210,7 +252,9 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                               AND stb.cell_type <> 'NONE'
             WHERE ssA.stop_id = :fromStopId
             """, nativeQuery = true)
-    List<PinAnchorRow> findPinAnchors(@Param("toStopId") Integer toStopId,
+    /** Raw rows for the same reason as {@link #findStopAnchors}: a pin near the CBD
+     *  matches thousands of these, once per leg it sits on. */
+    List<Object[]> findPinAnchors(@Param("toStopId") Integer toStopId,
                                       @Param("fromStopId") Integer fromStopId);
 
     /** Planner: distinct stops a given trip serves after a fractional position. */

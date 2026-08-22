@@ -156,27 +156,6 @@ public final class Projections {
         Double getLengthM();
     }
 
-    /** Anchor of a named stop on a (schedule, trip). */
-    public interface StopAnchorRow {
-        Integer getScheduleId();
-        Integer getTripIndex();
-        Integer getStopSequence();
-        LocalTime getDepartureTime();
-        String getRawValue();
-        String getName();
-    }
-
-    /** Anchor of a pin, interpolated along the leg A -> B. */
-    public interface PinAnchorRow {
-        Integer getScheduleId();
-        Integer getTripIndex();
-        Integer getStopSequence();
-        LocalTime getTimeA();
-        LocalTime getTimeB();
-        String getNameA();
-        String getNameB();
-    }
-
     /** Schedule metadata keyed by schedule id (planner grouping). */
     public interface ScheduleMetaRow {
         Integer getId();
