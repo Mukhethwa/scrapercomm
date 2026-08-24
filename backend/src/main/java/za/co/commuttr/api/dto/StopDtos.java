@@ -20,7 +20,16 @@ public final class StopDtos {
                                    Long tripCount,
                                    Long routeCount) { }
 
-    public record ReachableResponse(StopDto origin, List<ReachableStopDto> reachable) { }
+    /** GET /api/stops/{id}/reachable row for a destination that needs one change. */
+    public record ConnectingStopDto(Integer id,
+                                    String name,
+                                    Double lat,
+                                    Double lon,
+                                    Long changeCount) { }
+
+    public record ReachableResponse(StopDto origin,
+                                    List<ReachableStopDto> reachable,
+                                    List<ConnectingStopDto> connecting) { }
 
     /**
      * GET /api/reachable_point row. Note this carries only trip_count — the pin planner

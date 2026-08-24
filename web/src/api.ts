@@ -135,8 +135,14 @@ export interface JourneysResponse {
 export const getStops = (q: string) =>
   getJSON<{ stops: StopHit[] }>(`${API}/stops?q=${encodeURIComponent(q)}`)
 
+/** A destination that needs one change of bus; change_count is how many stops you could change at. */
+export interface ConnectingStop extends StopHit {
+  change_count: number
+}
+
 export const getReachable = (id: number) =>
-  getJSON<{ origin: StopHit; reachable: ReachableStop[] }>(`${API}/stops/${id}/reachable`)
+  getJSON<{ origin: StopHit; reachable: ReachableStop[]; connecting: ConnectingStop[] }>(
+    `${API}/stops/${id}/reachable`)
 
 export const getJourneys = (from: number, to: number) =>
   getJSON<JourneysResponse>(`${API}/journeys?from=${from}&to=${to}`)
@@ -244,6 +250,12 @@ export const getPlan = (from: Endpoint, to: Endpoint) =>
   getJSON<{ from: unknown; to: unknown; options: PlanOption[] }>(
     `${API}/plan?${epParams('from', from)}&${epParams('to', to)}`,
   )
+
+/** Destinations needing one change. Only stops have them; a pin falls back to none. */
+export const connectingFor = (ep: Endpoint) =>
+  ep.kind === 'stop' && ep.id != null
+    ? getReachable(ep.id).then((r) => r.connecting ?? [])
+    : Promise.resolve([] as ConnectingStop[])
 
 export const reachableFor = (ep: Endpoint) =>
   ep.kind === 'stop'

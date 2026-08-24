@@ -64,6 +64,46 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
             """, nativeQuery = true)
     List<ReachableRow> findReachableFromStop(@Param("stopId") Integer stopId);
 
+    /**
+     * Where else you could get to by changing bus once, excluding anywhere a single bus
+     * already reaches. Without this the app only ever offered the handful of stops on
+     * one bus - six, from a stop like BUH REIN - so a rider had no way to discover that
+     * MALMESBURY is perfectly reachable by changing at CAPE TOWN.
+     */
+    @Query(value = """
+            WITH direct AS (
+                SELECT DISTINCT ssy.stop_id AS mid
+                FROM schedule_stop ssx
+                JOIN stop_time bx  ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
+                JOIN stop_time byy ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
+                                  AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                                       OR byy.departure_time >= bx.departure_time)
+                JOIN schedule_stop ssy ON ssy.id = byy.schedule_stop_id
+                                      AND ssy.stop_sequence > ssx.stop_sequence
+                WHERE ssx.stop_id = :stopId
+            )
+            SELECT s2.id                   AS "id",
+                   s2.name                 AS "name",
+                   s2.lat                  AS "lat",
+                   s2.lon                  AS "lon",
+                   count(DISTINCT d.mid)   AS "changeCount"
+            FROM direct d
+            JOIN schedule_stop ssx ON ssx.stop_id = d.mid
+            JOIN stop_time bx  ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
+            JOIN stop_time byy ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
+                              AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                                   OR byy.departure_time >= bx.departure_time)
+            JOIN schedule_stop ssy ON ssy.id = byy.schedule_stop_id
+                                  AND ssy.stop_sequence > ssx.stop_sequence
+            JOIN stop s2 ON s2.id = ssy.stop_id
+            WHERE s2.id <> :stopId AND NOT EXISTS (
+                SELECT 1 FROM direct dd WHERE dd.mid = s2.id
+            )
+            GROUP BY s2.id, s2.name, s2.lat, s2.lon
+            ORDER BY s2.name
+            """, nativeQuery = true)
+    List<Object[]> findConnectingFromStop(@Param("stopId") Integer stopId);
+
     /** GET /api/journeys: schedules where some trip serves both stops, in order. */
     @Query(value = """
             SELECT sc.id               AS "scheduleId",

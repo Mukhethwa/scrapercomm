@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  getStops, getGeocode, getAreas, reachableFor, getPlan, getTripStops, getNearbyOrigins,
+  getStops, getGeocode, getAreas, reachableFor, connectingFor, getPlan, getTripStops, getNearbyOrigins,
   getConnections,
-  type StopHit, type GeoHit, type ReachableStop, type Endpoint, type PlanOption,
+  type StopHit, type GeoHit, type ReachableStop, type ConnectingStop, type Endpoint, type PlanOption,
   type PlanDeparture, type TripStop, type TripNote, type NearbyOrigin, type Connection,
 } from './api'
 import PlanMap from './PlanMap'
@@ -108,6 +108,7 @@ export default function PlanView() {
     return null
   }
   const [reachable, setReachable] = useState<ReachableStop[] | null>(null)
+  const [connecting, setConnecting] = useState<ConnectingStop[]>([])
   const [plan, setPlan] = useState<PlanOption[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [sel, setSel] = useState(0)
@@ -150,9 +151,10 @@ export default function PlanView() {
 
   function pickFrom(ep: Endpoint) {
     setFrom(ep); setFromText(ep.name); setFromHits([]); setArmed(null)
-    setTo(null); setToText(''); setPlan(null); setReachable(null); setDayAlts({})
+    setTo(null); setToText(''); setPlan(null); setReachable(null); setConnecting([]); setDayAlts({})
     setOpenDep(null); setTripStops(null)
     reachableFor(ep).then(setReachable).catch(() => setReachable([]))
+    connectingFor(ep).then(setConnecting).catch(() => setConnecting([]))
   }
 
   function runPlan(f: Endpoint, t: Endpoint) {
@@ -193,6 +195,7 @@ export default function PlanView() {
     const f: Endpoint = { kind: 'stop', id: o.id, name: o.name, lat: o.lat, lon: o.lon }
     setFrom(f); setFromText(o.name); setSel(0)
     reachableFor(f).then(setReachable).catch(() => {})
+    connectingFor(f).then(setConnecting).catch(() => {})
     runPlan(f, to!)
   }
 
@@ -217,6 +220,11 @@ export default function PlanView() {
     return q ? reachable.filter((r) => r.name.toLowerCase().includes(q)) : reachable
   }, [reachable, toText])
 
+  const filteredConnecting = useMemo(() => {
+    const q = toText.trim().toLowerCase()
+    return q ? connecting.filter((r) => r.name.toLowerCase().includes(q)) : connecting
+  }, [connecting, toText])
+
   const stage = !from ? 'from' : !to ? 'reachable' : 'journeys'
   const segment = stage === 'journeys' && plan && plan[sel] ? plan[sel].segment_stops : undefined
   const roadPath = stage === 'journeys' && plan && plan[sel] ? plan[sel].road_path : undefined
@@ -229,7 +237,7 @@ export default function PlanView() {
           <label>Starting point</label>
           <div className="ac">
             <input value={fromText} placeholder="Bus stop, place, or address"
-              onChange={(e) => { setFromText(e.target.value); if (from) { setFrom(null); setReachable(null); setPlan(null); setTo(null); setDayAlts({}) } }}
+              onChange={(e) => { setFromText(e.target.value); if (from) { setFrom(null); setReachable(null); setConnecting([]); setPlan(null); setTo(null); setDayAlts({}) } }}
               onFocus={() => setFromOpen(true)}
               onBlur={() => setFromOpen(false)}
               onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.blur() }} />
@@ -299,9 +307,30 @@ export default function PlanView() {
                   </button>
                 ))}
                 {reachable != null && filteredReach.length === 0 && (
-                  <div className="empty">No direct bus goes to "{toText}" from here. Pick it from the search above and I will show you nearby options.</div>
+                  <div className="empty">No direct bus goes to "{toText}" from here.</div>
                 )}
               </div>
+
+              {filteredConnecting.length > 0 && (
+                <>
+                  <div className="reachhead sub">
+                    …and {filteredConnecting.length} more with one change of bus
+                  </div>
+                  <div className="browsehint">
+                    No single bus runs the whole way, so these need you to change once. Pick
+                    one and I will work out where to change and what time to be there.
+                  </div>
+                  <div className="reachlist">
+                    {filteredConnecting.map((r) => (
+                      <button key={r.id} className="reachitem connecting" onClick={() =>
+                        pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}>
+                        <span className="rname">{r.name}</span>
+                        <span className="rtrips">1 change</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
 

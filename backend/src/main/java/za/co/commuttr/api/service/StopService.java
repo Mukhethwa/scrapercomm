@@ -3,6 +3,7 @@ package za.co.commuttr.api.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.commuttr.api.dto.StopDtos.ReachableResponse;
+import za.co.commuttr.api.dto.StopDtos.ConnectingStopDto;
 import za.co.commuttr.api.dto.StopDtos.ReachableStopDto;
 import za.co.commuttr.api.dto.StopDtos.StopDto;
 import za.co.commuttr.api.dto.StopDtos.StopsResponse;
@@ -34,7 +35,7 @@ public class StopService {
         return new StopsResponse(rows.stream().map(StopService::toDto).toList());
     }
 
-    /** GET /api/stops/{stop_id}/reachable — stops reachable on a SINGLE bus. */
+    /** GET /api/stops/{stop_id}/reachable — on one bus, plus what one change adds. */
     public ReachableResponse reachable(Integer stopId) {
         StopRow origin = stops.findRowById(stopId)
                 .orElseThrow(() -> ApiException.notFound("stop not found"));
@@ -44,7 +45,14 @@ public class StopService {
                         r.getTripCount(), r.getRouteCount()))
                 .toList();
 
-        return new ReachableResponse(toDto(origin), reachable);
+        List<ConnectingStopDto> connecting = stopTimes.findConnectingFromStop(stopId).stream()
+                .map(r -> new ConnectingStopDto(((Number) r[0]).intValue(), (String) r[1],
+                        r[2] == null ? null : ((Number) r[2]).doubleValue(),
+                        r[3] == null ? null : ((Number) r[3]).doubleValue(),
+                        ((Number) r[4]).longValue()))
+                .toList();
+
+        return new ReachableResponse(toDto(origin), reachable, connecting);
     }
 
     static StopDto toDto(StopRow row) {

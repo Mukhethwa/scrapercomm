@@ -246,7 +246,45 @@ def reachable(stop_id: int):
             """,
             (stop_id, stop_id),
         )
-        return {"origin": origin[0], "reachable": _rows(cur)}
+        direct = _rows(cur)
+
+        # Where else you could get to by changing bus once. Without this the app only
+        # ever offered the handful of stops on a single bus - six, from a stop like BUH
+        # REIN - and a rider had no way to discover that MALMESBURY is perfectly
+        # reachable by changing at CAPE TOWN. The direct ones are excluded so the two
+        # lists do not repeat each other.
+        cur.execute(
+            """
+            WITH direct AS (
+                SELECT DISTINCT ssy.stop_id AS mid
+                FROM schedule_stop ssx
+                JOIN stop_time bx  ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
+                JOIN stop_time byy ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
+                                  AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                                       OR byy.departure_time >= bx.departure_time)
+                JOIN schedule_stop ssy ON ssy.id = byy.schedule_stop_id
+                                      AND ssy.stop_sequence > ssx.stop_sequence
+                WHERE ssx.stop_id = %s
+            )
+            SELECT s2.id, s2.name, s2.lat, s2.lon, count(DISTINCT d.mid) AS change_count
+            FROM direct d
+            JOIN schedule_stop ssx ON ssx.stop_id = d.mid
+            JOIN stop_time bx  ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
+            JOIN stop_time byy ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
+                              AND (bx.departure_time IS NULL OR byy.departure_time IS NULL
+                                   OR byy.departure_time >= bx.departure_time)
+            JOIN schedule_stop ssy ON ssy.id = byy.schedule_stop_id
+                                  AND ssy.stop_sequence > ssx.stop_sequence
+            JOIN stop s2 ON s2.id = ssy.stop_id
+            WHERE s2.id <> %s AND NOT EXISTS (
+                SELECT 1 FROM direct dd WHERE dd.mid = s2.id
+            )
+            GROUP BY s2.id, s2.name, s2.lat, s2.lon
+            ORDER BY s2.name
+            """,
+            (stop_id, stop_id),
+        )
+        return {"origin": origin[0], "reachable": direct, "connecting": _rows(cur)}
     finally:
         conn.close()
 

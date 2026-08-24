@@ -158,6 +158,12 @@ body { background: var(--bg); color: var(--ink); }
 .reachitem .rname { font-size: 13.5px; font-weight: 600; }
 .reachitem .rtrips { font-size: 11px; color: var(--muted); }
 
+/* The second destination list: everywhere you can get to by changing bus once. Set
+   apart from the direct list so the distinction is visible at a glance, not read. */
+.reachhead.sub { margin-top: 22px; color: var(--muted); }
+.reachitem.connecting { border-style: dashed; }
+.reachitem.connecting .rtrips { color: var(--warn, #b45309); font-weight: 600; }
+
 .optcard {
   display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: #fff;
   border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer;
