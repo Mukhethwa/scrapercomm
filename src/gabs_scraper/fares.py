@@ -82,9 +82,21 @@ ALIASES = {
 # Words our timetables abbreviate. Expanded on both sides before comparing.
 ABBREV = {
     "STN": "STATION", "IND": "INDUSTRIA", "INDUS": "INDUSTRIA",
-    "PLN": "PLAIN", "RD": "ROAD", "DRV": "DRIVE", "AVE": "AVENUE",
+    "PLN": "PLAIN", "RD": "ROAD", "DRV": "DRIVE", "DR": "DRIVE", "AVE": "AVENUE",
     "STH": "SOUTH", "NTH": "NORTH", "PK": "PARK", "CIR": "CIRCLE",
     "HOSP": "HOSPITAL", "CRES": "CRESCENT", "SQ": "SQUARE", "CTR": "CENTRE",
+    "GDNS": "GARDENS", "SCH": "SCHOOL", "TERM": "TERMINUS", "CNR": "CORNER",
+}
+
+# Route endpoints the timetables name differently from the fare page. Only names that
+# are the same place under another spelling - never a neighbouring one.
+ROUTE_ALIASES = {
+    "UWC": "University of the Western Cape",
+    "TYGER VALLEY": "Tyger Valley Centre",
+    "CAMBRIDGE": "Milnerton (Cambridge)",
+    "EPPING": "Epping Industria",
+    "SEA FORTH SCHOOLS": "Seaforth",
+    "NOORD HOEK": "Noordhoek",
 }
 
 _ROW = re.compile(

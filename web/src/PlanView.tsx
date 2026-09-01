@@ -9,6 +9,7 @@ import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
 import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
+import { rands, perRide, basisNote } from './money'
 import { ArrowRight, CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
@@ -83,6 +84,68 @@ async function mergedSearch(q: string, areas: string[]): Promise<Hit[]> {
  * items use onMouseDown, which fires before blur, so clicking a suggestion still
  * registers. Escape blurs, which closes the menu by the same rule.
  */
+/**
+ * What the ride costs. The per-ride price leads, because that is what somebody getting
+ * on a bus once wants to know; the products sit under it for anyone buying ahead.
+ */
+function FarePanel({ fare }: { fare: PlanOption['fare'] }) {
+  const [open, setOpen] = useState(false)
+  if (!fare || fare.per_ride_cents == null) {
+    return (
+      <div className="farebox none">
+        <Info size={13} aria-hidden="true" />
+        <span>Golden Arrow publishes no fare for this journey. Ask the driver.</span>
+      </div>
+    )
+  }
+  const note = basisNote(fare)
+  return (
+    <div className="farebox">
+      <div className="fareline">
+        <span className="fareamt">{rands(fare.per_ride_cents)}</span>
+        <span className="farelbl">a ride on a Gold Card 5&nbsp;Ride</span>
+        {fare.code && <span className="farecode">{fare.code}</span>}
+        <button className="infobtn" onClick={() => setOpen(!open)} aria-expanded={open}>
+          <Info size={13} aria-hidden="true" />
+          <span>{open ? 'Hide' : 'Other tickets'}</span>
+        </button>
+      </div>
+      {open && (
+        <div className="faredetail">
+          <table className="faretable">
+            <thead>
+              <tr><th>Ticket</th><th>Price</th><th>Rides</th><th>Each</th></tr>
+            </thead>
+            <tbody>
+              {perRide(fare).map((p) => (
+                <tr key={p.label}>
+                  <td>{p.label}</td>
+                  <td>{rands(p.total) ?? '-'}</td>
+                  <td>{p.rides}</td>
+                  <td><b>{rands(p.each) ?? '-'}</b></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="farefoot">
+            A "Weekly" is 10 rides valid 30 days and a "Monthly" is 48 rides valid 90
+            days, so the longer tickets are cheaper per ride, not just longer.
+          </p>
+          {fare.transfers && fare.transfers !== 'Zero' && (
+            <p className="farefoot">Includes {fare.transfers.toLowerCase()} transfer.</p>
+          )}
+          {note && <p className="farefoot">{note}</p>}
+          <p className="farefoot">
+            These are Gold Card prices and do not change with the time of day. Paying
+            cash costs more and differs between peak (16:00-08:00) and off-peak; Golden
+            Arrow does not publish cash fares per journey.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /**
  * Does any departure here carry a time the timetable never printed?
  *
@@ -436,6 +499,7 @@ export default function PlanView() {
                         <span className="daypill">{DAY_LABEL[o.day_type] ?? o.day_type}</span>
                       </span>
                     </div>
+                    <FarePanel fare={o.fare} />
                     <div className="depshint">Tap a departure to see where you get on and off.</div>
                     {hasApprox(o) && (
                       <div className="aprxlegend">
@@ -463,6 +527,9 @@ export default function PlanView() {
                                     <span className="da">to</span>
                                     <DepTime raw={d.arrive_raw} approx={d.arrive_approx}
                                       useful={boundIsUseful(d.arrive_minutes, d.arrive_approx, d.board_minutes)} />
+                                    {o.fare?.per_ride_cents != null && (
+                                      <span className="depfare">{rands(o.fare.per_ride_cents)}</span>
+                                    )}
                                   </button>
                                   <button
                                     className={`addbtn ${planned ? 'on' : ''}`}

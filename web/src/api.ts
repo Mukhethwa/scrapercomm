@@ -164,6 +164,20 @@ export interface GeoHit {
   lon: number
 }
 
+/** What a ride costs, or absent where the operator publishes no fare for it. */
+export interface Fare {
+  code: string | null
+  per_ride_cents: number | null
+  five_ride_cents: number | null
+  weekly_cents: number | null
+  monthly_cents: number | null
+  transfers: string | null
+  /** exact | section | route - where the number came from. */
+  basis: string
+  basis_from: string | null
+  basis_to: string | null
+}
+
 export interface PlanDeparture {
   board_raw: string
   board_approx: boolean
@@ -230,6 +244,7 @@ export interface PlanOption {
   alight_approx: boolean
   board_label: string
   alight_label: string
+  fare: Fare | null
 }
 
 export const getGeocode = (q: string) =>

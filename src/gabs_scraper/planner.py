@@ -288,6 +288,48 @@ def _road_path(conn, seg, from_pos, to_pos, leg_cache=None):
 
 # ---- journeys ----
 
+def journey_fare(conn, from_stop_id, to_stop_id):
+    """The published fare for riding between two stops, or None.
+
+    Precomputed by gabs_scraper.pricing so this is a primary-key lookup, and so the Java
+    service reads exactly the same numbers rather than reimplementing the resolution.
+    """
+    if from_stop_id is None or to_stop_id is None:
+        return None
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT code, per_ride_cents, five_ride_cents, weekly_cents, monthly_cents,
+               transfers, basis, basis_from, basis_to
+        FROM journey_fare WHERE from_stop_id=%s AND to_stop_id=%s
+        """,
+        (from_stop_id, to_stop_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    code, per, five, week, month, transfers, basis, bfrom, bto = row
+    return {
+        "code": code, "per_ride_cents": per, "five_ride_cents": five,
+        "weekly_cents": week, "monthly_cents": month, "transfers": transfers,
+        "basis": basis, "basis_from": bfrom, "basis_to": bto,
+    }
+
+
+def _endpoint_stop(ep, seg, end):
+    """Which stop the fare is charged from/to.
+
+    A named stop prices itself. A dropped pin has no stop of its own, so it is priced
+    from the timing point at that end of the segment the rider is actually on.
+    """
+    if ep.get("stop_id"):
+        return ep["stop_id"]
+    ids = [x["stop_id"] for x in seg if x.get("stop_id") is not None]
+    if not ids:
+        return None
+    return ids[0] if end == "from" else ids[-1]
+
+
 def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
     board = endpoint_anchors(conn, from_ep, threshold_m)
     alight = endpoint_anchors(conn, to_ep, threshold_m)
@@ -347,8 +389,14 @@ def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
         })
 
     options = []
+    fare_cache = {}
     for g in groups.values():
         g.pop("_seen")
+        key = (_endpoint_stop(from_ep, g["segment_stops"], "from"),
+               _endpoint_stop(to_ep, g["segment_stops"], "to"))
+        if key not in fare_cache:
+            fare_cache[key] = journey_fare(conn, key[0], key[1])
+        g["fare"] = fare_cache[key]
         g["departures"].sort(key=lambda d: (d["board_minutes"] is None, d["board_minutes"] or 0))
         options.append(g)
     options.sort(key=lambda o: (_DAY.get(o["day_type"], 9), o["route_label"]))

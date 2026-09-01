@@ -14,6 +14,7 @@ import za.co.commuttr.api.dto.JourneyDtos.JourneyOptionDto;
 import za.co.commuttr.api.dto.JourneyDtos.JourneysResponse;
 import za.co.commuttr.api.dto.JourneyDtos.SegmentStopDto;
 import za.co.commuttr.api.dto.PlanDtos.PlanDepartureDto;
+import za.co.commuttr.api.dto.PlanDtos.FareDto;
 import za.co.commuttr.api.dto.PlanDtos.PlanOptionDto;
 import za.co.commuttr.api.dto.PlanDtos.PlanResponse;
 import za.co.commuttr.api.dto.PlanDtos.PlanSegmentStopDto;
@@ -200,7 +201,9 @@ class ApiContractTest {
                 List.of(new PlanSegmentStopDto(3, "NYANGA TERM", -33.98, 18.58, 0)),
                 List.of(new double[] { -33.98, 18.58 }, new double[] { -33.90, 18.62 }),
                 List.of(new PlanDepartureDto("0605", false, 365, "06:47", true, 407.5, 88, 2, 0, 6)),
-                false, true, "NYANGA TERM", "near A–B");
+                false, true, "NYANGA TERM", "near A–B",
+                new FareDto("CIBV", 2320, 11600, 21500, 94600, "Zero",
+                        "exact", "Cape Town", "Bellville"));
         given(planner.plan(any(), any())).willReturn(new PlanResponse(
                 new StopDto(3, "NYANGA TERM", -33.98, 18.58), PinDto.of(-33.90, 18.62),
                 List.of(option)));
@@ -212,6 +215,11 @@ class ApiContractTest {
                 .andExpect(jsonPath("$.options[0].road_path[0][0]").value(-33.98))
                 .andExpect(jsonPath("$.options[0].board_approx").value(false))
                 .andExpect(jsonPath("$.options[0].alight_label").value("near A–B"))
+                // Money crosses the wire in cents, as a whole number: a fare that has
+                // been through a float is a bug a customer finds.
+                .andExpect(jsonPath("$.options[0].fare.per_ride_cents").value(2320))
+                .andExpect(jsonPath("$.options[0].fare.code").value("CIBV"))
+                .andExpect(jsonPath("$.options[0].fare.basis").value("exact"))
                 .andExpect(jsonPath("$.options[0].segment_stops[0].stop_id").value(3))
                 // an exact stop keeps an integer; an interpolated pin keeps its fraction
                 .andExpect(jsonPath("$.options[0].departures[0].board_minutes").value(365))

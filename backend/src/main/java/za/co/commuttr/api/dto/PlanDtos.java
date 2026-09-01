@@ -68,6 +68,24 @@ public final class PlanDtos {
                                    Integer toSeq) { }
 
     /** {@code roadPath} is a list of [lat, lon] pairs stitched across the segment. */
+    /**
+     * What the ride costs, or null where the operator publishes no fare for it.
+     *
+     * `basis` says where the number came from - "exact" for a fare printed against
+     * these two places, "section" for the nearest published fare that still covers the
+     * whole ride, "route" for the trip's own end-to-end fare - and basisFrom/basisTo
+     * name the places it is printed between, so the app can show its working.
+     */
+    public record FareDto(String code,
+                          Integer perRideCents,
+                          Integer fiveRideCents,
+                          Integer weeklyCents,
+                          Integer monthlyCents,
+                          String transfers,
+                          String basis,
+                          String basisFrom,
+                          String basisTo) { }
+
     public record PlanOptionDto(String timetableNumber,
                                 String routeLabel,
                                 String dayType,
@@ -78,7 +96,8 @@ public final class PlanDtos {
                                 Boolean boardApprox,
                                 Boolean alightApprox,
                                 String boardLabel,
-                                String alightLabel) { }
+                                String alightLabel,
+                                FareDto fare) { }
 
     /** from/to is a StopDto for a named stop, or a PinDto for a lat/lon pin. */
     public record PlanResponse(@JsonProperty("from") Object from,

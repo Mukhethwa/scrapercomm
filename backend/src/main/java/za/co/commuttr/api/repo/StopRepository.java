@@ -70,4 +70,20 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
             FROM stop WHERE id IN (:a, :b)
             """, nativeQuery = true)
     List<StopRow> findPair(@Param("a") Integer a, @Param("b") Integer b);
+
+    /**
+     * The published fare for riding between two stops, or nothing.
+     *
+     * Resolved ahead of time by {@code gabs_scraper.pricing} - which zone a stop sits
+     * in, and which of three published fares covers the ride - so both services read
+     * the same numbers instead of each reimplementing that and drifting apart.
+     */
+    @Query(value = """
+            SELECT code, per_ride_cents, five_ride_cents, weekly_cents, monthly_cents,
+                   transfers, basis, basis_from, basis_to
+            FROM journey_fare
+            WHERE from_stop_id = :fromId AND to_stop_id = :toId
+            """, nativeQuery = true)
+    List<Object[]> findJourneyFare(@Param("fromId") Integer fromId,
+                                   @Param("toId") Integer toId);
 }

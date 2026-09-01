@@ -14,6 +14,7 @@ import za.co.commuttr.api.dto.PlanDtos.LocateResponse;
 import za.co.commuttr.api.dto.PlanDtos.NearbyOriginDto;
 import za.co.commuttr.api.dto.PlanDtos.NearbyOriginsResponse;
 import za.co.commuttr.api.dto.PlanDtos.PlanDepartureDto;
+import za.co.commuttr.api.dto.PlanDtos.FareDto;
 import za.co.commuttr.api.dto.PlanDtos.PlanOptionDto;
 import za.co.commuttr.api.dto.PlanDtos.PlanResponse;
 import za.co.commuttr.api.dto.PlanDtos.PlanSegmentStopDto;
@@ -410,6 +411,44 @@ public class PlannerService {
         String alightLabel;
     }
 
+    /**
+     * Which stop the fare is charged from/to.
+     *
+     * A named stop prices itself. A dropped pin has no stop of its own, so it is priced
+     * from the timing point at that end of the segment the rider is actually on.
+     */
+    private static Integer fareEndpoint(EndpointRef ep, List<PlanSegmentStopDto> seg,
+                                        boolean isFrom) {
+        if (ep.isStop()) {
+            return ep.stopId();
+        }
+        List<Integer> ids = seg.stream().map(PlanSegmentStopDto::stopId)
+                .filter(Objects::nonNull).toList();
+        if (ids.isEmpty()) {
+            return null;
+        }
+        return isFrom ? ids.get(0) : ids.get(ids.size() - 1);
+    }
+
+    /** {@code planner.journey_fare} */
+    private FareDto fareFor(Integer fromId, Integer toId) {
+        if (fromId == null || toId == null) {
+            return null;
+        }
+        List<Object[]> rows = stops.findJourneyFare(fromId, toId);
+        if (rows.isEmpty()) {
+            return null;
+        }
+        Object[] r = rows.get(0);
+        return new FareDto(
+                (String) r[0],
+                r[1] == null ? null : ((Number) r[1]).intValue(),
+                r[2] == null ? null : ((Number) r[2]).intValue(),
+                r[3] == null ? null : ((Number) r[3]).intValue(),
+                r[4] == null ? null : ((Number) r[4]).intValue(),
+                (String) r[5], (String) r[6], (String) r[7], (String) r[8]);
+    }
+
     /** {@code planner.resolve_journeys} */
     public List<PlanOptionDto> resolveJourneys(EndpointRef fromEp, EndpointRef toEp, double thresholdM) {
         Map<AnchorKey, List<Anchor>> board = endpointAnchors(fromEp, thresholdM);
@@ -482,12 +521,16 @@ public class PlannerService {
         }
 
         List<PlanOptionDto> options = new ArrayList<>(groups.size());
+        Map<List<Integer>, FareDto> fareCache = new HashMap<>();
         for (PlanGroup g : groups.values()) {
             g.departures.sort(planDepartureOrder());
+            List<Integer> key = Arrays.asList(fareEndpoint(fromEp, g.segmentStops, true),
+                                              fareEndpoint(toEp, g.segmentStops, false));
+            FareDto fare = fareCache.computeIfAbsent(key, k -> fareFor(k.get(0), k.get(1)));
             options.add(new PlanOptionDto(
                     g.timetableNumber, g.routeLabel, g.dayType, g.dayLabel,
                     g.segmentStops, g.roadPath, List.copyOf(g.departures),
-                    g.boardApprox, g.alightApprox, g.boardLabel, g.alightLabel));
+                    g.boardApprox, g.alightApprox, g.boardLabel, g.alightLabel, fare));
         }
         options.sort(Comparator
                 .comparingInt((PlanOptionDto o) -> DayTypes.order(o.dayType()))
