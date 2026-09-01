@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
 import type { TripNote, TripStop } from './api'
+import { longTime } from './times'
 
 export interface PinEnd { name: string; time?: string }
 
@@ -12,13 +13,10 @@ export interface PinEnd { name: string; time?: string }
  *
  * Shared by the search results and the Planner, so a journey reads identically in both.
  */
-/**
- * "about 07:14" only makes sense of a real clock time. An unofficial stop between two
- * timing points can come back as "via" - the timetable simply prints no time there - and
- * "about via" says nothing. Those are left to speak for themselves.
- */
-function approxTime(time: string): string {
-  return /^\d{1,2}:\d{2}/.test(time) ? `about ${time}` : time
+/** A stop's time in the breakdown: published, or plainly marked as a guess. */
+function TripTime({ time, approx }: { time: string; approx: boolean }) {
+  const t = longTime(time, approx)
+  return <span className={`tstime ${t.approx ? 'aprx' : ''}`}>{t.text}</span>
 }
 
 export default function TripStrip(
@@ -43,29 +41,36 @@ export default function TripStrip(
   if (!stops || stops.length === 0)
     return <div className="tripstrip"><div className="tsloading">No stop detail for this trip.</div></div>
 
-  type Row = { name: string; time: string; approx: boolean; role: 'board' | 'alight' | 'mid' }
+  // `approx` is about the TIME being a guess; `pin` is about the STOP being the
+  // rider's own unofficial one. They used to be the same flag, which meant every
+  // via row started claiming to be "your stop".
+  type Row = { name: string; time: string; approx: boolean; pin: boolean
+               role: 'board' | 'alight' | 'mid' }
   const rows: Row[] = []
   let boardInserted = false
   stops.forEach((s, i) => {
     // your (unofficial) boarding point goes just before the first stop at/after it
     if (boardPin && !boardInserted && s.stop_sequence >= riderFromSeq) {
-      rows.push({ name: boardPin.name, time: boardPin.time ?? '', approx: true, role: 'board' })
+      rows.push({ name: boardPin.name, time: boardPin.time ?? '', approx: true,
+                  pin: true, role: 'board' })
       boardInserted = true
     }
     const isBoardStop = !boardPin && s.stop_sequence === riderFromSeq
     const isAlightStop = !alightPin && s.stop_sequence === riderToSeq
-    const published = s.cell_type === 'TIME' ? s.raw_value : 'via'
+    const printed = s.cell_type === 'TIME' ? s.raw_value : 'via'
     const chosen = isBoardStop ? boardTime : isAlightStop ? alightTime : undefined
     rows.push({
       name: s.name,
-      time: s.cell_type === 'TIME' ? published : chosen ?? published,
-      approx: false,
+      time: s.cell_type === 'TIME' ? printed : chosen ?? printed,
+      approx: s.cell_type !== 'TIME',
+      pin: false,
       role: isBoardStop ? 'board' : isAlightStop ? 'alight' : 'mid',
     })
     // your (unofficial) alighting point goes just after the last stop within your segment
     const next = stops[i + 1]
     if (alightPin && s.stop_sequence <= riderToSeq && (!next || next.stop_sequence > riderToSeq)) {
-      rows.push({ name: alightPin.name, time: alightPin.time ?? '', approx: true, role: 'alight' })
+      rows.push({ name: alightPin.name, time: alightPin.time ?? '', approx: true,
+                  pin: true, role: 'alight' })
     }
   })
 
@@ -86,13 +91,13 @@ export default function TripStrip(
               <span className="tsdot" />
               <span className="tsname">
                 {r.name}
-                {r.approx && <span className="yourstop"> (your stop)</span>}
+                {r.pin && <span className="yourstop"> (your stop)</span>}
                 {r.role === 'board' && <span className="tstag on">get on here</span>}
                 {r.role === 'alight' && <span className="tstag off">get off here</span>}
                 {isFirst && before && <span className="tstag ctx">bus starts</span>}
                 {isLast && after && <span className="tstag ctx">terminus</span>}
               </span>
-              <span className="tstime">{r.approx ? approxTime(r.time) : r.time}</span>
+              <TripTime time={r.time} approx={r.approx} />
             </li>
           )
         })}

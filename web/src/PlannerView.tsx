@@ -15,6 +15,7 @@ import {
   type SavedJourney,
 } from './planner'
 import TripStrip from './TripStrip'
+import { shortTime, boundIsUseful, NO_TIME } from './times'
 
 const DAY_LABEL: Record<string, string> = {
   WEEKDAY: 'Mon-Fri', SATURDAY: 'Saturday', SUNDAY: 'Sunday',
@@ -22,6 +23,13 @@ const DAY_LABEL: Record<string, string> = {
 }
 
 /** The bus's front sign: the terminus, read from ORIGIN - VIA - TERMINUS. */
+/** Same rendering as the search results, so a saved journey reads identically. */
+function PlanTime({ raw, approx, useful = true }:
+  { raw: string; approx: boolean; useful?: boolean }) {
+  const t = shortTime(useful ? raw : NO_TIME, approx)
+  return <span className={t.approx ? 'aprx' : ''}>{t.text}</span>
+}
+
 function terminusOf(routeLabel: string) {
   const parts = routeLabel.split(' - ').map((s) => s.trim()).filter(Boolean)
   return parts[parts.length - 1] ?? routeLabel
@@ -290,9 +298,10 @@ function ChangeTime(
                     toEndpoint(journey.from), toEndpoint(journey.to), o, d,
                   ))}
                 >
-                  <span className="bt">{d.board_raw}</span>
+                  <PlanTime raw={d.board_raw} approx={d.board_approx} />
                   <span className="da">to</span>
-                  <span className="at">{d.arrive_raw}</span>
+                  <PlanTime raw={d.arrive_raw} approx={d.arrive_approx}
+                    useful={boundIsUseful(d.arrive_minutes, d.arrive_approx, d.board_minutes)} />
                   {isCurrent && <span className="curtag">now</span>}
                 </button>
               )

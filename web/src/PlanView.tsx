@@ -8,6 +8,7 @@ import {
 import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
 import { buildJourney, usePlanner } from './planner'
+import { shortTime, boundIsUseful, NO_TIME } from './times'
 import { ArrowRight, CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
@@ -82,6 +83,36 @@ async function mergedSearch(q: string, areas: string[]): Promise<Hit[]> {
  * items use onMouseDown, which fires before blur, so clicking a suggestion still
  * registers. Escape blurs, which closes the menu by the same rule.
  */
+/**
+ * Does any departure here carry a time the timetable never printed?
+ *
+ * The option's own board_approx/alight_approx describe whichever candidate happened to
+ * build the group, so a group can show "~05:30" while reporting false. Gating the legend
+ * on that flag hid the explanation from the exact rows that needed it.
+ */
+function hasApprox(o: PlanOption): boolean {
+  return o.departures.some((d) => d.board_approx || d.arrive_approx)
+}
+
+/**
+ * What one end of the ride should say, decided once so the departure button and the trip
+ * breakdown can never disagree about the same stop.
+ */
+function alightOrNone(d: PlanDeparture | undefined, end: 'board' | 'alight'): string | undefined {
+  if (!d) return undefined
+  const raw = end === 'board' ? d.board_raw : d.arrive_raw
+  const approx = end === 'board' ? d.board_approx : d.arrive_approx
+  const mins = end === 'board' ? d.board_minutes : d.arrive_minutes
+  return boundIsUseful(mins, approx, d.board_minutes) ? raw : NO_TIME
+}
+
+/** One end of a departure button: a published time, or a visibly-approximate one. */
+function DepTime({ raw, approx, useful = true }:
+  { raw: string; approx: boolean; useful?: boolean }) {
+  const t = shortTime(useful ? raw : NO_TIME, approx)
+  return <span className={t.approx ? 'aprx' : ''}>{t.text}</span>
+}
+
 export default function PlanView() {
   const [from, setFrom] = useState<Endpoint | null>(null)
   const [to, setTo] = useState<Endpoint | null>(null)
@@ -401,11 +432,19 @@ export default function PlanView() {
                         <div className="signroute">Route: {o.route_label}, timetable #{o.timetable_number}</div>
                       </div>
                       <span className="optmeta">
-                        {(o.board_approx || o.alight_approx) && <span className="approxpill">Approx times</span>}
+                        {hasApprox(o) && <span className="approxpill">Approx times</span>}
                         <span className="daypill">{DAY_LABEL[o.day_type] ?? o.day_type}</span>
                       </span>
                     </div>
                     <div className="depshint">Tap a departure to see where you get on and off.</div>
+                    {hasApprox(o) && (
+                      <div className="aprxlegend">
+                        The timetable prints no time for one of your stops.
+                        <b>~05:20</b> means the bus cannot get there before 05:20 — be there
+                        by then and allow extra. <b>no set time</b> means even that much is
+                        not known; tap the departure to see the timed stops either side.
+                      </div>
+                    )}
                     {[...TIME_GROUPS, { key: 'other', label: 'Other times' }].map((g) =>
                       groups[g.key].length > 0 ? (
                         <div key={g.key} className="depgroup">
@@ -420,9 +459,10 @@ export default function PlanView() {
                                 <div key={j} className={`depwrap ${planned ? 'planned' : ''}`}>
                                   <button className={`dep ${openDep?.oi === i && openDep?.di === j ? 'on' : ''}`}
                                     onClick={() => selectDep(i, j, d)}>
-                                    <span className="bt">{d.board_raw}</span>
+                                    <DepTime raw={d.board_raw} approx={d.board_approx} />
                                     <span className="da">to</span>
-                                    <span className="at">{d.arrive_raw}</span>
+                                    <DepTime raw={d.arrive_raw} approx={d.arrive_approx}
+                                      useful={boundIsUseful(d.arrive_minutes, d.arrive_approx, d.board_minutes)} />
                                   </button>
                                   <button
                                     className={`addbtn ${planned ? 'on' : ''}`}
@@ -446,8 +486,8 @@ export default function PlanView() {
                         riderToSeq={o.departures[openDep.di]?.to_seq ?? 9999}
                         boardPin={from?.kind === 'pin' ? { name: from.name, time: o.departures[openDep.di]?.board_raw } : null}
                         alightPin={to?.kind === 'pin' ? { name: to.name, time: o.departures[openDep.di]?.arrive_raw } : null}
-                        boardTime={o.departures[openDep.di]?.board_raw}
-                        alightTime={o.departures[openDep.di]?.arrive_raw}
+                        boardTime={alightOrNone(o.departures[openDep.di], 'board')}
+                        alightTime={alightOrNone(o.departures[openDep.di], 'alight')}
                       />
                     )}
                   </div>
