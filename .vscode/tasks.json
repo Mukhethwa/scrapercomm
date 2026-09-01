@@ -1,0 +1,37 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "API (Spring Boot :8000)",
+      "type": "shell",
+      "command": "mvn -f backend/pom.xml spring-boot:run",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "commuttr", "panel": "dedicated" }
+    },
+    {
+      "label": "Web (Vite dev :5173)",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "commuttr", "panel": "dedicated" }
+    },
+    {
+      "label": "Legacy API (FastAPI :8001)",
+      "type": "shell",
+      "command": "PYTHONPATH=src .venv/Scripts/python.exe -m uvicorn gabs_scraper.api:app --port 8001",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "commuttr", "panel": "dedicated" }
+    },
+    {
+      "label": "Start Commuttr",
+      "dependsOn": ["API (Spring Boot :8000)", "Web (Vite dev :5173)"],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true }
+    }
+  ]
+}
