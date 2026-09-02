@@ -320,6 +320,23 @@ export default function PlanView() {
       .slice(0, 6)
   }, [to, reachable, connecting])
 
+  /** Buses the best answer to what was actually asked needs. */
+  const bestLegs = plan && plan.length > 0 ? 1 : (connLegs ?? Infinity)
+
+  /**
+   * Nearby stops that take fewer buses than the stop the rider chose.
+   *
+   * A stop's name is not its area, and some named stops are barely served. WYNBERG to
+   * KHAYELITSHA comes back as three buses and an hour and fifty minutes, because no
+   * route lists a stop called KHAYELITSHA at all - the route named "WYNBERG -
+   * KHAYELITSHA" calls at MAKHAZA, HARARE and SITE C, and SITE C is one bus away.
+   * Answering the letter of the question and hiding the better journey helps nobody.
+   */
+  const betterNearby = useMemo(
+    () => nearbyAlternatives.filter((r) => (r.change ? 2 : 1) < bestLegs),
+    [nearbyAlternatives, bestLegs],
+  )
+
   const filteredConnecting = useMemo(() => {
     const q = toText.trim().toLowerCase()
     return q ? connecting.filter((r) => r.name.toLowerCase().includes(q)) : connecting
@@ -495,6 +512,27 @@ export default function PlanView() {
                     <b>No way to get there by bus.</b> There is no direct service from {from!.name} to{' '}
                     {to!.name}, and no combination of up to three buses connects them either.
                   </span>
+                </div>
+              )}
+
+              {!loading && !connLoading && betterNearby.length > 0 && bestLegs < Infinity && (
+                <div className="altbox better">
+                  <div className="altlbl">
+                    <b>{to!.name}</b> needs {bestLegs} bus{bestLegs === 1 ? '' : 'es'}, but these
+                    stops nearby are quicker to reach
+                  </div>
+                  <div className="altlist">
+                    {betterNearby.map((r) => (
+                      <button key={r.id} className="altitem" onClick={() =>
+                        pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}>
+                        <span className="altname">{r.name}</span>
+                        <span className="altmeta">
+                          {r.km < 1 ? `${Math.round(r.km * 1000)} m` : `${r.km.toFixed(1)} km`} from{' '}
+                          {to!.name} · {r.change ? '2 buses' : 'direct'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 

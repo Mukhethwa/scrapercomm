@@ -254,6 +254,8 @@ body { background: var(--bg); color: var(--ink); }
    name is not its area, and telling somebody "no" about KHAYELITSHA while SITE C and
    MAKHAZA are one change away answers the wrong question. */
 .altbox { margin: 0 0 12px; }
+.altbox.better { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; }
+.altbox.better .altlbl { font-weight: 500; }
 .altlbl { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 7px; }
 .altlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
 .altitem {
