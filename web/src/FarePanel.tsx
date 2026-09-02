@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Info } from 'lucide-react'
+import { Info, TicketCheck, Tickets } from 'lucide-react'
 import type { Fare, ConnectionFare } from './api'
 import { rands, perRide, basisNote, isFlat } from './money'
 
@@ -44,6 +44,20 @@ export default function FarePanel(
     <div className="farebox">
       <div className="fareline">
         <span className="fareamt">{rands(fare.per_ride_cents)}</span>
+        {/* Whether a change of bus is paid for twice is the thing a rider most wants to
+            know here, and it is not our judgement: Golden Arrow publishes a fare for
+            this journey with a transfer allowance, or it does not. */}
+        {through && (
+          <span className="faretag once">
+            <TicketCheck size={13} aria-hidden="true" /> Pay once
+          </span>
+        )}
+        {perLeg && tickets && (
+          <span className="faretag many">
+            <Tickets size={13} aria-hidden="true" />
+            {tickets === 2 ? 'Pay twice' : `Pay ${tickets} times`}
+          </span>
+        )}
         <span className="farelbl">
           {perLeg && tickets ? <>for all {tickets} buses. </> : null}
           Price on a <b>Golden Arrow Gold Card</b>. <b>Paying cash costs more.</b>
@@ -61,13 +75,15 @@ export default function FarePanel(
               so the table has to say so or it reads as the price of one ticket. */}
           {perLeg && tickets ? (
             <p className="farefoot lead">
-              A separate ticket for each of the {tickets} buses. Every price below is the
-              total for all {tickets}.
+              Golden Arrow publishes no through fare for this journey, so you buy a ticket
+              on each of the {tickets} buses. Every price below is the total for all {tickets}.
             </p>
           ) : null}
           {through ? (
             <p className="farefoot lead">
-              One ticket covers the whole journey, including the change of bus.
+              Golden Arrow sells this journey as one ticket
+              {fare.transfers ? `, allowing ${fare.transfers.toLowerCase()} transfer` : ''}
+              , so the change of bus costs nothing extra.
             </p>
           ) : null}
           <table className="faretable">

@@ -207,6 +207,19 @@ body { background: var(--bg); color: var(--ink); }
   color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px;
 }
 .fareline .infobtn { margin-left: auto; }
+
+/* Whether the change of bus is paid for again. This is the operator's own position -
+   they publish a fare for the journey with a transfer allowance, or they do not - so it
+   is stated as a fact beside the price rather than buried in the notes. */
+.faretag {
+  display: inline-flex; align-items: center; gap: 4px;
+  border-radius: 999px; padding: 2px 8px;
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.faretag.once { background: var(--ink); color: #fff; }
+.faretag.many { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+.connfarelbl.once { color: var(--ink); font-weight: 700; }
+.connfarelbl.many { color: var(--accent); font-weight: 700; }
 .faredetail { margin-top: 9px; border-top: 1px solid var(--line); padding-top: 9px; }
 .faretable { width: 100%; border-collapse: collapse; font-size: 12px; }
 .faretable th {

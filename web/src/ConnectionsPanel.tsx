@@ -147,10 +147,10 @@ export default function ConnectionsPanel(
                 {c.fare?.per_ride_cents != null && (
                   <span className="connfare">
                     {rands(c.fare.per_ride_cents)}
-                    <span className="connfarelbl">
+                    <span className={`connfarelbl ${c.fare.kind === 'through' ? 'once' : 'many'}`}>
                       {c.fare.kind === 'through'
-                        ? ' one ticket'
-                        : ` ${c.fare.tickets} tickets`}
+                        ? ' pay once'
+                        : c.fare.tickets === 2 ? ' pay twice' : ` pay ${c.fare.tickets} times`}
                     </span>
                   </span>
                 )}
