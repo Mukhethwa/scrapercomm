@@ -29,15 +29,21 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
     /**
      * GET /api/stops?q=. Prefix matches float to the top, then alphabetical, exactly
      * as {@code ORDER BY (name ILIKE 'q%') DESC, name} did in FastAPI.
+     *
+     * The second clause matches ignoring spaces. The timetables and the riders disagree
+     * about whether a name is one word or two - BLUE DOWNS against "bluedowns", CAPE
+     * TOWN against "capetown" - and a search that cannot cross a space returns nothing
+     * for a stop that plainly exists.
      */
     @Query(value = """
             SELECT id AS "id", name AS "name", lat AS "lat", lon AS "lon"
             FROM stop
-            WHERE name ILIKE :contains
+            WHERE name ILIKE :contains OR replace(name, ' ', '') ILIKE :squashed
             ORDER BY (name ILIKE :prefix) DESC, name
             LIMIT :maxRows
             """, nativeQuery = true)
     List<StopRow> searchByName(@Param("contains") String contains,
+                               @Param("squashed") String squashed,
                                @Param("prefix") String prefix,
                                @Param("maxRows") int maxRows);
 

@@ -135,13 +135,42 @@ export default function PlanView() {
 
   useEffect(() => { getAreas().then((r) => setAreas(r.areas)).catch(() => {}) }, [])
 
+  /**
+   * Turn a suggestion into somewhere the planner can actually use.
+   *
+   * An area is a route's endpoint name, not a stop, and it carries no coordinates. It
+   * used to be geocoded, which fails on names that are not places - "KHAYELITSHA S A P"
+   * means nothing to a map - and the click then did nothing at all, silently.
+   *
+   * Nearly all of them are a stop under a slightly longer name, so the stop list is
+   * asked first, dropping a trailing word at a time. A stop beats a pin: it comes with
+   * the timetables, rather than a point the planner has to work out anchors for.
+   */
   async function resolveHit(h: Hit): Promise<Endpoint | null> {
     if (h.kind === 'stop') return { kind: 'stop', id: h.id, name: h.name, lat: h.lat, lon: h.lon }
     if (h.kind === 'place') return { kind: 'pin', name: h.name, lat: h.lat, lon: h.lon }
+
+    const words = h.name.split(/\s+/).filter(Boolean)
+    for (let n = words.length; n > 0; n--) {
+      const r = await getStops(words.slice(0, n).join(' ')).catch(() => ({ stops: [] as StopHit[] }))
+      const hit = r.stops.find((x) => x.lat != null && x.lon != null)
+      if (hit) {
+        return { kind: 'stop', id: hit.id, name: hit.name, lat: hit.lat as number, lon: hit.lon as number }
+      }
+    }
     const r = await getGeocode(h.name).catch(() => ({ results: [] as GeoHit[] }))
     if (r.results.length) return { kind: 'pin', name: h.name, lat: r.results[0].lat, lon: r.results[0].lon }
     return null
   }
+
+  /** Picking a suggestion must never look like nothing happened. */
+  async function choose(h: Hit, pick: (ep: Endpoint) => void) {
+    setPickError(null)
+    const ep = await resolveHit(h)
+    if (ep) pick(ep)
+    else setPickError(`Could not find a stop for "${h.name}". Try a nearby stop or place.`)
+  }
+  const [pickError, setPickError] = useState<string | null>(null)
   const [reachable, setReachable] = useState<ReachableStop[] | null>(null)
   const [connecting, setConnecting] = useState<ConnectingStop[]>([])
   const [plan, setPlan] = useState<PlanOption[] | null>(null)
@@ -316,7 +345,7 @@ export default function PlanView() {
             {fromOpen && fromHits.length > 0 && (
               <div className="acmenu">
                 {fromHits.map((h, i) => (
-                  <button key={i} className="acitem" onMouseDown={() => resolveHit(h).then((ep) => ep && pickFrom(ep))}>
+                  <button key={i} className="acitem" onMouseDown={() => choose(h, pickFrom)}>
                     <span className="hittag">{h.kind === 'stop' ? 'Stop' : h.kind === 'area' ? 'Area' : 'Place'}</span>
                     {h.name}{h.sub ? <span className="acsub"> {h.sub}</span> : null}
                   </button>
@@ -341,7 +370,7 @@ export default function PlanView() {
             {toOpen && toHits.length > 0 && (
               <div className="acmenu">
                 {toHits.map((h, i) => (
-                  <button key={i} className="acitem" onMouseDown={() => resolveHit(h).then((ep) => ep && pickTo(ep))}>
+                  <button key={i} className="acitem" onMouseDown={() => choose(h, pickTo)}>
                     <span className="hittag">{h.kind === 'stop' ? 'Stop' : h.kind === 'area' ? 'Area' : 'Place'}</span>
                     {h.name}{h.sub ? <span className="acsub"> {h.sub}</span> : null}
                   </button>
@@ -351,6 +380,13 @@ export default function PlanView() {
           </div>
         </div>
       </div>
+
+      {pickError && (
+        <div className="banner bad">
+          <CircleX size={16} aria-hidden="true" />
+          <span>{pickError}</span>
+        </div>
+      )}
 
       <ModePicker />
 

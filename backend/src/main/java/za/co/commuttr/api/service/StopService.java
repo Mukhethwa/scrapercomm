@@ -31,7 +31,8 @@ public class StopService {
     public StopsResponse listStops(String q, int limit) {
         List<StopRow> rows = (q == null || q.isEmpty())
                 ? stops.listAll(limit)
-                : stops.searchByName("%" + q + "%", q + "%", limit);
+                : stops.searchByName("%" + q + "%",
+                        "%" + q.replace(" ", "") + "%", q + "%", limit);
         return new StopsResponse(rows.stream().map(StopService::toDto).toList());
     }
 

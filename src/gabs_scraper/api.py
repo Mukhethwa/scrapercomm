@@ -202,10 +202,16 @@ def list_stops(q: str | None = None, limit: int = 20):
     try:
         cur = conn.cursor()
         if q:
+            # Also match ignoring spaces. The timetables and the riders disagree about
+            # whether a name is one word or two - BLUE DOWNS against "bluedowns", CAPE
+            # TOWN against "capetown" - and a search that cannot cross a space returns
+            # nothing for a stop that plainly exists.
+            squashed = q.replace(" ", "")
             cur.execute(
-                "SELECT id, name, lat, lon FROM stop WHERE name ILIKE %s "
+                "SELECT id, name, lat, lon FROM stop "
+                "WHERE name ILIKE %s OR replace(name, ' ', '') ILIKE %s "
                 "ORDER BY (name ILIKE %s) DESC, name LIMIT %s",
-                (f"%{q}%", f"{q}%", limit),
+                (f"%{q}%", f"%{squashed}%", f"{q}%", limit),
             )
         else:
             cur.execute("SELECT id, name, lat, lon FROM stop ORDER BY name LIMIT %s", (limit,))
