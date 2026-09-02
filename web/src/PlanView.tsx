@@ -111,9 +111,11 @@ function FarePanel({ fare }: { fare: PlanOption['fare'] }) {
         </button>
       </div>
       {/* Always visible, never behind the toggle: a rider who reads only the number
-          would otherwise take it for what the driver charges in cash, which is more. */}
+          would otherwise take it for what the driver charges in cash, which is more.
+          The card is named in full - "card price" on its own invites the reader to
+          think of the one in their wallet. */}
       <div className="farecash">
-        This is the card price. <b>Paying cash costs more.</b>
+        Price on a <b>Golden Arrow Gold Card</b>. <b>Paying cash costs more.</b>
       </div>
       {open && (
         <div className="faredetail">
@@ -141,7 +143,9 @@ function FarePanel({ fare }: { fare: PlanOption['fare'] }) {
           )}
           {note && <p className="farefoot">{note}</p>}
           <p className="farefoot">
-            {isFlat(fare.basis) ? 'These are GO Easy prices' : 'These are Gold Card prices'}
+            {isFlat(fare.basis)
+              ? 'These are GO Easy prices on a Golden Arrow Gold Card'
+              : 'These are Golden Arrow Gold Card prices'}
             {' '}and do not change with the time of day. <b>Paying cash costs more</b>, and
             the cash fare itself differs between peak (16:00-08:00) and off-peak; Golden
             Arrow does not publish cash fares per journey.

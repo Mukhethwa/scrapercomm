@@ -131,13 +131,14 @@ export default function ConnectionsPanel(
             ) : c.fare.kind === 'through' ? (
               <div className="connfarenote">
                 One ticket covers the change: {rands(c.fare.per_ride_cents)} a ride on a
-                Gold Card 5&nbsp;Ride{c.fare.code ? ` (${c.fare.code})` : ''}, which
-                already allows {c.fare.transfers?.toLowerCase()} transfer.
+                <b> Golden Arrow Gold Card</b> 5&nbsp;Ride{c.fare.code ? ` (${c.fare.code})` : ''},
+                which already allows {c.fare.transfers?.toLowerCase()} transfer.
+                Paying cash costs more.
               </div>
             ) : (
               <div className="connfarenote">
                 A separate ticket for each bus, {rands(c.fare.per_ride_cents)} a ride in
-                total on Gold Card 5&nbsp;Ride.
+                total on a <b>Golden Arrow Gold Card</b> 5&nbsp;Ride. Paying cash costs more.
               </div>
             )}
 
