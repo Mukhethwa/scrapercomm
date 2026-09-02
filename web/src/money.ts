@@ -14,16 +14,6 @@ export const RIDES = { five: 5, weekly: 10, monthly: 48 }
 /** GO Easy is the flat fare: one price for any journey, wherever it goes. */
 export const isFlat = (basis: string) => basis === 'go_easy'
 
-/**
- * What to call the ticket this price is for.
- *
- * "Gold Card" is named in full. On its own it reads like something from a bank, and a
- * rider who has never bought one needs to know whose card to ask for.
- */
-export function ticketName(basis: string): string {
-  return isFlat(basis) ? 'GO Easy 5 Ride' : 'Golden Arrow Gold Card 5 Ride'
-}
-
 export function rands(cents: number | null | undefined): string | null {
   if (cents == null) return null
   return `R${(cents / 100).toFixed(2)}`

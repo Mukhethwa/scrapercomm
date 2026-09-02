@@ -9,7 +9,7 @@ import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
 import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
-import { rands, perRide, basisNote, ticketName, isFlat } from './money'
+import { rands, perRide, basisNote, isFlat } from './money'
 import { ArrowRight, CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
@@ -103,20 +103,19 @@ function FarePanel({ fare }: { fare: PlanOption['fare'] }) {
     <div className="farebox">
       <div className="fareline">
         <span className="fareamt">{rands(fare.per_ride_cents)}</span>
-        <span className="farelbl">a ride on a {ticketName(fare.basis)}</span>
+        {/* What the number means, rather than which product it came off. A rider wants
+            to know it is not the cash fare and whose card to ask for; the ticket's name
+            is the operator's own vocabulary and is left to "Other tickets". */}
+        <span className="farelbl">
+          Price on a <b>Golden Arrow Gold Card</b>. <b>Paying cash costs more.</b>
+        </span>
         {fare.code && <span className="farecode">{fare.code}</span>}
         <button className="infobtn" onClick={() => setOpen(!open)} aria-expanded={open}>
           <Info size={13} aria-hidden="true" />
           <span>{open ? 'Hide' : 'Other tickets'}</span>
         </button>
       </div>
-      {/* Always visible, never behind the toggle: a rider who reads only the number
-          would otherwise take it for what the driver charges in cash, which is more.
-          The card is named in full - "card price" on its own invites the reader to
-          think of the one in their wallet. */}
-      <div className="farecash">
-        Price on a <b>Golden Arrow Gold Card</b>. <b>Paying cash costs more.</b>
-      </div>
+
       {open && (
         <div className="faredetail">
           <table className="faretable">
