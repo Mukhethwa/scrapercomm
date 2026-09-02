@@ -110,6 +110,11 @@ function FarePanel({ fare }: { fare: PlanOption['fare'] }) {
           <span>{open ? 'Hide' : 'Other tickets'}</span>
         </button>
       </div>
+      {/* Always visible, never behind the toggle: a rider who reads only the number
+          would otherwise take it for what the driver charges in cash, which is more. */}
+      <div className="farecash">
+        This is the card price. <b>Paying cash costs more.</b>
+      </div>
       {open && (
         <div className="faredetail">
           <table className="faretable">

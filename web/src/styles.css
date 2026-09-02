@@ -162,7 +162,7 @@ body { background: var(--bg); color: var(--ink); }
    apart from the direct list so the distinction is visible at a glance, not read. */
 .reachhead.sub { margin-top: 22px; color: var(--muted); }
 .reachitem.connecting { border-style: dashed; }
-.reachitem.connecting .rtrips { color: var(--warn, #b45309); font-weight: 600; }
+.reachitem.connecting .rtrips { color: var(--accent); font-weight: 600; }
 
 /* A time the timetable never printed. It has to be legible but must never pass for a
    published departure, so it loses the bold weight real times carry and picks up the
@@ -193,7 +193,7 @@ body { background: var(--bg); color: var(--ink); }
 
 .farebox {
   border: 1px solid var(--line); border-radius: 10px;
-  padding: 9px 12px; margin: 0 0 10px; background: var(--card);
+  padding: 9px 12px; margin: 0 0 10px; background: var(--panel);
 }
 .farebox.none {
   display: flex; align-items: center; gap: 7px;
@@ -207,6 +207,8 @@ body { background: var(--bg); color: var(--ink); }
   color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px;
 }
 .fareline .infobtn { margin-left: auto; }
+.farecash { margin-top: 4px; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.farecash b { font-weight: 700; }
 .faredetail { margin-top: 9px; border-top: 1px solid var(--line); padding-top: 9px; }
 .faretable { width: 100%; border-collapse: collapse; font-size: 12px; }
 .faretable th {
