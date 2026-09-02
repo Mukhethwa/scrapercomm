@@ -9,7 +9,7 @@ import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
 import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
-import { rands, perRide, basisNote } from './money'
+import { rands, perRide, basisNote, ticketName, isFlat } from './money'
 import { ArrowRight, CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
@@ -103,7 +103,7 @@ function FarePanel({ fare }: { fare: PlanOption['fare'] }) {
     <div className="farebox">
       <div className="fareline">
         <span className="fareamt">{rands(fare.per_ride_cents)}</span>
-        <span className="farelbl">a ride on a Gold Card 5&nbsp;Ride</span>
+        <span className="farelbl">a ride on a {ticketName(fare.basis)}</span>
         {fare.code && <span className="farecode">{fare.code}</span>}
         <button className="infobtn" onClick={() => setOpen(!open)} aria-expanded={open}>
           <Info size={13} aria-hidden="true" />
@@ -136,8 +136,9 @@ function FarePanel({ fare }: { fare: PlanOption['fare'] }) {
           )}
           {note && <p className="farefoot">{note}</p>}
           <p className="farefoot">
-            These are Gold Card prices and do not change with the time of day. Paying
-            cash costs more and differs between peak (16:00-08:00) and off-peak; Golden
+            {isFlat(fare.basis) ? 'These are GO Easy prices' : 'These are Gold Card prices'}
+            {' '}and do not change with the time of day. <b>Paying cash costs more</b>, and
+            the cash fare itself differs between peak (16:00-08:00) and off-peak; Golden
             Arrow does not publish cash fares per journey.
           </p>
         </div>
@@ -557,6 +558,7 @@ export default function PlanView() {
                         alightPin={to?.kind === 'pin' ? { name: to.name, time: o.departures[openDep.di]?.arrive_raw } : null}
                         boardTime={alightOrNone(o.departures[openDep.di], 'board')}
                         alightTime={alightOrNone(o.departures[openDep.di], 'alight')}
+                        onClose={() => setOpenDep(null)}
                       />
                     )}
                   </div>

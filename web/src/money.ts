@@ -11,6 +11,14 @@ import type { Fare } from './api'
 /** Rides each product carries. Straight off the operator's product page. */
 export const RIDES = { five: 5, weekly: 10, monthly: 48 }
 
+/** GO Easy is the flat fare: one price for any journey, wherever it goes. */
+export const isFlat = (basis: string) => basis === 'go_easy'
+
+/** What to call the ticket this price is for. */
+export function ticketName(basis: string): string {
+  return isFlat(basis) ? 'GO Easy 5 Ride' : 'Gold Card 5 Ride'
+}
+
 export function rands(cents: number | null | undefined): string | null {
   if (cents == null) return null
   return `R${(cents / 100).toFixed(2)}`
@@ -39,6 +47,8 @@ export function basisNote(fare: Fare): string | null {
   const between = fare.basis_from && fare.basis_to
     ? `${fare.basis_from} to ${fare.basis_to}`
     : null
+  if (isFlat(fare.basis))
+    return 'GO Easy is one price for any journey, however far it goes. It is not valid to or from Atlantis, Darling, Dassenberg, Mamre/Pella, Malmesbury, Koeberg Power Station, Melkbosstrand, Fisantekraal, Wellington, Paarl or Stellenbosch, which are priced by distance instead.'
   if (fare.basis === 'exact') return between ? `Fare published for ${between}.` : null
   if (fare.basis === 'section')
     return between

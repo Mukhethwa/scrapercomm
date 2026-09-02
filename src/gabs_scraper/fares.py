@@ -37,6 +37,27 @@ FARES_URL = "https://www.gabs.co.za/MultiJourneyFares.aspx"
 # Rides each product carries, straight off the product page.
 RIDES = {"five_ride": 5, "weekly": 10, "monthly": 48}
 
+# GO Easy: one price for any journey, whatever the distance. Announced by the operator on
+# 7 August 2026 - "One ticket, multiple journeys" - and it supersedes the per-zone table
+# for everywhere it is valid, which is nearly the whole network.
+GO_EASY = {
+    "five_ride_cents": 13400,     # R134.00
+    "weekly_cents": 24850,        # R248.50
+    "monthly_cents": 109300,      # R1093.00
+}
+
+# The places GO Easy is not valid to or from, named in that same announcement.
+#
+# Matched on a stop's whole name, never a substring: OLD PAARL RD, STELLENBOSCH RD and
+# STELLENBOSCH ART are roads inside Cape Town, and KOEBERG RD and KOEBERG STN are not the
+# power station. Pricing any of those as a long-distance journey would be wrong, and
+# wrong in the expensive direction.
+GO_EASY_EXCLUDED = {
+    "ATLANTIS", "ATLANTIS IND", "DARLING", "DASSENBERG", "FISANTEKRAAL",
+    "KOEBERG POWER STN", "MALMESBURY", "MAMRE", "MAMRE (PARADISE RD)", "MELKBOS",
+    "PAARL", "PELLA", "STELLENBOSCH", "WELLINGTON",
+}
+
 _DDL = """
 CREATE TABLE IF NOT EXISTS fare (
     origin_zone       TEXT NOT NULL,

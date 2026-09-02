@@ -5,10 +5,17 @@ run between 527 fine-grained timing points, so almost no journey has a fare prin
 against exactly its two stops. Three things are tried, in order, and every answer records
 which one it came from so the app can say so:
 
+    go_easy  the flat fare, which is one price for any journey and covers nearly the
+             whole network, so it answers almost every search
     exact    both stops sit in zones with a published fare between them
     section  the nearest published fare either side that still covers the whole ride
     route    the fare for the trip's own route, end to end - the price a rider is
              actually sold when they board it
+
+The last three only apply where GO Easy is not valid - journeys to or from Atlantis,
+Darling, Dassenberg, Mamre/Pella, Malmesbury, Koeberg Power Station, Melkbosstrand,
+Fisantekraal, Wellington, Paarl or Stellenbosch - which is where the per-zone table
+scraped from the fare page is still the real price.
 
 A journey that reaches none of those has no published fare, and is left empty. Guessing
 one would be worse than saying nothing: it is money, and a rider would plan around it.
@@ -23,7 +30,8 @@ import argparse
 from datetime import datetime, timezone
 
 from . import db
-from .fares import RIDES, ROUTE_ALIASES, _squash, _tokens
+from .fares import (GO_EASY, GO_EASY_EXCLUDED, RIDES, ROUTE_ALIASES,
+                    _squash, _tokens)
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS journey_fare (
@@ -121,6 +129,12 @@ def compute(conn) -> dict:
 
     fares, stop_zones, zones = _load(conn)
 
+    cur.execute("SELECT id, name FROM stop")
+    stop_name = dict(cur.fetchall())
+    # GO Easy is sold "to/from" places, so exclusion follows the rider's own two ends. A
+    # bus that carries on to Paarl afterwards does not make a trip across town excluded.
+    excluded = {sid for sid, name in stop_name.items() if name in GO_EASY_EXCLUDED}
+
     # Every trip in stop order, with the route it belongs to. One pass; the pairs are
     # derived from it rather than queried again per pair.
     cur.execute(
@@ -164,6 +178,12 @@ def compute(conn) -> dict:
                 # Not cached as a failure: another trip through the same two stops may
                 # run a route that does have a published fare.
                 all_pairs.add((a, b))
+                if a not in excluded and b not in excluded:
+                    resolved[(a, b)] = (
+                        (None, GO_EASY["five_ride_cents"], GO_EASY["weekly_cents"],
+                         GO_EASY["monthly_cents"], None),
+                        None, None, "go_easy")
+                    continue
                 row, za, zb = _priced(fares, stop_zones.get(a, []), stop_zones.get(b, []))
                 basis = "exact"
                 if row is None:
@@ -192,14 +212,14 @@ def compute(conn) -> dict:
     priced_stops = sorted(stop_zones)
     for a in priced_stops:
         for b in priced_stops:
-            if a == b or (a, b) in resolved:
+            if a == b or (a, b) in resolved or a not in excluded and b not in excluded:
                 continue
             row, za, zb = _priced(fares, stop_zones[a], stop_zones[b])
             if row is not None:
                 all_pairs.add((a, b))
                 resolved[(a, b)] = (row, za, zb, "exact")
 
-    counts = {"exact": 0, "section": 0, "route": 0}
+    counts = {"go_easy": 0, "exact": 0, "section": 0, "route": 0}
     for _row, _za, _zb, basis in resolved.values():
         counts[basis] += 1
     counts["none"] = len(all_pairs) - len(resolved)
@@ -242,5 +262,5 @@ if __name__ == "__main__":
     c = run()
     total = c["exact"] + c["section"] + c["route"] + c["none"]
     print(f"journey pairs priced : {c['pairs']}")
-    for k in ("exact", "section", "route", "none"):
+    for k in ("go_easy", "exact", "section", "route", "none"):
         print(f"  {k:8}: {c[k]:6}  ({100 * c[k] / max(total, 1):.1f}%)")

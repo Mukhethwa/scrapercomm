@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Info } from 'lucide-react'
+import { Info, X } from 'lucide-react'
 import type { TripNote, TripStop } from './api'
 import { longTime } from './times'
 
@@ -21,7 +21,7 @@ function TripTime({ time, approx }: { time: string; approx: boolean }) {
 
 export default function TripStrip(
   { stops, loading, boardPin, alightPin, riderFromSeq, riderToSeq, notes,
-    boardTime, alightTime }:
+    boardTime, alightTime, onClose }:
   {
     stops: TripStop[] | null; loading: boolean
     boardPin: PinEnd | null; alightPin: PinEnd | null
@@ -35,6 +35,12 @@ export default function TripStrip(
      * departure's own wording wins on those two rows.
      */
     boardTime?: string; alightTime?: string
+    /**
+     * Collapses the breakdown. Tapping the same departure again already closed it, but
+     * that means aiming at the chip you came from after scrolling past a long list of
+     * stops; a close button sits where the reader's eye already is.
+     */
+    onClose?: () => void
   },
 ) {
   if (loading) return <div className="tripstrip"><div className="tsloading">Loading the full trip…</div></div>
@@ -79,7 +85,15 @@ export default function TripStrip(
 
   return (
     <div className="tripstrip">
-      <div className="tsttitle">The whole bus trip. You ride the highlighted part.</div>
+      <div className="tsthead">
+        <span className="tsttitle">The whole bus trip. You ride the highlighted part.</span>
+        {onClose && (
+          <button className="tsclose" onClick={onClose} aria-label="Hide the trip breakdown">
+            <X size={13} aria-hidden="true" />
+            <span>Hide</span>
+          </button>
+        )}
+      </div>
       <ol className="tslist">
         {rows.map((r, i) => {
           const before = boardIdx >= 0 && i < boardIdx
