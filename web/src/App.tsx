@@ -30,7 +30,6 @@ export default function App() {
             Browse routes
           </button>
         </nav>
-        <div className="sub">Cape Town bus timetables and trip planner</div>
       </header>
       {/*
         * PlanView stays mounted and is hidden with CSS rather than unmounted. The whole

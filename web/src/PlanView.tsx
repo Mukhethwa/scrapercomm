@@ -8,6 +8,8 @@ import {
 import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
 import FarePanel from './FarePanel'
+import ModePicker from './ModePicker'
+import { useModes } from './modes'
 import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
 import { rands } from './money'
@@ -247,6 +249,8 @@ export default function PlanView() {
       .finally(() => setLoadingTrip(false))
   }
 
+  const modes = useModes()
+
   const filteredReach = useMemo(() => {
     if (!reachable) return []
     const q = toText.trim().toLowerCase()
@@ -314,9 +318,21 @@ export default function PlanView() {
         </div>
       </div>
 
+      <ModePicker />
+
       <div className="plancontent">
         <section className="planleft">
-          {stage === 'from' && (
+          {/* Every timetable, stop and fare here came from Golden Arrow, so turning it
+              off leaves nothing to search. Saying so beats an empty result that looks
+              like the journey does not exist. */}
+          {modes.none && (
+            <div className="placeholder">
+              No transport selected. Everything this app knows about comes from
+              <b> Golden Arrow</b>, so turn it back on above to plan a journey. Metro Rail
+              and MyCiTi are not available yet.
+            </div>
+          )}
+          {!modes.none && stage === 'from' && (
             <div className="placeholder">
               Type where you want to start. It can be a bus stop, or any place or address,
               even one that is not a listed stop like Woodstock. You can also tap <b>Map</b> and
@@ -324,7 +340,7 @@ export default function PlanView() {
             </div>
           )}
 
-          {stage === 'reachable' && (
+          {!modes.none && stage === 'reachable' && (
             <>
               <div className="reachhead">
                 {reachable == null ? 'Finding destinations…'
@@ -367,7 +383,7 @@ export default function PlanView() {
             </>
           )}
 
-          {stage === 'journeys' && (
+          {!modes.none && stage === 'journeys' && (
             <>
               <div className="reachhead">
                 <b>{from!.name}</b> <span className="arrowin">to</span> <b>{to!.name}</b>
