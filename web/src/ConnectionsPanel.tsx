@@ -1,7 +1,9 @@
-import { ArrowRight, Check, Plus, TriangleAlert } from 'lucide-react'
-import type { Connection, ConnectionLeg } from './api'
+import { useEffect, useState } from 'react'
+import { ArrowRight, Check, ChevronDown, Plus, TriangleAlert } from 'lucide-react'
+import { getTripStops, type Connection, type ConnectionLeg, type TripNote, type TripStop } from './api'
 import { rands } from './money'
 import { rideKey, usePlanner, type SavedJourney } from './planner'
+import TripStrip from './TripStrip'
 
 const DAY_LABEL: Record<string, string> = {
   WEEKDAY: 'Mon-Fri', SATURDAY: 'Saturday', SUNDAY: 'Sunday',
@@ -42,10 +44,68 @@ function legToJourney(leg: ConnectionLeg, dayType: string, dayLabel: string): Sa
  * Adding a connection puts each leg on the planner as its own numbered journey, which is
  * exactly what the planner is for: leg 1, then leg 2, in the order you travel.
  */
+/**
+ * One leg of a change-of-bus journey, opened in place.
+ *
+ * The same breakdown a direct journey gets. Before this the only way to see which stops
+ * a leg passes was to put the whole connection on the planner first, which is backwards:
+ * the stops are how somebody decides whether to plan it at all.
+ */
+function LegDetail({ leg, onClose, throughTicket }:
+  { leg: ConnectionLeg; onClose: () => void; throughTicket: boolean }) {
+  const [stops, setStops] = useState<TripStop[] | null>(null)
+  const [notes, setNotes] = useState<TripNote[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let live = true
+    setLoading(true)
+    // The whole trip, origin to terminus, so the leg is shown in the context of the bus
+    // it is on - the stops before boarding and after alighting included.
+    getTripStops(leg.schedule_id, leg.trip_index, 0, 9999)
+      .then((r) => { if (live) { setStops(r.stops); setNotes(r.notes ?? []) } })
+      .catch(() => { if (live) { setStops([]); setNotes([]) } })
+      .finally(() => { if (live) setLoading(false) })
+    return () => { live = false }
+  }, [leg.schedule_id, leg.trip_index])
+
+  return (
+    <div className="connlegdetail">
+      {/* On a through ticket the leg has a published price of its own, but it is not
+          what the rider pays - one ticket already covers the whole journey. Showing it
+          here would read as a second charge. */}
+      {throughTicket ? (
+        <div className="connlegfarenote">
+          Covered by the one ticket for the whole journey - there is nothing extra to pay
+          for this leg.
+        </div>
+      ) : leg.fare?.per_ride_cents != null ? (
+        <div className="connlegfarenote">
+          This leg costs <b>{rands(leg.fare.per_ride_cents)}</b> a ride on a Golden Arrow
+          Gold Card. Paying cash costs more.
+        </div>
+      ) : null}
+      <TripStrip
+        stops={stops}
+        loading={loading}
+        notes={notes}
+        riderFromSeq={leg.from_seq}
+        riderToSeq={leg.to_seq}
+        boardPin={null}
+        alightPin={null}
+        boardTime={leg.board_raw}
+        alightTime={leg.arrive_raw}
+        onClose={onClose}
+      />
+    </div>
+  )
+}
+
 export default function ConnectionsPanel(
   { connections, legsRequired }: { connections: Connection[]; legsRequired: number | null },
 ) {
   const planner = usePlanner()
+  const [open, setOpen] = useState<{ ci: number; li: number } | null>(null)
 
   function alreadyPlanned(c: Connection) {
     return c.legs.every((l) => planner.has({
@@ -103,25 +163,38 @@ export default function ConnectionsPanel(
             </div>
 
             <ol className="connlegs">
-              {c.legs.map((l, j) => (
-                <li key={j} className="connleg">
-                  <span className="connlegno">{j + 1}</span>
-                  <span className="connlegbody">
-                    <span className="connlegstops">
-                      {l.from_name} <ArrowRight size={12} aria-hidden="true" /> {l.to_name}
-                    </span>
-                    <span className="connlegroute">{l.route_label}</span>
-                  </span>
-                  <span className="connlegtimes">
-                    <b>{l.board_raw}</b>
-                    <span className="connlegdash">to</span>
-                    <b>{l.arrive_raw}</b>
-                    {c.fare?.kind === 'per_leg' && l.fare?.per_ride_cents != null && (
-                      <span className="connlegfare">{rands(l.fare.per_ride_cents)}</span>
+              {c.legs.map((l, j) => {
+                const isOpen = open?.ci === i && open?.li === j
+                return (
+                  <li key={j} className={`connleg ${isOpen ? 'open' : ''}`}>
+                    <button className="connlegbtn"
+                      onClick={() => setOpen(isOpen ? null : { ci: i, li: j })}
+                      aria-expanded={isOpen}>
+                      <span className="connlegno">{j + 1}</span>
+                      <span className="connlegbody">
+                        <span className="connlegstops">
+                          {l.from_name} <ArrowRight size={12} aria-hidden="true" /> {l.to_name}
+                        </span>
+                        <span className="connlegroute">{l.route_label}</span>
+                      </span>
+                      <span className="connlegtimes">
+                        <b>{l.board_raw}</b>
+                        <span className="connlegdash">to</span>
+                        <b>{l.arrive_raw}</b>
+                        {c.fare?.kind === 'per_leg' && l.fare?.per_ride_cents != null && (
+                          <span className="connlegfare">{rands(l.fare.per_ride_cents)}</span>
+                        )}
+                      </span>
+                      <ChevronDown size={14} aria-hidden="true"
+                        className={`connlegchev ${isOpen ? 'up' : ''}`} />
+                    </button>
+                    {isOpen && (
+                      <LegDetail leg={l} onClose={() => setOpen(null)}
+                        throughTicket={c.fare?.kind === 'through'} />
                     )}
-                  </span>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ol>
 
             {c.fare == null ? (
