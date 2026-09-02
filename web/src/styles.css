@@ -217,6 +217,8 @@ body { background: var(--bg); color: var(--ink); }
 .faretable td { padding: 3px 0; font-variant-numeric: tabular-nums; }
 .faretable th:not(:first-child), .faretable td:not(:first-child) { text-align: right; }
 .farefoot { margin: 7px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.farefoot.lead { margin: 0 0 8px; color: var(--ink); font-weight: 600; }
+.conncard .farebox { margin: 8px 0 0; }
 
 /* Fares on a change-of-bus journey. The total leads; the per-leg prices only appear
    when the rider actually has to buy a ticket for each bus. */
@@ -241,10 +243,6 @@ body { background: var(--bg); color: var(--ink); }
 }
 .tsclose:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 
-.connfarenote {
-  margin: 8px 0 0; padding: 6px 9px; border-radius: 7px;
-  background: var(--accent-soft); font-size: 11.5px; line-height: 1.5; color: var(--muted);
-}
 
 .optcard {
   display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: #fff;

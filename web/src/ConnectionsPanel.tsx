@@ -4,6 +4,7 @@ import { getTripStops, type Connection, type ConnectionLeg, type TripNote, type 
 import { rands } from './money'
 import { rideKey, usePlanner, type SavedJourney } from './planner'
 import TripStrip from './TripStrip'
+import FarePanel from './FarePanel'
 
 const DAY_LABEL: Record<string, string> = {
   WEEKDAY: 'Mon-Fri', SATURDAY: 'Saturday', SUNDAY: 'Sunday',
@@ -197,23 +198,7 @@ export default function ConnectionsPanel(
               })}
             </ol>
 
-            {c.fare == null ? (
-              <div className="connfarenote">
-                Golden Arrow publishes no fare for part of this journey. Ask the driver.
-              </div>
-            ) : c.fare.kind === 'through' ? (
-              <div className="connfarenote">
-                One ticket covers the change: {rands(c.fare.per_ride_cents)} a ride on a
-                <b> Golden Arrow Gold Card</b> 5&nbsp;Ride{c.fare.code ? ` (${c.fare.code})` : ''},
-                which already allows {c.fare.transfers?.toLowerCase()} transfer.
-                Paying cash costs more.
-              </div>
-            ) : (
-              <div className="connfarenote">
-                A separate ticket for each bus, {rands(c.fare.per_ride_cents)} a ride in
-                total on a <b>Golden Arrow Gold Card</b> 5&nbsp;Ride. Paying cash costs more.
-              </div>
-            )}
+            <FarePanel fare={c.fare} tickets={c.fare?.tickets} kind={c.fare?.kind ?? 'per_leg'} />
 
             <button className={`addbtn wide ${planned ? 'on' : ''}`} onClick={() => addWholeConnection(c)}>
               {planned

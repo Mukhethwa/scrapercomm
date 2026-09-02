@@ -7,9 +7,10 @@ import {
 } from './api'
 import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
+import FarePanel from './FarePanel'
 import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
-import { rands, perRide, basisNote, isFlat } from './money'
+import { rands } from './money'
 import { ArrowRight, CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
@@ -84,77 +85,6 @@ async function mergedSearch(q: string, areas: string[]): Promise<Hit[]> {
  * items use onMouseDown, which fires before blur, so clicking a suggestion still
  * registers. Escape blurs, which closes the menu by the same rule.
  */
-/**
- * What the ride costs. The per-ride price leads, because that is what somebody getting
- * on a bus once wants to know; the products sit under it for anyone buying ahead.
- */
-function FarePanel({ fare }: { fare: PlanOption['fare'] }) {
-  const [open, setOpen] = useState(false)
-  if (!fare || fare.per_ride_cents == null) {
-    return (
-      <div className="farebox none">
-        <Info size={13} aria-hidden="true" />
-        <span>Golden Arrow publishes no fare for this journey. Ask the driver.</span>
-      </div>
-    )
-  }
-  const note = basisNote(fare)
-  return (
-    <div className="farebox">
-      <div className="fareline">
-        <span className="fareamt">{rands(fare.per_ride_cents)}</span>
-        {/* What the number means, rather than which product it came off. A rider wants
-            to know it is not the cash fare and whose card to ask for; the ticket's name
-            is the operator's own vocabulary and is left to "Other tickets". */}
-        <span className="farelbl">
-          Price on a <b>Golden Arrow Gold Card</b>. <b>Paying cash costs more.</b>
-        </span>
-        {fare.code && <span className="farecode">{fare.code}</span>}
-        <button className="infobtn" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <Info size={13} aria-hidden="true" />
-          <span>{open ? 'Hide' : 'Other tickets'}</span>
-        </button>
-      </div>
-
-      {open && (
-        <div className="faredetail">
-          <table className="faretable">
-            <thead>
-              <tr><th>Ticket</th><th>Price</th><th>Rides</th><th>Each</th></tr>
-            </thead>
-            <tbody>
-              {perRide(fare).map((p) => (
-                <tr key={p.label}>
-                  <td>{p.label}</td>
-                  <td>{rands(p.total) ?? '-'}</td>
-                  <td>{p.rides}</td>
-                  <td><b>{rands(p.each) ?? '-'}</b></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="farefoot">
-            A "Weekly" is 10 rides valid 30 days and a "Monthly" is 48 rides valid 90
-            days, so the longer tickets are cheaper per ride, not just longer.
-          </p>
-          {fare.transfers && fare.transfers !== 'Zero' && (
-            <p className="farefoot">Includes {fare.transfers.toLowerCase()} transfer.</p>
-          )}
-          {note && <p className="farefoot">{note}</p>}
-          <p className="farefoot">
-            {isFlat(fare.basis)
-              ? 'These are GO Easy prices on a Golden Arrow Gold Card'
-              : 'These are Golden Arrow Gold Card prices'}
-            {' '}and do not change with the time of day. <b>Paying cash costs more</b>, and
-            the cash fare itself differs between peak (16:00-08:00) and off-peak; Golden
-            Arrow does not publish cash fares per journey.
-          </p>
-        </div>
-      )}
-    </div>
-  )
-}
-
 /**
  * Does any departure here carry a time the timetable never printed?
  *

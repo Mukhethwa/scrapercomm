@@ -144,7 +144,24 @@ public class ConnectionService {
             total += leg.fare().perRideCents();
         }
         return new ConnectionFareDto("per_leg", legs.size(), total,
-                null, null, null, null, null, "per_leg", null, null);
+                sumOver(legs, FareDto::fiveRideCents),
+                sumOver(legs, FareDto::weeklyCents),
+                sumOver(legs, FareDto::monthlyCents),
+                null, null, "per_leg", null, null);
+    }
+
+    /** A ticket per bus means buying each product once per bus. */
+    private static Integer sumOver(List<ConnectionLegDto> legs,
+                                   java.util.function.Function<FareDto, Integer> field) {
+        int total = 0;
+        for (ConnectionLegDto leg : legs) {
+            Integer value = leg.fare() == null ? null : field.apply(leg.fare());
+            if (value == null) {
+                return null;
+            }
+            total += value;
+        }
+        return total;
     }
 
     private ConnectionDto toDto(TwoLegRow r, StopRow from, StopRow to, Map<Integer, StopRow> c) {

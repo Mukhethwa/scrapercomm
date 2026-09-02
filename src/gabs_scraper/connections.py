@@ -314,11 +314,19 @@ def _price_connections(conn, from_id, to_id, out):
 
         each = [leg["fare"] for leg in legs]
         if all(f and f.get("per_ride_cents") is not None for f in each):
+            def total(field):
+                """A ticket per bus means buying each product once per bus."""
+                if any(f.get(field) is None for f in each):
+                    return None
+                return sum(f[field] for f in each)
+
             c["fare"] = {
                 "kind": "per_leg",
                 "tickets": len(legs),
                 "per_ride_cents": sum(f["per_ride_cents"] for f in each),
-                "five_ride_cents": None, "weekly_cents": None, "monthly_cents": None,
+                "five_ride_cents": total("five_ride_cents"),
+                "weekly_cents": total("weekly_cents"),
+                "monthly_cents": total("monthly_cents"),
                 "code": None, "transfers": None, "basis": "per_leg",
                 "basis_from": None, "basis_to": None,
             }
