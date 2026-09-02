@@ -179,10 +179,19 @@ def compute(conn) -> dict:
                 # run a route that does have a published fare.
                 all_pairs.add((a, b))
                 if a not in excluded and b not in excluded:
+                    # GO Easy sets the price, but whether a change of bus is included is
+                    # a property of the journey, and the fare page states it: the
+                    # Khayelitsha to Cape Town row is R134.00 - the GO Easy price
+                    # exactly - and marked "Transfers: One". Carrying that allowance
+                    # across is what stops a rider being charged twice for a journey the
+                    # operator sells as one ride. Where the page lists no fare between
+                    # the two places it says nothing about transfers either, and the
+                    # journey is priced per bus rather than guessed at.
+                    allow, za, zb = _priced(fares, stop_zones.get(a, []), stop_zones.get(b, []))
                     resolved[(a, b)] = (
                         (None, GO_EASY["five_ride_cents"], GO_EASY["weekly_cents"],
-                         GO_EASY["monthly_cents"], None),
-                        None, None, "go_easy")
+                         GO_EASY["monthly_cents"], allow[4] if allow else None),
+                        za, zb, "go_easy")
                     continue
                 row, za, zb = _priced(fares, stop_zones.get(a, []), stop_zones.get(b, []))
                 basis = "exact"
@@ -212,12 +221,24 @@ def compute(conn) -> dict:
     priced_stops = sorted(stop_zones)
     for a in priced_stops:
         for b in priced_stops:
-            if a == b or (a, b) in resolved or a not in excluded and b not in excluded:
+            if a == b or (a, b) in resolved:
                 continue
             row, za, zb = _priced(fares, stop_zones[a], stop_zones[b])
-            if row is not None:
-                all_pairs.add((a, b))
+            if row is None:
+                continue
+            all_pairs.add((a, b))
+            if a in excluded or b in excluded:
                 resolved[(a, b)] = (row, za, zb, "exact")
+            else:
+                # GO Easy still sets the price here, but this pair is only reached by
+                # changing bus, so the transfer allowance on the published row is the
+                # whole point of resolving it: Khayelitsha to Cape Town is listed at
+                # R134.00 with "Transfers: One", and a rider making that change buys one
+                # ride, not two.
+                resolved[(a, b)] = (
+                    (None, GO_EASY["five_ride_cents"], GO_EASY["weekly_cents"],
+                     GO_EASY["monthly_cents"], row[4]),
+                    za, zb, "go_easy")
 
     counts = {"go_easy": 0, "exact": 0, "section": 0, "route": 0}
     for _row, _za, _zb, basis in resolved.values():
@@ -260,7 +281,7 @@ def run() -> dict:
 if __name__ == "__main__":
     argparse.ArgumentParser(description="Precompute a fare for every journey").parse_args()
     c = run()
-    total = c["exact"] + c["section"] + c["route"] + c["none"]
+    total = sum(c[k] for k in ("go_easy", "exact", "section", "route", "none"))
     print(f"journey pairs priced : {c['pairs']}")
     for k in ("go_easy", "exact", "section", "route", "none"):
         print(f"  {k:8}: {c[k]:6}  ({100 * c[k] / max(total, 1):.1f}%)")
