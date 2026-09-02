@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS journey_fare (
     basis           TEXT NOT NULL,   -- exact | section | route
     basis_from      TEXT,            -- the fare zones the price is actually printed for
     basis_to        TEXT,
+    -- True when an end of the journey is not itself named on the fare page and was
+    -- priced as part of the surrounding area. The price is the operator's, the match to
+    -- this exact stop is ours, and the app says so.
+    zone_approx     BOOLEAN NOT NULL DEFAULT FALSE,
     computed_at     TIMESTAMPTZ,
     PRIMARY KEY (from_stop_id, to_stop_id)
 );
@@ -102,13 +106,16 @@ def _load(conn):
         fares[(o, d)] = row
         fares.setdefault((d, o), row)          # the page prints each pair one way only
 
-    cur.execute("SELECT stop_id, zone FROM fare_zone_stop")
+    cur.execute("SELECT stop_id, zone, via FROM fare_zone_stop")
     stop_zones: dict[int, list[str]] = {}
-    for sid, zone in cur.fetchall():
+    area_only: set[int] = set()
+    for sid, zone, via in cur.fetchall():
         stop_zones.setdefault(sid, []).append(zone)
+        if via == "nearby":
+            area_only.add(sid)
 
     zone_names = sorted({z for pair in fares for z in pair})
-    return fares, stop_zones, Zones(zone_names)
+    return fares, stop_zones, Zones(zone_names), area_only
 
 
 def _priced(fares, a_zones, b_zones):
@@ -127,7 +134,7 @@ def compute(conn) -> dict:
         cur.execute(stmt)
     conn.commit()
 
-    fares, stop_zones, zones = _load(conn)
+    fares, stop_zones, zones, area_only = _load(conn)
 
     cur.execute("SELECT id, name FROM stop")
     stop_name = dict(cur.fetchall())
@@ -252,18 +259,21 @@ def compute(conn) -> dict:
             """
             INSERT INTO journey_fare (from_stop_id, to_stop_id, code, five_ride_cents,
                 weekly_cents, monthly_cents, per_ride_cents, transfers, basis,
-                basis_from, basis_to, computed_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                basis_from, basis_to, zone_approx, computed_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (from_stop_id, to_stop_id) DO UPDATE SET
                 code=EXCLUDED.code, five_ride_cents=EXCLUDED.five_ride_cents,
                 weekly_cents=EXCLUDED.weekly_cents, monthly_cents=EXCLUDED.monthly_cents,
                 per_ride_cents=EXCLUDED.per_ride_cents, transfers=EXCLUDED.transfers,
                 basis=EXCLUDED.basis, basis_from=EXCLUDED.basis_from,
-                basis_to=EXCLUDED.basis_to, computed_at=EXCLUDED.computed_at
+                basis_to=EXCLUDED.basis_to, zone_approx=EXCLUDED.zone_approx,
+                computed_at=EXCLUDED.computed_at
             """,
             (a, b, code, five, week, month,
              None if five is None else round(five / RIDES["five_ride"]),
-             transfers, basis, za, zb, now),
+             transfers, basis, za, zb,
+             basis != "go_easy" and (a in area_only or b in area_only),
+             now),
         )
     conn.commit()
     counts["pairs"] = len(resolved)

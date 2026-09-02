@@ -185,6 +185,21 @@ def _zone_labels(zone: str) -> list[str]:
     return [p.strip() for p in body.split("/") if p.strip()] or [zone]
 
 
+# How far from a named fare zone a stop can sit and still be treated as part of it.
+# A zone is a suburb, not a point: "Khayelitsha" is one row on the fare page and dozens
+# of timing points on the ground.
+ZONE_RADIUS_KM = 5.0
+
+
+def _km(a_lat, a_lon, b_lat, b_lon) -> float:
+    from math import asin, cos, radians, sin, sqrt
+    d_lat = radians(b_lat - a_lat)
+    d_lon = radians(b_lon - a_lon)
+    h = (sin(d_lat / 2) ** 2
+         + cos(radians(a_lat)) * cos(radians(b_lat)) * sin(d_lon / 2) ** 2)
+    return 2 * 6371.0 * asin(sqrt(h))
+
+
 def map_zones(conn, zones: list[str]) -> list[tuple[str, int, str]]:
     """Decide which stops each fare zone covers. Returns (zone, stop_id, how)."""
     cur = conn.cursor()
@@ -232,7 +247,44 @@ def map_zones(conn, zones: list[str]) -> list[tuple[str, int, str]]:
             if sid not in seen:
                 seen.add(sid)
                 pairs.append((zone, sid, how))
-    return pairs
+
+    return pairs + _spread_over_area(conn, pairs)
+
+
+def _spread_over_area(conn, pairs) -> list[tuple[str, int, str]]:
+    """Give the rest of a suburb the zone its named stop already has.
+
+    A fare zone is an area, and the fare page names it once. On the ground "Khayelitsha"
+    is a via point with no published time, while MAKHAZA, SITE C and HARARE - the same
+    suburb, and where the buses actually run - matched no zone at all and so had no fare.
+    A rider was told to ask the driver for a journey the operator prints a price for.
+
+    Each unzoned stop takes the zones of the nearest stop that has some, if it is close
+    enough to be the same place. Recorded as "nearby" so the app can say the price is
+    published for the area rather than for that exact stop.
+    """
+    cur = conn.cursor()
+    cur.execute("SELECT id, lat, lon FROM stop WHERE lat IS NOT NULL")
+    coords = {i: (la, lo) for i, la, lo in cur.fetchall()}
+
+    zoned: dict[int, list[str]] = {}
+    for zone, sid, _how in pairs:
+        zoned.setdefault(sid, []).append(zone)
+
+    anchors = [(sid, *coords[sid]) for sid in zoned if sid in coords]
+    out: list[tuple[str, int, str]] = []
+    for sid, (lat, lon) in coords.items():
+        if sid in zoned:
+            continue
+        best, best_km = None, ZONE_RADIUS_KM
+        for anchor, a_lat, a_lon in anchors:
+            d = _km(lat, lon, a_lat, a_lon)
+            if d < best_km:
+                best, best_km = anchor, d
+        if best is not None:
+            for zone in zoned[best]:
+                out.append((zone, sid, "nearby"))
+    return out
 
 
 def ensure_tables(conn) -> None:

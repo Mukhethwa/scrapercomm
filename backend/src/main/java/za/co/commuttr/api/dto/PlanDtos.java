@@ -84,7 +84,10 @@ public final class PlanDtos {
                           String transfers,
                           String basis,
                           String basisFrom,
-                          String basisTo) { }
+                          String basisTo,
+                          /** The stop is not itself named on the fare page and was
+                           *  priced as part of the surrounding area. */
+                          Boolean zoneApprox) { }
 
     public record PlanOptionDto(String timetableNumber,
                                 String routeLabel,

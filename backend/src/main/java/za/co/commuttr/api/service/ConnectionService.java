@@ -114,7 +114,8 @@ public class ConnectionService {
                 r[2] == null ? null : ((Number) r[2]).intValue(),
                 r[3] == null ? null : ((Number) r[3]).intValue(),
                 r[4] == null ? null : ((Number) r[4]).intValue(),
-                (String) r[5], (String) r[6], (String) r[7], (String) r[8]);
+                (String) r[5], (String) r[6], (String) r[7], (String) r[8],
+                r[9] != null && (Boolean) r[9]);
     }
 
     /**
@@ -134,7 +135,7 @@ public class ConnectionService {
             return new ConnectionFareDto("through", 1, through.perRideCents(),
                     through.fiveRideCents(), through.weeklyCents(), through.monthlyCents(),
                     through.code(), through.transfers(), through.basis(),
-                    through.basisFrom(), through.basisTo());
+                    through.basisFrom(), through.basisTo(), through.zoneApprox());
         }
         int total = 0;
         for (ConnectionLegDto leg : legs) {
@@ -143,11 +144,13 @@ public class ConnectionService {
             }
             total += leg.fare().perRideCents();
         }
+        boolean approx = legs.stream()
+                .anyMatch(l -> l.fare() != null && Boolean.TRUE.equals(l.fare().zoneApprox()));
         return new ConnectionFareDto("per_leg", legs.size(), total,
                 sumOver(legs, FareDto::fiveRideCents),
                 sumOver(legs, FareDto::weeklyCents),
                 sumOver(legs, FareDto::monthlyCents),
-                null, null, "per_leg", null, null);
+                null, null, "per_leg", null, null, approx);
     }
 
     /** A ticket per bus means buying each product once per bus. */

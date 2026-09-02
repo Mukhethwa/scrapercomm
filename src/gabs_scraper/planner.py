@@ -300,7 +300,7 @@ def journey_fare(conn, from_stop_id, to_stop_id):
     cur.execute(
         """
         SELECT code, per_ride_cents, five_ride_cents, weekly_cents, monthly_cents,
-               transfers, basis, basis_from, basis_to
+               transfers, basis, basis_from, basis_to, zone_approx
         FROM journey_fare WHERE from_stop_id=%s AND to_stop_id=%s
         """,
         (from_stop_id, to_stop_id),
@@ -308,11 +308,12 @@ def journey_fare(conn, from_stop_id, to_stop_id):
     row = cur.fetchone()
     if not row:
         return None
-    code, per, five, week, month, transfers, basis, bfrom, bto = row
+    code, per, five, week, month, transfers, basis, bfrom, bto, approx = row
     return {
         "code": code, "per_ride_cents": per, "five_ride_cents": five,
         "weekly_cents": week, "monthly_cents": month, "transfers": transfers,
         "basis": basis, "basis_from": bfrom, "basis_to": bto,
+        "zone_approx": bool(approx),
     }
 
 

@@ -218,6 +218,7 @@ body { background: var(--bg); color: var(--ink); }
 }
 .faretag.once { background: var(--ink); color: #fff; }
 .faretag.many { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+.faretag.area { background: var(--bg); color: var(--muted); border: 1px dashed var(--line); font-weight: 600; }
 .connfarelbl.once { color: var(--ink); font-weight: 700; }
 .connfarelbl.many { color: var(--accent); font-weight: 700; }
 .faredetail { margin-top: 9px; border-top: 1px solid var(--line); padding-top: 9px; }

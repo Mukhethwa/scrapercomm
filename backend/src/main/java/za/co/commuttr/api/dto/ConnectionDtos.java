@@ -65,7 +65,8 @@ public final class ConnectionDtos {
                                     String transfers,
                                     String basis,
                                     String basisFrom,
-                                    String basisTo) { }
+                                    String basisTo,
+                                    Boolean zoneApprox) { }
 
     public record ConnectionDto(String dayType,
                                 List<String> changeAt,

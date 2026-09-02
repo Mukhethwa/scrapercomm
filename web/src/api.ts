@@ -176,6 +176,8 @@ export interface Fare {
   basis: string
   basis_from: string | null
   basis_to: string | null
+  /** The stop is not named on the fare page; the fare is the one for its area. */
+  zone_approx: boolean
 }
 
 export interface PlanDeparture {
@@ -292,6 +294,7 @@ export interface ConnectionFare {
   basis: string
   basis_from: string | null
   basis_to: string | null
+  zone_approx: boolean
 }
 
 export interface ConnectionLeg {

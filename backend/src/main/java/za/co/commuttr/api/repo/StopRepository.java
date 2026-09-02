@@ -80,7 +80,7 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
      */
     @Query(value = """
             SELECT code, per_ride_cents, five_ride_cents, weekly_cents, monthly_cents,
-                   transfers, basis, basis_from, basis_to
+                   transfers, basis, basis_from, basis_to, zone_approx
             FROM journey_fare
             WHERE from_stop_id = :fromId AND to_stop_id = :toId
             """, nativeQuery = true)

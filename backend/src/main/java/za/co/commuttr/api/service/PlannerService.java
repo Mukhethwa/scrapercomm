@@ -446,7 +446,8 @@ public class PlannerService {
                 r[2] == null ? null : ((Number) r[2]).intValue(),
                 r[3] == null ? null : ((Number) r[3]).intValue(),
                 r[4] == null ? null : ((Number) r[4]).intValue(),
-                (String) r[5], (String) r[6], (String) r[7], (String) r[8]);
+                (String) r[5], (String) r[6], (String) r[7], (String) r[8],
+                r[9] != null && (Boolean) r[9]);
     }
 
     /** {@code planner.resolve_journeys} */

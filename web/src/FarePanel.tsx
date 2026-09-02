@@ -62,6 +62,11 @@ export default function FarePanel(
           {perLeg && tickets ? <>for all {tickets} buses. </> : null}
           Price on a <b>Golden Arrow Gold Card</b>. <b>Paying cash costs more.</b>
         </span>
+        {(fare as Fare).zone_approx && (
+          <span className="faretag area" title="Published for the surrounding area, not this exact stop">
+            area fare
+          </span>
+        )}
         {fare.code && <span className="farecode">{fare.code}</span>}
         <button className="infobtn" onClick={() => setOpen(!open)} aria-expanded={open}>
           <Info size={13} aria-hidden="true" />
@@ -109,6 +114,16 @@ export default function FarePanel(
             <p className="farefoot">Includes {fare.transfers.toLowerCase()} transfer.</p>
           )}
           {note && <p className="farefoot">{note}</p>}
+          {/* The price is the operator's; matching it to this exact stop is ours. Say
+              which, rather than presenting an area fare as if it were printed for the
+              stop the rider chose. */}
+          {(fare as Fare).zone_approx && (
+            <p className="farefoot">
+              Your stop is not named on the fare page, so this is the published fare for
+              the area it is in{(fare as Fare).basis_to ? ` (${(fare as Fare).basis_to})` : ''}.
+              The fare you are charged may differ.
+            </p>
+          )}
           <p className="farefoot">
             {isFlat(fare.basis)
               ? 'These are GO Easy prices on a Golden Arrow Gold Card'

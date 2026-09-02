@@ -329,6 +329,7 @@ def _price_connections(conn, from_id, to_id, out):
                 "monthly_cents": total("monthly_cents"),
                 "code": None, "transfers": None, "basis": "per_leg",
                 "basis_from": None, "basis_to": None,
+                "zone_approx": any(f.get("zone_approx") for f in each),
             }
         else:
             c["fare"] = None
