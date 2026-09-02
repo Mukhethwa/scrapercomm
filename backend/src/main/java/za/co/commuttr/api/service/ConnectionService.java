@@ -3,6 +3,8 @@ package za.co.commuttr.api.service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import za.co.commuttr.api.dto.PlanDtos.FareDto;
+import za.co.commuttr.api.dto.ConnectionDtos.ConnectionFareDto;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionDto;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionLegDto;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionsResponse;
@@ -92,23 +94,80 @@ public class ConnectionService {
         return r == null ? null : r.getLon();
     }
 
+    /** How many changes of bus a published transfer allowance covers. */
+    private static final Map<String, Integer> TRANSFERS =
+            Map.of("Zero", 0, "One", 1, "Two", 2);
+
+    /** {@code planner.journey_fare} — the same precomputed table the planner reads. */
+    private FareDto fareFor(Integer fromId, Integer toId) {
+        if (fromId == null || toId == null) {
+            return null;
+        }
+        List<Object[]> rows = stops.findJourneyFare(fromId, toId);
+        if (rows.isEmpty()) {
+            return null;
+        }
+        Object[] r = rows.get(0);
+        return new FareDto(
+                (String) r[0],
+                r[1] == null ? null : ((Number) r[1]).intValue(),
+                r[2] == null ? null : ((Number) r[2]).intValue(),
+                r[3] == null ? null : ((Number) r[3]).intValue(),
+                r[4] == null ? null : ((Number) r[4]).intValue(),
+                (String) r[5], (String) r[6], (String) r[7], (String) r[8]);
+    }
+
+    /**
+     * What the whole multi-bus journey costs. {@code connections._price_connections}
+     *
+     * One ticket where the operator publishes a fare between the two ends whose transfer
+     * allowance covers the changes this journey makes; otherwise a ticket per bus, added
+     * up. A journey with an unpriced leg gets no total at all, because a partial sum
+     * shown as a total would understate the trip.
+     */
+    private ConnectionFareDto priceJourney(Integer fromId, Integer toId,
+                                           List<ConnectionLegDto> legs) {
+        FareDto through = fareFor(fromId, toId);
+        int changes = legs.size() - 1;
+        if (through != null && through.perRideCents() != null
+                && TRANSFERS.getOrDefault(through.transfers(), 0) >= changes) {
+            return new ConnectionFareDto("through", 1, through.perRideCents(),
+                    through.fiveRideCents(), through.weeklyCents(), through.monthlyCents(),
+                    through.code(), through.transfers(), through.basis(),
+                    through.basisFrom(), through.basisTo());
+        }
+        int total = 0;
+        for (ConnectionLegDto leg : legs) {
+            if (leg.fare() == null || leg.fare().perRideCents() == null) {
+                return null;
+            }
+            total += leg.fare().perRideCents();
+        }
+        return new ConnectionFareDto("per_leg", legs.size(), total,
+                null, null, null, null, null, "per_leg", null, null);
+    }
+
     private ConnectionDto toDto(TwoLegRow r, StopRow from, StopRow to, Map<Integer, StopRow> c) {
         ConnectionLegDto leg1 = new ConnectionLegDto(
                 from.getId(), from.getName(), from.getLat(), from.getLon(),
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
                 r.getRoute1(), r.getTtn1(), r.getDepRaw1(), ApiFormat.time(r.getArr1()),
                 ApiFormat.minutes(r.getDep1()), ApiFormat.minutes(r.getArr1()),
-                r.getSched1(), r.getTrip1(), r.getFromSeq1(), r.getToSeq1());
+                r.getSched1(), r.getTrip1(), r.getFromSeq1(), r.getToSeq1(),
+                fareFor(from.getId(), r.getChangeId()));
 
         ConnectionLegDto leg2 = new ConnectionLegDto(
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
                 to.getId(), to.getName(), to.getLat(), to.getLon(),
                 r.getRoute2(), r.getTtn2(), ApiFormat.time(r.getDep2()), r.getArrRaw2(),
                 ApiFormat.minutes(r.getDep2()), null,
-                r.getSched2(), r.getTrip2(), r.getFromSeq2(), r.getToSeq2());
+                r.getSched2(), r.getTrip2(), r.getFromSeq2(), r.getToSeq2(),
+                fareFor(r.getChangeId(), to.getId()));
 
+        List<ConnectionLegDto> legs = List.of(leg1, leg2);
         return new ConnectionDto(r.getDayType(), List.of(r.getChangeName()),
-                List.of(leg1, leg2), r.getWaitMinutes(), r.getTotalMinutes());
+                legs, r.getWaitMinutes(), r.getTotalMinutes(),
+                priceJourney(from.getId(), to.getId(), legs));
     }
 
     private ConnectionDto toDto(ThreeLegRow r, StopRow from, StopRow to, Map<Integer, StopRow> c) {
@@ -117,24 +176,29 @@ public class ConnectionService {
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
                 r.getRoute1(), r.getTtn1(), r.getDepRaw1(), ApiFormat.time(r.getArr1()),
                 ApiFormat.minutes(r.getDep1()), ApiFormat.minutes(r.getArr1()),
-                r.getSched1(), r.getTrip1(), r.getFromSeq1(), r.getToSeq1());
+                r.getSched1(), r.getTrip1(), r.getFromSeq1(), r.getToSeq1(),
+                fareFor(from.getId(), r.getChangeId()));
 
         ConnectionLegDto leg2 = new ConnectionLegDto(
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
                 r.getChange2Id(), r.getChange2Name(), lat(c, r.getChange2Id()), lon(c, r.getChange2Id()),
                 r.getRoute2(), r.getTtn2(), ApiFormat.time(r.getDep2()), ApiFormat.time(r.getArr2()),
                 ApiFormat.minutes(r.getDep2()), ApiFormat.minutes(r.getArr2()),
-                r.getSched2(), r.getTrip2(), r.getFromSeq2(), r.getToSeq2());
+                r.getSched2(), r.getTrip2(), r.getFromSeq2(), r.getToSeq2(),
+                fareFor(r.getChangeId(), r.getChange2Id()));
 
         ConnectionLegDto leg3 = new ConnectionLegDto(
                 r.getChange2Id(), r.getChange2Name(), lat(c, r.getChange2Id()), lon(c, r.getChange2Id()),
                 to.getId(), to.getName(), to.getLat(), to.getLon(),
                 r.getRoute3(), r.getTtn3(), ApiFormat.time(r.getDep3()), r.getArrRaw3(),
                 ApiFormat.minutes(r.getDep3()), null,
-                r.getSched3(), r.getTrip3(), r.getFromSeq3(), r.getToSeq3());
+                r.getSched3(), r.getTrip3(), r.getFromSeq3(), r.getToSeq3(),
+                fareFor(r.getChange2Id(), to.getId()));
 
+        List<ConnectionLegDto> legs = List.of(leg1, leg2, leg3);
         return new ConnectionDto(r.getDayType(),
                 List.of(r.getChangeName(), r.getChange2Name()),
-                List.of(leg1, leg2, leg3), r.getWaitMinutes(), r.getTotalMinutes());
+                legs, r.getWaitMinutes(), r.getTotalMinutes(),
+                priceJourney(from.getId(), to.getId(), legs));
     }
 }

@@ -279,6 +279,21 @@ export const reachableFor = (ep: Endpoint) =>
 
 // ---- connections: journeys that need a change of bus ----
 
+/** What a whole multi-bus journey costs: one through-ticket, or one per bus. */
+export interface ConnectionFare {
+  kind: 'through' | 'per_leg'
+  tickets: number
+  per_ride_cents: number | null
+  five_ride_cents: number | null
+  weekly_cents: number | null
+  monthly_cents: number | null
+  code: string | null
+  transfers: string | null
+  basis: string
+  basis_from: string | null
+  basis_to: string | null
+}
+
 export interface ConnectionLeg {
   from_stop_id: number
   from_name: string
@@ -299,6 +314,7 @@ export interface ConnectionLeg {
   trip_index: number
   from_seq: number
   to_seq: number
+  fare: Fare | null
 }
 
 export interface Connection {
@@ -307,6 +323,7 @@ export interface Connection {
   legs: ConnectionLeg[]
   wait_minutes: number | null
   total_minutes: number | null
+  fare: ConnectionFare | null
 }
 
 export interface ConnectionsResponse {

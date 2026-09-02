@@ -181,6 +181,24 @@ def compute(conn) -> dict:
                     continue
                 resolved[(a, b)] = (row, za, zb, basis)
 
+    # Through-fares, for journeys that take more than one bus.
+    #
+    # Everything above walks single trips, so it only ever prices two stops one bus
+    # already joins. But 416 of the 845 published fares carry a transfer allowance -
+    # "Transfers: One" is the operator selling a ticket that covers a change - and those
+    # pairs are exactly the ones no single trip serves. There are only ~100 priced stops,
+    # so every pair between them is cheap to resolve and makes the connections engine
+    # able to say "one ticket" instead of adding two.
+    priced_stops = sorted(stop_zones)
+    for a in priced_stops:
+        for b in priced_stops:
+            if a == b or (a, b) in resolved:
+                continue
+            row, za, zb = _priced(fares, stop_zones[a], stop_zones[b])
+            if row is not None:
+                all_pairs.add((a, b))
+                resolved[(a, b)] = (row, za, zb, "exact")
+
     counts = {"exact": 0, "section": 0, "route": 0}
     for _row, _za, _zb, basis in resolved.values():
         counts[basis] += 1

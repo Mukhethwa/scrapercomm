@@ -1,6 +1,7 @@
 package za.co.commuttr.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import za.co.commuttr.api.dto.PlanDtos.FareDto;
 import za.co.commuttr.api.dto.StopDtos.StopDto;
 
 import java.util.List;
@@ -39,17 +40,39 @@ public final class ConnectionDtos {
                                    Integer scheduleId,
                                    Integer tripIndex,
                                    Integer fromSeq,
-                                   Integer toSeq) { }
+                                   Integer toSeq,
+                                   FareDto fare) { }
 
     /**
      * @param waitMinutes  total time spent waiting at interchanges
      * @param totalMinutes door-to-door, or null when the final arrival is not published
      */
+    /**
+     * What a whole multi-bus journey costs.
+     *
+     * @param kind    "through" for one ticket that covers the change - 416 of the 845
+     *                published fares carry a transfer allowance - or "per_leg" when a
+     *                ticket has to be bought for each bus
+     * @param tickets how many tickets that is
+     */
+    public record ConnectionFareDto(String kind,
+                                    Integer tickets,
+                                    Integer perRideCents,
+                                    Integer fiveRideCents,
+                                    Integer weeklyCents,
+                                    Integer monthlyCents,
+                                    String code,
+                                    String transfers,
+                                    String basis,
+                                    String basisFrom,
+                                    String basisTo) { }
+
     public record ConnectionDto(String dayType,
                                 List<String> changeAt,
                                 List<ConnectionLegDto> legs,
                                 Integer waitMinutes,
-                                Integer totalMinutes) { }
+                                Integer totalMinutes,
+                                ConnectionFareDto fare) { }
 
     /**
      * @param legsRequired how many buses the best answer needs, or null if none was found

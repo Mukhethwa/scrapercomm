@@ -218,6 +218,22 @@ body { background: var(--bg); color: var(--ink); }
 .faretable th:not(:first-child), .faretable td:not(:first-child) { text-align: right; }
 .farefoot { margin: 7px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
 
+/* Fares on a change-of-bus journey. The total leads; the per-leg prices only appear
+   when the rider actually has to buy a ticket for each bus. */
+.connfare {
+  font-size: 12.5px; font-weight: 700; color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.connfarelbl { font-weight: 500; color: var(--muted); font-size: 11px; }
+.connlegfare {
+  margin-left: 8px; font-size: 11.5px; font-weight: 600;
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.connfarenote {
+  margin: 8px 0 0; padding: 6px 9px; border-radius: 7px;
+  background: var(--accent-soft); font-size: 11.5px; line-height: 1.5; color: var(--muted);
+}
+
 .optcard {
   display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: #fff;
   border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer;

@@ -1,5 +1,6 @@
 import { ArrowRight, Check, Plus, TriangleAlert } from 'lucide-react'
 import type { Connection, ConnectionLeg } from './api'
+import { rands } from './money'
 import { rideKey, usePlanner, type SavedJourney } from './planner'
 
 const DAY_LABEL: Record<string, string> = {
@@ -82,6 +83,16 @@ export default function ConnectionsPanel(
               </div>
               <div className="conntotals">
                 <span className="conntotal">{duration(c.total_minutes)}</span>
+                {c.fare?.per_ride_cents != null && (
+                  <span className="connfare">
+                    {rands(c.fare.per_ride_cents)}
+                    <span className="connfarelbl">
+                      {c.fare.kind === 'through'
+                        ? ' one ticket'
+                        : ` ${c.fare.tickets} tickets`}
+                    </span>
+                  </span>
+                )}
                 {c.wait_minutes != null && (
                   <span className={`connwait ${c.wait_minutes > 60 ? 'long' : ''}`}>
                     {c.wait_minutes > 60 && <TriangleAlert size={12} aria-hidden="true" />}
@@ -105,10 +116,30 @@ export default function ConnectionsPanel(
                     <b>{l.board_raw}</b>
                     <span className="connlegdash">to</span>
                     <b>{l.arrive_raw}</b>
+                    {c.fare?.kind === 'per_leg' && l.fare?.per_ride_cents != null && (
+                      <span className="connlegfare">{rands(l.fare.per_ride_cents)}</span>
+                    )}
                   </span>
                 </li>
               ))}
             </ol>
+
+            {c.fare == null ? (
+              <div className="connfarenote">
+                Golden Arrow publishes no fare for part of this journey. Ask the driver.
+              </div>
+            ) : c.fare.kind === 'through' ? (
+              <div className="connfarenote">
+                One ticket covers the change: {rands(c.fare.per_ride_cents)} a ride on a
+                Gold Card 5&nbsp;Ride{c.fare.code ? ` (${c.fare.code})` : ''}, which
+                already allows {c.fare.transfers?.toLowerCase()} transfer.
+              </div>
+            ) : (
+              <div className="connfarenote">
+                A separate ticket for each bus, {rands(c.fare.per_ride_cents)} a ride in
+                total on Gold Card 5&nbsp;Ride.
+              </div>
+            )}
 
             <button className={`addbtn wide ${planned ? 'on' : ''}`} onClick={() => addWholeConnection(c)}>
               {planned

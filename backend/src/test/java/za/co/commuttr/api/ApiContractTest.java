@@ -21,6 +21,7 @@ import za.co.commuttr.api.dto.PlanDtos.PlanSegmentStopDto;
 import za.co.commuttr.api.dto.StopDtos.PinDto;
 import za.co.commuttr.api.dto.StopDtos.StopDto;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionDto;
+import za.co.commuttr.api.dto.ConnectionDtos.ConnectionFareDto;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionLegDto;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionsResponse;
 import za.co.commuttr.api.service.CatalogService;
@@ -140,22 +141,34 @@ class ApiContractTest {
         ConnectionLegDto leg1 = new ConnectionLegDto(
                 24696, "MALMESBURY", -33.45, 18.73, 101, "CAPE TOWN", -33.92, 18.42,
                 "MALMESBURY - KILLARNEY - CAPE TOWN", "013501", "07:45", "10:00", 465, 600,
-                14230, 4, 0, 8);
+                14230, 4, 0, 8,
+                new FareDto("MACI", 4650, 23250, 43000, 189000, "Zero",
+                        "exact", "Malmesbury", "Cape Town"));
         ConnectionLegDto leg2 = new ConnectionLegDto(
                 101, "CAPE TOWN", -33.92, 18.42, 3370, "BUH REIN", -33.82, 18.71,
                 "CAPE TOWN - NORTHPINE - KRAAIFONTEIN", "001501", "14:50", "via", 890, null,
-                13987, 0, 0, 6);
+                13987, 0, 0, 6,
+                new FareDto("FYDU", 2530, 12650, 23400, 103000, "Zero",
+                        "route", "Cape Town", "Durbanville via Freeway"));
         given(connections.connections(anyInt(), anyInt())).willReturn(new ConnectionsResponse(
                 new StopDto(24696, "MALMESBURY", -33.45, 18.73),
                 new StopDto(3370, "BUH REIN", -33.82, 18.71),
                 2,
                 List.of(new ConnectionDto("WEEKDAY", List.of("CAPE TOWN"),
-                        List.of(leg1, leg2), 290, 425))));
+                        List.of(leg1, leg2), 290, 425,
+                        new ConnectionFareDto("per_leg", 2, 7180, null, null, null,
+                                null, null, "per_leg", null, null)))));
 
         mvc.perform(get("/api/connections").param("from", "24696").param("to", "3370"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.from.name").value("MALMESBURY"))
                 .andExpect(jsonPath("$.legs_required").value(2))
+                // Two buses with no through-ticket means two fares, and the total is
+                // their sum - not one of them, and never a partial sum.
+                .andExpect(jsonPath("$.connections[0].fare.kind").value("per_leg"))
+                .andExpect(jsonPath("$.connections[0].fare.tickets").value(2))
+                .andExpect(jsonPath("$.connections[0].fare.per_ride_cents").value(7180))
+                .andExpect(jsonPath("$.connections[0].legs[0].fare.per_ride_cents").value(4650))
                 .andExpect(jsonPath("$.connections[0].change_at[0]").value("CAPE TOWN"))
                 .andExpect(jsonPath("$.connections[0].total_minutes").value(425))
                 .andExpect(jsonPath("$.connections[0].wait_minutes").value(290))

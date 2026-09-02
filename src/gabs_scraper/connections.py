@@ -278,6 +278,55 @@ def _leg(from_id, from_name, from_ll, to_id, to_name, to_ll, route, ttn,
     }
 
 
+# How many changes of bus a published transfer allowance covers.
+_TRANSFERS = {"Zero": 0, "One": 1, "Two": 2}
+
+
+def _price_connections(conn, from_id, to_id, out):
+    """Attach a fare to every leg, and work out what the whole journey costs.
+
+    Two ways a multi-bus journey can be paid for, and the published data says which:
+
+    * One ticket. 416 of the 845 fares carry a transfer allowance - "Transfers: One" is
+      the operator selling a ticket that covers a change - so where such a fare exists
+      between the two ends and allows at least as many changes as this journey makes,
+      that single price is what a rider pays.
+    * Otherwise a ticket per leg, added up. Legs are single-bus rides, so each is priced
+      the same way any direct journey is.
+
+    A journey with an unpriced leg gets no total, because a partial sum shown as a total
+    would understate what the trip costs.
+    """
+    from . import planner
+
+    through = planner.journey_fare(conn, from_id, to_id)
+    for c in out:
+        legs = c["legs"]
+        for leg in legs:
+            leg["fare"] = planner.journey_fare(conn, leg["from_stop_id"], leg["to_stop_id"])
+
+        changes = len(legs) - 1
+        allowance = _TRANSFERS.get((through or {}).get("transfers") or "", 0)
+        if through and through.get("per_ride_cents") is not None and allowance >= changes:
+            c["fare"] = {**through, "kind": "through", "tickets": 1,
+                         "per_ride_cents": through["per_ride_cents"]}
+            continue
+
+        each = [leg["fare"] for leg in legs]
+        if all(f and f.get("per_ride_cents") is not None for f in each):
+            c["fare"] = {
+                "kind": "per_leg",
+                "tickets": len(legs),
+                "per_ride_cents": sum(f["per_ride_cents"] for f in each),
+                "five_ride_cents": None, "weekly_cents": None, "monthly_cents": None,
+                "code": None, "transfers": None, "basis": "per_leg",
+                "basis_from": None, "basis_to": None,
+            }
+        else:
+            c["fare"] = None
+    return out
+
+
 def connections(conn, from_id, to_id,
                 buffer_minutes=DEFAULT_BUFFER_MINUTES, limit=DEFAULT_MAX_RESULTS):
     """Two legs if possible, three if not, and nothing if neither connects."""
@@ -312,7 +361,8 @@ def connections(conn, from_id, to_id,
                 "wait_minutes": wait,
                 "total_minutes": total,
             })
-        return {"from": origin, "to": dest, "legs_required": 2, "connections": out}
+        return {"from": origin, "to": dest, "legs_required": 2,
+                "connections": _price_connections(conn, from_id, to_id, out)}
 
     cur.execute(_THREE_LEG_SQL, params)
     rows = cur.fetchall()
@@ -339,7 +389,8 @@ def connections(conn, from_id, to_id,
                 "wait_minutes": wait,
                 "total_minutes": total,
             })
-        return {"from": origin, "to": dest, "legs_required": 3, "connections": out}
+        return {"from": origin, "to": dest, "legs_required": 3,
+                "connections": _price_connections(conn, from_id, to_id, out)}
 
     # Genuinely unreachable within three buses.
     return {"from": origin, "to": dest, "legs_required": None, "connections": []}
