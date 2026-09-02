@@ -249,6 +249,21 @@ body { background: var(--bg); color: var(--ink); }
 /* Listed but not selectable. Dimmed and not-allowed rather than hidden, so a rider
    looking for a train learns the app has none yet instead of doubting their search. */
 .modechip.soon { opacity: .55; cursor: not-allowed; }
+/* Where the journey asked for is impossible but the area around it is not. A stop's
+   name is not its area, and telling somebody "no" about KHAYELITSHA while SITE C and
+   MAKHAZA are one change away answers the wrong question. */
+.altbox { margin: 0 0 12px; }
+.altlbl { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 7px; }
+.altlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.altitem {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+  padding: 7px 10px; font: inherit; cursor: pointer;
+}
+.altitem:hover { border-color: var(--accent); background: var(--accent-soft); }
+.altname { font-size: 13px; font-weight: 700; }
+.altmeta { font-size: 11px; color: var(--muted); }
+
 .modesoon {
   font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
   border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--muted);

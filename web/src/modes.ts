@@ -13,13 +13,27 @@ export interface Mode {
   name: string
   /** Whether there is any data behind it. False means listed, not selectable. */
   available: boolean
+  /** Where it runs, so somebody outside Cape Town can see themselves on the list. */
+  region: string
+  kind: 'bus' | 'train'
   note: string
 }
 
 export const MODES: Mode[] = [
-  { id: 'gabs', name: 'Golden Arrow', available: true, note: 'Buses across Cape Town' },
-  { id: 'metrorail', name: 'Metro Rail', available: false, note: 'Trains - not yet available' },
-  { id: 'myciti', name: 'MyCiTi', available: false, note: 'Buses - not yet available' },
+  { id: 'gabs', name: 'Golden Arrow', available: true, region: 'Cape Town',
+    kind: 'bus', note: 'Buses across Cape Town' },
+  { id: 'myciti', name: 'MyCiTi', available: false, region: 'Cape Town',
+    kind: 'bus', note: 'Cape Town buses - not yet available' },
+  { id: 'metrorail', name: 'Metro Rail', available: false, region: 'National',
+    kind: 'train', note: 'Trains - not yet available' },
+  { id: 'gautrain', name: 'Gautrain', available: false, region: 'Gauteng',
+    kind: 'train', note: 'Gauteng trains - not yet available' },
+  { id: 'reavaya', name: 'Rea Vaya', available: false, region: 'Johannesburg',
+    kind: 'bus', note: 'Johannesburg buses - not yet available' },
+  { id: 'metrobus', name: 'Metrobus', available: false, region: 'Johannesburg',
+    kind: 'bus', note: 'Johannesburg buses - not yet available' },
+  { id: 'aretaxi', name: 'Are Yeng', available: false, region: 'Pretoria',
+    kind: 'bus', note: 'Tshwane buses - not yet available' },
 ]
 
 const STORAGE_KEY = 'commuttr:modes'

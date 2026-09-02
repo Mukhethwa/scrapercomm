@@ -257,6 +257,40 @@ export default function PlanView() {
     return q ? reachable.filter((r) => r.name.toLowerCase().includes(q)) : reachable
   }, [reachable, toText])
 
+  /**
+   * Places near the chosen destination that CAN be reached from here.
+   *
+   * A stop's name is not its area. KHAYELITSHA is a via point with no published times
+   * and a bus to it from four stops in the whole network, while SITE C, MAKHAZA and
+   * HARARE - all of them Khayelitsha - are served thousands of times and sit one change
+   * away. Somebody who typed "Khayelitsha" and was told it is impossible was being
+   * answered about the wrong thing, so the ones that do work are offered by name.
+   */
+  const nearbyAlternatives = useMemo(() => {
+    if (!to || to.lat == null || to.lon == null) return []
+    const km = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
+      const R = 6371, rad = Math.PI / 180
+      const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad
+      const h = Math.sin(dLat / 2) ** 2 +
+        Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2
+      return 2 * R * Math.asin(Math.sqrt(h))
+    }
+    const here = { lat: to.lat, lon: to.lon }
+    const seen = new Set<number>()
+    return [
+      ...(reachable ?? []).map((r) => ({ ...r, change: false })),
+      ...connecting.map((r) => ({ ...r, change: true })),
+    ]
+      .filter((r) => {
+        if (r.id === to.id || r.lat == null || r.lon == null || seen.has(r.id)) return false
+        seen.add(r.id)
+        return km(here, { lat: r.lat, lon: r.lon }) <= 6
+      })
+      .map((r) => ({ ...r, km: km(here, { lat: r.lat!, lon: r.lon! }) }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 6)
+  }, [to, reachable, connecting])
+
   const filteredConnecting = useMemo(() => {
     const q = toText.trim().toLowerCase()
     return q ? connecting.filter((r) => r.name.toLowerCase().includes(q)) : connecting
@@ -425,6 +459,27 @@ export default function PlanView() {
                     <b>No way to get there by bus.</b> There is no direct service from {from!.name} to{' '}
                     {to!.name}, and no combination of up to three buses connects them either.
                   </span>
+                </div>
+              )}
+
+              {plan && !loading && plan.length === 0 && !connLoading && conns && conns.length === 0
+                && nearbyAlternatives.length > 0 && (
+                <div className="altbox">
+                  <div className="altlbl">
+                    You can reach these stops near {to!.name}
+                  </div>
+                  <div className="altlist">
+                    {nearbyAlternatives.map((r) => (
+                      <button key={r.id} className="altitem" onClick={() =>
+                        pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}>
+                        <span className="altname">{r.name}</span>
+                        <span className="altmeta">
+                          {r.km < 1 ? `${Math.round(r.km * 1000)} m` : `${r.km.toFixed(1)} km`} away
+                          {r.change ? ' · 1 change' : ' · direct'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 

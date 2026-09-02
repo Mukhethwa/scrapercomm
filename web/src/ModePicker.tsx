@@ -1,11 +1,7 @@
 import { Bus, Check, TrainFront } from 'lucide-react'
 import { MODES, useModes } from './modes'
 
-const ICON: Record<string, typeof Bus> = {
-  gabs: Bus,
-  myciti: Bus,
-  metrorail: TrainFront,
-}
+const ICON = { bus: Bus, train: TrainFront }
 
 /**
  * Which transport to plan with.
@@ -22,7 +18,7 @@ export default function ModePicker() {
       <span className="modelbl">Transport</span>
       <div className="modelist">
         {MODES.map((m) => {
-          const Icon = ICON[m.id] ?? Bus
+          const Icon = ICON[m.kind]
           const on = modes.has(m.id)
           return (
             <button
@@ -31,7 +27,7 @@ export default function ModePicker() {
               onClick={() => modes.toggle(m.id)}
               disabled={!m.available}
               aria-pressed={m.available ? on : undefined}
-              title={m.note}
+              title={`${m.note} (${m.region})`}
             >
               {on ? <Check size={13} aria-hidden="true" /> : <Icon size={13} aria-hidden="true" />}
               <span>{m.name}</span>
