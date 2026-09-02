@@ -189,7 +189,7 @@ body { background: var(--bg); color: var(--ink); }
   font-size: 11px; font-weight: 700; color: var(--accent);
   font-variant-numeric: tabular-nums; line-height: 1.3;
 }
-.dep.on .depfare, .depwrap.planned .depfare { color: inherit; }
+.depwrap.planned .depfare { color: inherit; }
 
 .farebox {
   border: 1px solid var(--line); border-radius: 10px;
@@ -282,6 +282,15 @@ body { background: var(--bg); color: var(--ink); }
 .dep:hover { background: var(--accent-soft); }
 .dep.on { background: var(--ink); color: #fff; }
 .dep.on .da, .dep.on .at { color: #fff; }
+/* An approximate time sets its own muted colour, which on the selected chip's dark
+   background disappeared completely - the boarding time simply was not there. It still
+   has to read as less certain than a published one, so it stays dimmer than the rest,
+   but dimmer against dark means lighter, not grey. */
+.dep.on .aprx, .dep.current .aprx {
+  color: rgba(255, 255, 255, .78);
+  border-bottom-color: rgba(255, 255, 255, .55);
+}
+.dep.on .depfare, .dep.current .depfare { color: rgba(255, 255, 255, .85); }
 
 /* bus destination sign header */
 .opthead { align-items: flex-start; }
