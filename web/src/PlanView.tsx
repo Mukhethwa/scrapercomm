@@ -523,10 +523,12 @@ export default function PlanView() {
                                 <div key={j} className={`depwrap ${planned ? 'planned' : ''}`}>
                                   <button className={`dep ${openDep?.oi === i && openDep?.di === j ? 'on' : ''}`}
                                     onClick={() => selectDep(i, j, d)}>
-                                    <DepTime raw={d.board_raw} approx={d.board_approx} />
-                                    <span className="da">to</span>
-                                    <DepTime raw={d.arrive_raw} approx={d.arrive_approx}
-                                      useful={boundIsUseful(d.arrive_minutes, d.arrive_approx, d.board_minutes)} />
+                                    <span className="deptimes">
+                                      <DepTime raw={d.board_raw} approx={d.board_approx} />
+                                      <span className="da">to</span>
+                                      <DepTime raw={d.arrive_raw} approx={d.arrive_approx}
+                                        useful={boundIsUseful(d.arrive_minutes, d.arrive_approx, d.board_minutes)} />
+                                    </span>
                                     {o.fare?.per_ride_cents != null && (
                                       <span className="depfare">{rands(o.fare.per_ride_cents)}</span>
                                     )}
