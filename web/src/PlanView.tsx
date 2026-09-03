@@ -412,10 +412,23 @@ export default function PlanView() {
         </div>
       </div>
 
+      {/* A toast, not a banner in the flow. Inserted above the picker it pushed the
+          whole page - map included - down by its own height, which is a lot of movement
+          for a message about one failed click. */}
       {pickError && (
-        <div className="banner bad">
-          <CircleX size={16} aria-hidden="true" />
+        <div
+          role="status"
+          className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-start gap-2 rounded-lg border border-bad bg-bad px-3 py-2 text-[13px] text-white shadow-lg"
+        >
+          <CircleX size={16} aria-hidden="true" className="mt-px shrink-0" />
           <span>{pickError}</span>
+          <button
+            className="ml-2 cursor-pointer font-bold text-white/80 hover:text-white"
+            onClick={() => setPickError(null)}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
         </div>
       )}
 
