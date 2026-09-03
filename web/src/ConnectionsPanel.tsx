@@ -83,7 +83,7 @@ function LegDetail({ leg, onClose, throughTicket }:
       ) : leg.fare?.per_ride_cents != null ? (
         <div className="connlegfarenote">
           This leg costs <b>{rands(leg.fare.per_ride_cents)}</b> a ride on a Golden Arrow
-          Gold Card. Paying cash costs more.
+          Gold Card. Cash is higher in peak (16:00–08:00), lower off-peak.
         </div>
       ) : null}
       <TripStrip
