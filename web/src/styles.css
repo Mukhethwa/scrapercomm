@@ -349,9 +349,21 @@ body { background: var(--bg); color: var(--ink); }
 .modeswitch { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .modeswitch button { border: none; background: #fff; font-size: 11px; padding: 2px 9px; cursor: pointer; color: var(--muted); }
 .modeswitch button.on { background: var(--accent); color: #fff; }
-.planbar .ac input { padding-right: 58px; }
+.planbar .ac input { padding-right: 92px; }
+/* Clear and Map sit in one row, so neither can land on top of the other. */
+.fieldbtns {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 4px;
+}
+/* Clearing a field by hand meant a dozen backspaces on a phone. */
+.clearbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border: none; background: transparent;
+  color: var(--muted); border-radius: 50%; cursor: pointer; padding: 0; flex: none;
+}
+.clearbtn:hover { background: var(--bg); color: var(--accent); }
 .pinbtn {
-  position: absolute; right: 6px; top: 6px; border: 1px solid var(--line); background: #fff;
+  border: 1px solid var(--line); background: #fff;
   border-radius: 6px; font-size: 11px; font-weight: 600; padding: 4px 8px; cursor: pointer;
   display: inline-flex; align-items: center; gap: 4px; color: var(--ink);
 }

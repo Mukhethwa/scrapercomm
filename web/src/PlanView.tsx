@@ -14,7 +14,7 @@ import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
 import { stopLabel } from './stops'
 import { rands } from './money'
-import { ArrowRightLeft, CircleCheck, CircleX, Info, Lightbulb, TriangleAlert } from 'lucide-react'
+import { ArrowRightLeft, CircleCheck, CircleX, Info, Lightbulb, TriangleAlert, X } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
 
@@ -219,6 +219,21 @@ export default function PlanView() {
     if (!from || !debTo || (to && to.name === debTo)) { setToHits([]); return }
     mergedSearch(debTo, areas).then(setToHits).catch(() => setToHits([]))
   }, [debTo, from, areas]) // eslint-disable-line
+
+  /** Empty the starting point and everything that depended on it. */
+  function clearFrom() {
+    setFrom(null); setFromText(''); setFromHits([]); setArmed(null); setPickError(null)
+    setTo(null); setToText(''); setToHits([])
+    setPlan(null); setReachable(null); setConnecting([]); setDayAlts({})
+    setConns(null); setConnLegs(null); setOpenDep(null); setTripStops(null); setSel(0)
+  }
+
+  /** Empty the destination. The starting point, and what it can reach, stay. */
+  function clearTo() {
+    setTo(null); setToText(''); setToHits([]); setArmed(null); setPickError(null)
+    setPlan(null); setDayAlts({}); setConns(null); setConnLegs(null)
+    setOpenDep(null); setTripStops(null); setSel(0)
+  }
 
   function pickFrom(ep: Endpoint) {
     setFrom(ep); setFromText(ep.name); setFromHits([]); setArmed(null)
@@ -428,7 +443,21 @@ export default function PlanView() {
               onFocus={() => setFromOpen(true)}
               onBlur={() => setFromOpen(false)}
               onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.blur() }} />
-            <button className={`pinbtn ${armed === 'from' ? 'armed' : ''}`} onClick={() => setArmed(armed === 'from' ? null : 'from')}><PinIcon /> Map</button>
+            {/* One row, so a longer label can never push one button under the
+                other - which a fixed right offset did. */}
+            <div className="fieldbtns">
+              {fromText && (
+                <button
+                  className="clearbtn"
+                  onClick={clearFrom}
+                  title="Clear"
+                  aria-label="Clear starting point"
+                >
+                  <X size={13} aria-hidden="true" />
+                </button>
+              )}
+              <button className={`pinbtn ${armed === 'from' ? 'armed' : ''}`} onClick={() => setArmed(armed === 'from' ? null : 'from')}><PinIcon /> Map</button>
+            </div>
             {fromOpen && fromHits.length > 0 && (
               <div className="acmenu">
                 {fromHits.map((h, i) => (
@@ -468,7 +497,21 @@ export default function PlanView() {
               onFocus={() => setToOpen(true)}
               onBlur={() => setToOpen(false)}
               onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.blur() }} />
-            <button className={`pinbtn ${armed === 'to' ? 'armed' : ''}`} disabled={!from} onClick={() => setArmed(armed === 'to' ? null : 'to')}><PinIcon /> Map</button>
+            {/* One row, so a longer label can never push one button under the
+                other - which a fixed right offset did. */}
+            <div className="fieldbtns">
+              {toText && (
+                <button
+                  className="clearbtn"
+                  onClick={clearTo}
+                  title="Clear"
+                  aria-label="Clear destination"
+                >
+                  <X size={13} aria-hidden="true" />
+                </button>
+              )}
+              <button className={`pinbtn ${armed === 'to' ? 'armed' : ''}`} disabled={!from} onClick={() => setArmed(armed === 'to' ? null : 'to')}><PinIcon /> Map</button>
+            </div>
             {toOpen && toHits.length > 0 && (
               <div className="acmenu">
                 {toHits.map((h, i) => (
@@ -700,14 +743,6 @@ export default function PlanView() {
                     </div>
                     <FarePanel fare={o.fare} />
                     <div className="depshint">Tap a departure to see where you get on and off.</div>
-                    {hasApprox(o) && (
-                      <div className="aprxlegend">
-                        The timetable prints no time for one of your stops.
-                        <b>~05:20</b> means the bus cannot get there before 05:20 — be there
-                        by then and allow extra. <b>no set time</b> means even that much is
-                        not known; tap the departure to see the timed stops either side.
-                      </div>
-                    )}
                     {[...TIME_GROUPS, { key: 'other', label: 'Other times' }].map((g) =>
                       groups[g.key].length > 0 ? (
                         <div key={g.key} className="depgroup">

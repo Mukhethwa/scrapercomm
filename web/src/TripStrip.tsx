@@ -145,9 +145,12 @@ function TripNotes({ notes }: { notes?: TripNote[] }) {
             are the bus's official schedule.
           </p>
           <p>
-            <b>"From 05:30"</b> means the bus leaves its last timed stop at 05:30 and reaches
-            this one after that, so it will not come earlier than 05:30. The timetable does
-            not say how much later, so allow a little extra time.
+            <b>~05:30</b> means the bus cannot get there before 05:30 — be there by then and
+            allow extra, because the timetable does not say how much later it arrives.
+          </p>
+          <p>
+            <b>"No set time"</b> means even that much is not known for your stop. The timed
+            stops either side of it, above and below, are the best guide.
           </p>
           {notes && notes.length > 0 ? (
             <>

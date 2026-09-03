@@ -68,7 +68,6 @@ export default function ModePicker() {
   const [showAll, setShowAll] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const ready = MODES.filter((m) => m.available)
-  const coming = MODES.length - ready.length
 
   // A panel over the page has to be dismissable the ways a reader expects.
   useEffect(() => {
@@ -101,7 +100,7 @@ export default function ModePicker() {
         >
           <ChevronDown size={13} aria-hidden="true"
             className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
-          {showAll ? 'Hide what is coming' : `${coming} more cities coming`}
+          {showAll ? 'Hide' : 'More transport soon'}
         </button>
       </div>
 
