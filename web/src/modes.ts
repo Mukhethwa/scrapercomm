@@ -20,20 +20,34 @@ export interface Mode {
 }
 
 export const MODES: Mode[] = [
+  // Cape Town
   { id: 'gabs', name: 'Golden Arrow', available: true, region: 'Cape Town',
     kind: 'bus', note: 'Buses across Cape Town' },
   { id: 'myciti', name: 'MyCiTi', available: false, region: 'Cape Town',
-    kind: 'bus', note: 'Cape Town buses - not yet available' },
+    kind: 'bus', note: 'Cape Town buses' },
   { id: 'metrorail', name: 'Metro Rail', available: false, region: 'National',
-    kind: 'train', note: 'Trains - not yet available' },
+    kind: 'train', note: 'Passenger trains' },
+  // The rest of the Western Cape
+  { id: 'gogeorge', name: 'Go George', available: false, region: 'George',
+    kind: 'bus', note: 'George buses' },
+  // Gauteng
   { id: 'gautrain', name: 'Gautrain', available: false, region: 'Gauteng',
-    kind: 'train', note: 'Gauteng trains - not yet available' },
+    kind: 'train', note: 'Gauteng trains' },
   { id: 'reavaya', name: 'Rea Vaya', available: false, region: 'Johannesburg',
-    kind: 'bus', note: 'Johannesburg buses - not yet available' },
+    kind: 'bus', note: 'Johannesburg buses' },
   { id: 'metrobus', name: 'Metrobus', available: false, region: 'Johannesburg',
-    kind: 'bus', note: 'Johannesburg buses - not yet available' },
-  { id: 'aretaxi', name: 'Are Yeng', available: false, region: 'Pretoria',
-    kind: 'bus', note: 'Tshwane buses - not yet available' },
+    kind: 'bus', note: 'Johannesburg buses' },
+  { id: 'putco', name: 'PUTCO', available: false, region: 'Gauteng',
+    kind: 'bus', note: 'Gauteng buses' },
+  { id: 'areyeng', name: 'A Re Yeng', available: false, region: 'Tshwane',
+    kind: 'bus', note: 'Tshwane buses' },
+  // The rest of the country
+  { id: 'algoa', name: 'Algoa Bus', available: false, region: 'Gqeberha',
+    kind: 'bus', note: 'Gqeberha buses' },
+  { id: 'peoplemover', name: 'People Mover', available: false, region: 'Durban',
+    kind: 'bus', note: 'Durban buses' },
+  { id: 'ibl', name: 'Interstate', available: false, region: 'Bloemfontein',
+    kind: 'bus', note: 'Bloemfontein buses' },
 ]
 
 const STORAGE_KEY = 'commuttr:modes'

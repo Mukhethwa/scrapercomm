@@ -13,7 +13,7 @@ import { useModes } from './modes'
 import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
 import { rands } from './money'
-import { ArrowRight, CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react'
+import { ArrowRight, CircleCheck, CircleX, Info, Lightbulb, TriangleAlert } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
 
@@ -478,6 +478,32 @@ export default function PlanView() {
               </div>
               {loading && <div className="placeholder">Finding buses…</div>}
 
+              {/* Above the results, not below them. A shorter journey is only useful
+                  before the rider has read and chosen from the long one. */}
+              {!loading && !connLoading && betterNearby.length > 0 && bestLegs < Infinity && (
+                <div className="altbox better">
+                  <div className="altlbl">
+                    <Lightbulb size={15} aria-hidden="true" className="alticon" />
+                    <span>
+                      <b>Suggestion.</b> {to!.name} needs {bestLegs} bus{bestLegs === 1 ? '' : 'es'},
+                      but these stops nearby are quicker to reach.
+                    </span>
+                  </div>
+                  <div className="altlist">
+                    {betterNearby.map((r) => (
+                      <button key={r.id} className="altitem" onClick={() =>
+                        pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}>
+                        <span className="altname">{r.name}</span>
+                        <span className="altmeta">
+                          {r.km < 1 ? `${Math.round(r.km * 1000)} m` : `${r.km.toFixed(1)} km`} from{' '}
+                          {to!.name} · {r.change ? '2 buses' : 'direct'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {plan && !loading && plan.length > 0 && (
                 <div className="banner good">
                   <CircleCheck size={16} aria-hidden="true" />
@@ -512,27 +538,6 @@ export default function PlanView() {
                     <b>No way to get there by bus.</b> There is no direct service from {from!.name} to{' '}
                     {to!.name}, and no combination of up to three buses connects them either.
                   </span>
-                </div>
-              )}
-
-              {!loading && !connLoading && betterNearby.length > 0 && bestLegs < Infinity && (
-                <div className="altbox better">
-                  <div className="altlbl">
-                    <b>{to!.name}</b> needs {bestLegs} bus{bestLegs === 1 ? '' : 'es'}, but these
-                    stops nearby are quicker to reach
-                  </div>
-                  <div className="altlist">
-                    {betterNearby.map((r) => (
-                      <button key={r.id} className="altitem" onClick={() =>
-                        pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}>
-                        <span className="altname">{r.name}</span>
-                        <span className="altmeta">
-                          {r.km < 1 ? `${Math.round(r.km * 1000)} m` : `${r.km.toFixed(1)} km`} from{' '}
-                          {to!.name} · {r.change ? '2 buses' : 'direct'}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
                 </div>
               )}
 

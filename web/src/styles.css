@@ -233,12 +233,29 @@ body { background: var(--bg); color: var(--ink); }
 .farefoot.lead { margin: 0 0 8px; color: var(--ink); font-weight: 600; }
 
 /* ------------------------------------------------------- transport modes */
-.modepicker { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+.modepicker { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
+.modelbl { padding-top: 14px; }
+/* Grouped by city, so a dozen services still read as a few short rows. */
+.moderegions { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.moderegion { display: flex; flex-direction: column; gap: 4px; }
+.moderegionlbl {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted);
+}
+.modemore {
+  align-self: flex-end; display: inline-flex; align-items: center; gap: 4px;
+  border: 1px dashed var(--line); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 11.5px;
+  font-weight: 700; cursor: pointer;
+}
+.modemore:hover { border-color: var(--accent); color: var(--accent); }
+.modemorechev { transition: transform .15s ease; }
+.modemorechev.up { transform: rotate(180deg); }
 .modelbl {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .05em; color: var(--muted);
 }
-.modelist { display: flex; gap: 6px; flex-wrap: wrap; }
+.modelist { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .modechip {
   display: inline-flex; align-items: center; gap: 5px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
@@ -255,7 +272,8 @@ body { background: var(--bg); color: var(--ink); }
    MAKHAZA are one change away answers the wrong question. */
 .altbox { margin: 0 0 12px; }
 .altbox.better { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; }
-.altbox.better .altlbl { font-weight: 500; }
+.altbox.better .altlbl { font-weight: 500; display: flex; align-items: flex-start; gap: 7px; }
+.alticon { flex: none; color: var(--accent); margin-top: 1px; }
 .altlbl { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 7px; }
 .altlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
 .altitem {
