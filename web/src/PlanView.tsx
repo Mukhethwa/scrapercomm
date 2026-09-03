@@ -343,7 +343,24 @@ export default function PlanView() {
   }, [connecting, toText])
 
   const stage = !from ? 'from' : !to ? 'reachable' : 'journeys'
-  const segment = stage === 'journeys' && plan && plan[sel] ? plan[sel].segment_stops : undefined
+  /**
+   * The stops the map marks.
+   *
+   * segment_stops belongs to the OPTION, and an option groups every bus on that route
+   * and day - so it lists every stop any of them might serve. A given departure is one
+   * trip, and trips skip stops: the 05:30 out of BUH REIN calls at N1 FREEWAY and CAPE
+   * TOWN and nothing else, while the option lists seven. Numbering the option's stops
+   * put four on the map that the selected bus drives straight past.
+   *
+   * So once a departure is open the map follows that trip, which is the same list the
+   * breakdown underneath is showing. The road line stays the option's: every trip on the
+   * route drives the same road, it just does not stop everywhere along it.
+   */
+  const segment = useMemo(() => {
+    if (stage !== 'journeys' || !plan || !plan[sel]) return undefined
+    if (openDep?.oi === sel && tripStops) return tripStops
+    return plan[sel].segment_stops
+  }, [stage, plan, sel, openDep, tripStops])
   const roadPath = stage === 'journeys' && plan && plan[sel] ? plan[sel].road_path : undefined
 
   /**
