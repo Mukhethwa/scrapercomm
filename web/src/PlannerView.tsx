@@ -220,7 +220,7 @@ function SortableJourney(props: {
             )}
             {j.fare?.perRideCents != null && (
               <span className="plannerfare">
-                {rands(j.fare.perRideCents)} a ride
+                {rands(j.fare.perRideCents)}
                 {j.fare.code ? <span className="plannerttn"> · {j.fare.code}</span> : null}
               </span>
             )}
