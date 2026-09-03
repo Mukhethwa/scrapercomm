@@ -4,7 +4,6 @@ import {
   Map, MapControls, MapMarker, MapRoute, MarkerContent, MarkerTooltip, useMap,
 } from '@/components/ui/map'
 import type { Stop } from './api'
-import { OSM_RASTER } from './mapStyle'
 
 /** MapLibre takes [longitude, latitude]; everything here is lat/lon. See PlanMap. */
 const lngLat = (lat: number, lon: number): [number, number] => [lon, lat]
@@ -51,7 +50,6 @@ export default function MapView({ stops }: { stops: Stop[] }) {
         className="map"
         center={pts[0] ?? CAPE_TOWN}
         zoom={12}
-        styles={{ light: OSM_RASTER, dark: OSM_RASTER }}
         attributionControl={{ compact: true }}
       >
         <MapControls position="top-left" />

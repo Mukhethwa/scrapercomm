@@ -1,37 +1,43 @@
-/* Tailwind, without preflight.
+/* Tailwind, with the brand palette as first-class theme tokens.
  *
- * Preflight is a global reset - it strips button chrome, list markers, heading sizes and
- * default margins. This stylesheet was written against the browser defaults and is what
- * the whole app is currently styled by, so importing it wholesale would silently restyle
- * every screen. Bringing in the theme and the utilities gives shadcn and mapcn what they
- * need without touching anything already working; preflight can come later, alongside
- * the migration of the rules below. */
-@layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
+ * Declaring the colours in @theme is what turns them into utilities - bg-panel,
+ * text-ink, border-line - so components can be styled in the markup instead of through
+ * a parallel stylesheet. The names are the ones this app has always used.
+ *
+ * --muted stays near-black on purpose: hierarchy here comes from size and weight, not
+ * from grey. Anything placed on a dark surface has to override it rather than inherit,
+ * which is a trap that has already cost one invisible boarding time.
+ */
+@import "tailwindcss";
 
-/* The theme tokens shadcn and mapcn compile against, pointed at the palette this app
- * already has, so a shadcn component arrives wearing Commuttr's colours instead of a
- * second set.
- *
- * Mapped rather than declared: shadcn's own names include --muted, and this stylesheet
- * has used --muted for near-black secondary TEXT since the beginning. Declaring the
- * shadcn set directly would quietly turn every muted label into a background colour. */
+@theme {
+  --color-bg: #f5f6f7;
+  --color-panel: #ffffff;
+  --color-ink: #111111;
+  --color-black: #000000;
+  --color-muted: #111111;
+  --color-line: #e4e7eb;
+  --color-accent: #ff4500;
+  --color-accent-soft: #fff1eb;
+  --color-accent-deep: #cc3700;
+  --font-sans: 'Arimo', Arial, 'Helvetica Neue', Helvetica, sans-serif;
+}
+
+/* The tokens shadcn and mapcn compile against, pointed at the same palette so a shadcn
+ * component arrives wearing Commuttr's colours rather than a second set. */
 @theme inline {
-  --color-background: var(--panel);
-  --color-foreground: var(--ink);
-  --color-muted-foreground: var(--muted);
-  --color-popover: var(--panel);
-  --color-popover-foreground: var(--ink);
-  --color-card: var(--panel);
-  --color-card-foreground: var(--ink);
-  --color-border: var(--line);
-  --color-input: var(--line);
-  --color-ring: var(--accent);
-  --color-primary: var(--ink);
+  --color-background: var(--color-panel);
+  --color-foreground: var(--color-ink);
+  --color-muted-foreground: var(--color-muted);
+  --color-popover: var(--color-panel);
+  --color-popover-foreground: var(--color-ink);
+  --color-card: var(--color-panel);
+  --color-card-foreground: var(--color-ink);
+  --color-border: var(--color-line);
+  --color-input: var(--color-line);
+  --color-ring: var(--color-accent);
+  --color-primary: var(--color-ink);
   --color-primary-foreground: #ffffff;
-  --color-accent: var(--accent-soft);
-  --color-accent-foreground: var(--ink);
   --radius: 10px;
 }
 
@@ -52,19 +58,7 @@
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--ink); }
 
-.app { display: flex; flex-direction: column; height: 100%; }
 
-.topbar {
-  display: flex; align-items: baseline; gap: 16px;
-  padding: 12px 20px; background: var(--black); color: #fff;
-}
-/* commuttr. wordmark: all-lowercase, heavy, tight, with the orange period */
-.brand {
-  font-weight: 700; font-size: 22px; letter-spacing: -0.03em;
-  display: inline-flex; align-items: baseline; color: #fff;
-  text-transform: lowercase; line-height: 1;
-}
-.brand .flare { color: var(--accent); }
 
 .layout { display: flex; flex: 1; min-height: 0; }
 
@@ -142,13 +136,6 @@ body { background: var(--bg); color: var(--ink); }
 .map-note { font-size: 12px; color: var(--muted); padding: 8px 12px; margin: 0; border-top: 1px solid var(--line); }
 
 /* ---- Tabs ---- */
-.tabs { display: flex; gap: 4px; margin-left: 8px; }
-.tab {
-  background: transparent; border: none; color: #fff; font-size: 14px; font-weight: 600;
-  padding: 6px 14px; border-radius: 8px; cursor: pointer;
-}
-.tab:hover { color: #fff; background: rgba(255,255,255,.12); }
-.tab.active { color: #fff; background: var(--accent); }
 
 /* ---- Plan a trip ---- */
 .planwrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -269,41 +256,6 @@ body { background: var(--bg); color: var(--ink); }
 .farefoot { margin: 7px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
 .farefoot.lead { margin: 0 0 8px; color: var(--ink); font-weight: 600; }
 
-/* ------------------------------------------------------- transport modes */
-.modepicker { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
-.modelbl { padding-top: 14px; }
-/* Grouped by city, so a dozen services still read as a few short rows. */
-.moderegions { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; min-width: 0; }
-.moderegion { display: flex; flex-direction: column; gap: 4px; }
-.moderegionlbl {
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; color: var(--muted);
-}
-.modemore {
-  align-self: flex-end; display: inline-flex; align-items: center; gap: 4px;
-  border: 1px dashed var(--line); background: transparent; color: var(--muted);
-  border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 11.5px;
-  font-weight: 700; cursor: pointer;
-}
-.modemore:hover { border-color: var(--accent); color: var(--accent); }
-.modemorechev { transition: transform .15s ease; }
-.modemorechev.up { transform: rotate(180deg); }
-.modelbl {
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .05em; color: var(--muted);
-}
-.modelist { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.modechip {
-  display: inline-flex; align-items: center; gap: 5px;
-  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
-  border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px;
-  font-weight: 600; cursor: pointer;
-}
-.modechip:hover:not(:disabled) { border-color: var(--accent); }
-.modechip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
-/* Listed but not selectable. Dimmed and not-allowed rather than hidden, so a rider
-   looking for a train learns the app has none yet instead of doubting their search. */
-.modechip.soon { opacity: .55; cursor: not-allowed; }
 /* Where the journey asked for is impossible but the area around it is not. A stop's
    name is not its area, and telling somebody "no" about KHAYELITSHA while SITE C and
    MAKHAZA are one change away answers the wrong question. */
@@ -322,10 +274,6 @@ body { background: var(--bg); color: var(--ink); }
 .altname { font-size: 13px; font-weight: 700; }
 .altmeta { font-size: 11px; color: var(--muted); }
 
-.modesoon {
-  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
-  border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--muted);
-}
 .conncard .farebox { margin: 8px 0 0; }
 
 /* Fares on a change-of-bus journey. The total leads; the per-leg prices only appear
@@ -477,9 +425,7 @@ body { background: var(--bg); color: var(--ink); }
 
 /* ---- Planner: journeys a commuter has saved, in the order they will travel ---- */
 
-.tabbadge { margin-left: 6px; background: #fff; color: var(--accent); border-radius: 999px; font-size: 11px; font-weight: 700; padding: 1px 7px; }
-.tab.active .tabbadge { background: #fff; color: var(--accent); }
-
+.tab.active 
 /* Each departure now carries an add/remove control, so the time and the control are
    siblings inside the grid cell (a button cannot be nested inside another button). */
 .depwrap { display: flex; flex-direction: column; gap: 3px; }
@@ -546,8 +492,6 @@ body { background: var(--bg); color: var(--ink); }
 }
 
 /* PlanView stays mounted so a search is not lost when visiting the Planner. */
-.viewhost { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.viewhost.hiddenview { display: none; }
 
 /* The "via" explanation is one-time reading, so it hides behind an info toggle. */
 .tsnote { margin-top: 8px; }
@@ -611,8 +555,6 @@ body { background: var(--bg); color: var(--ink); }
 /* Strip the button chrome only. "font: inherit" would be a shorthand reset of size,
    weight and line-height too, which shrank the wordmark to the topbar's font size; the
    family is the only part a button needs told, since the rule above sets the rest. */
-.brand { background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; }
-.brand:hover .flare { transform: scale(1.35); }
 .flare { display: inline-block; transition: transform .12s ease; }
 
 .tsfoot p { margin: 0 0 6px; }

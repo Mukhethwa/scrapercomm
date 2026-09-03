@@ -4,7 +4,6 @@ import {
   Map, MapControls, MapMarker, MapRoute, MarkerContent, MarkerTooltip, useMap,
 } from '@/components/ui/map'
 import { PinIcon } from './icons'
-import { OSM_RASTER } from './mapStyle'
 
 /**
  * MapLibre, via mapcn, takes [longitude, latitude] where Leaflet took [latitude,
@@ -126,7 +125,6 @@ export default function PlanMap({
         className="map"
         center={fitPts[0] ?? CAPE_TOWN}
         zoom={12}
-        styles={{ light: OSM_RASTER, dark: OSM_RASTER }}
         attributionControl={{ compact: true }}
       >
         <MapControls position="top-left" />

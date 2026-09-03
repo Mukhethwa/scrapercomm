@@ -45,20 +45,37 @@ export default function ModePicker() {
   const shown = showAll ? MODES : ready
 
   return (
-    <div className="modepicker">
-      <span className="modelbl">Transport</span>
-      <div className="moderegions">
+    <div className="mb-3 flex flex-wrap items-start gap-3">
+      <span className="pt-3.5 text-[11px] font-bold tracking-[.05em] text-muted uppercase">
+        Transport
+      </span>
+      {/* Grouped by city, so a dozen services still read as a few short rows. */}
+      <div className="flex min-w-0 flex-1 flex-wrap gap-4">
         {byRegion(shown).map(([region, group]) => (
-          <div className="moderegion" key={region}>
-            <span className="moderegionlbl">{region}</span>
-            <div className="modelist">
+          <div className="flex flex-col gap-1" key={region}>
+            <span className="text-[10px] font-bold tracking-[.06em] text-muted uppercase">
+              {region}
+            </span>
+            <div className="flex min-w-0 flex-wrap gap-1.5">
               {group.map((m) => {
                 const Icon = ICON[m.kind]
                 const on = modes.has(m.id)
                 return (
                   <button
                     key={m.id}
-                    className={`modechip ${on ? 'on' : ''} ${m.available ? '' : 'soon'}`}
+                    className={[
+                      'inline-flex items-center gap-1.5 rounded-full border px-[11px] py-1',
+                      'text-xs font-semibold',
+                      on
+                        ? 'border-ink bg-ink text-white'
+                        : 'border-line bg-panel text-ink',
+                      // Listed but not selectable. Dimmed and not-allowed rather than
+                      // hidden, so a rider looking for a train learns the app has none
+                      // yet instead of doubting their search.
+                      m.available
+                        ? 'cursor-pointer hover:border-accent'
+                        : 'cursor-not-allowed opacity-55',
+                    ].join(' ')}
                     onClick={() => modes.toggle(m.id)}
                     disabled={!m.available}
                     aria-pressed={m.available ? on : undefined}
@@ -68,16 +85,24 @@ export default function ModePicker() {
                     {on ? <Check size={13} aria-hidden="true" />
                         : <Icon size={13} aria-hidden="true" />}
                     <span>{m.name}</span>
-                    {!m.available && <span className="modesoon">soon</span>}
+                    {!m.available && (
+                      <span className="rounded border border-line px-1 text-[9.5px] font-bold tracking-[.06em] text-muted uppercase">
+                        soon
+                      </span>
+                    )}
                   </button>
                 )
               })}
             </div>
           </div>
         ))}
-        <button className="modemore" onClick={() => setShowAll(!showAll)} aria-expanded={showAll}>
+        <button
+          className="inline-flex cursor-pointer items-center gap-1 self-end rounded-full border border-dashed border-line bg-transparent px-[11px] py-1 text-[11.5px] font-bold text-muted hover:border-accent hover:text-accent"
+          onClick={() => setShowAll(!showAll)}
+          aria-expanded={showAll}
+        >
           <ChevronDown size={13} aria-hidden="true"
-            className={`modemorechev ${showAll ? 'up' : ''}`} />
+            className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
           {showAll ? 'Hide what is coming' : `${coming} more cities coming`}
         </button>
       </div>

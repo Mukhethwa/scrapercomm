@@ -6,6 +6,12 @@ import { usePlanner } from './planner'
 
 type Tab = 'plan' | 'planner' | 'browse'
 
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'plan', label: 'Plan a trip' },
+  { id: 'planner', label: 'Planner' },
+  { id: 'browse', label: 'Browse routes' },
+]
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('plan')
   // Read here purely for the badge; the count updates the moment a journey is added
@@ -13,22 +19,36 @@ export default function App() {
   const { journeys } = usePlanner()
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <button className="brand" onClick={() => setTab('plan')} aria-label="commuttr home">
-          commuttr<span className="flare">.</span>
+    <div className="flex h-full flex-col">
+      <header className="flex items-baseline gap-4 bg-black px-5 py-3 text-white">
+        {/* commuttr. wordmark: all-lowercase, heavy, tight, with the orange period.
+            font-size and weight are set here rather than inherited, because a button
+            that only inherits its family shrinks to the surrounding text. */}
+        <button
+          className="group inline-flex cursor-pointer items-baseline text-[22px] leading-none font-bold tracking-[-0.03em] lowercase text-white"
+          onClick={() => setTab('plan')}
+          aria-label="commuttr home"
+        >
+          commuttr
+          <span className="text-accent transition-transform group-hover:scale-135">.</span>
         </button>
-        <nav className="tabs">
-          <button className={`tab ${tab === 'plan' ? 'active' : ''}`} onClick={() => setTab('plan')}>
-            Plan a trip
-          </button>
-          <button className={`tab ${tab === 'planner' ? 'active' : ''}`} onClick={() => setTab('planner')}>
-            Planner
-            {journeys.length > 0 && <span className="tabbadge">{journeys.length}</span>}
-          </button>
-          <button className={`tab ${tab === 'browse' ? 'active' : ''}`} onClick={() => setTab('browse')}>
-            Browse routes
-          </button>
+        <nav className="ml-2 flex gap-1">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`cursor-pointer rounded-lg px-3.5 py-1.5 text-sm font-semibold text-white ${
+                tab === t.id ? 'bg-accent' : 'hover:bg-white/12'
+              }`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+              {t.id === 'planner' && journeys.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-white px-[7px] py-px text-[11px] font-bold text-accent">
+                  {journeys.length}
+                </span>
+              )}
+            </button>
+          ))}
         </nav>
       </header>
       {/*
@@ -37,7 +57,7 @@ export default function App() {
         * unmounting threw away the search — the stops, the results, the map — every
         * time. The other two views are cheap to rebuild and read their state fresh.
         */}
-      <div className={tab === 'plan' ? 'viewhost' : 'viewhost hiddenview'}>
+      <div className={tab === 'plan' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
         <PlanView />
       </div>
       {tab === 'planner' && <PlannerView onBrowse={() => setTab('plan')} />}
