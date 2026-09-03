@@ -192,9 +192,14 @@ function SortableJourney(props: {
 
         <button className="plannermain" onClick={onToggleDetail} aria-expanded={open}>
           <div className="plannerroute">
-            <span className="pfrom">{j.from.name}</span>
-            <ArrowRight size={14} className="parrow" aria-hidden="true" />
-            <span className="pto">{j.to.name}</span>
+            <span className="pends">
+              <span className="pfrom">{j.from.name}</span>
+              <ArrowRight size={14} className="parrow" aria-hidden="true" />
+              <span className="pto">{j.to.name}</span>
+            </span>
+            {j.fare?.perRideCents != null && (
+              <span className="plannerfare">{rands(j.fare.perRideCents)}</span>
+            )}
           </div>
           <div className="plannertimes">
             <span className="ptime">{j.departure.boardRaw}</span>
@@ -209,21 +214,16 @@ function SortableJourney(props: {
               ? <span className="plannerttn"> · timetable #{j.route.timetableNumber}</span>
               : null}
           </div>
-          {/* Stops and price, on the card rather than behind it. Somebody reviewing a
-              plan the next morning has forgotten which departure they picked and why,
-              and both are the reasons they picked it. */}
+          {/* How many stops, on the card rather than behind it. Somebody reviewing a
+              plan the next morning has forgotten which departure they picked and why.
+              The price moved up to the route line, where it is read first. */}
           <div className="plannerfacts">
             {stopLabel(j.departure.stopCount) && (
               <span className={`depstops ${j.departure.stopCount === 0 ? 'direct' : ''}`}>
                 {stopLabel(j.departure.stopCount)}
               </span>
             )}
-            {j.fare?.perRideCents != null && (
-              <span className="plannerfare">
-                {rands(j.fare.perRideCents)}
-                {j.fare.code ? <span className="plannerttn"> · {j.fare.code}</span> : null}
-              </span>
-            )}
+            {j.fare?.code && <span className="plannerttn">{j.fare.code}</span>}
           </div>
         </button>
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import {
   getRoutes,
   getRoute,
@@ -97,7 +98,10 @@ export default function RouteBrowser() {
   }, [dayTypesForDir]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="layout">
+    /* "picked" drives the phone layout, where the two panes cannot sit side by side:
+       the list fills the screen until a route is chosen, then the timetable does. On a
+       wide screen both are always visible and the class changes nothing. */
+    <div className={`layout ${routeId != null ? 'picked' : ''}`}>
       <aside className="sidebar">
         <input
           className="search"
@@ -121,6 +125,11 @@ export default function RouteBrowser() {
       </aside>
 
       <main className="main">
+        {/* The only way back to the list on a phone, where the list is off screen. */}
+        <button className="backtolist" onClick={() => setRouteId(null)}>
+          <ChevronLeft size={15} aria-hidden="true" /> All routes
+        </button>
+
         {!routeData && <div className="placeholder">Select a route to view its timetables.</div>}
 
         {routeData && (

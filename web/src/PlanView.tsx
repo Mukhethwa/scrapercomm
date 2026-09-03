@@ -729,20 +729,25 @@ export default function PlanView() {
                 return (
                   <div key={i} className={`optcard ${i === sel ? 'active' : ''}`}>
                     <div className="opthead" onClick={() => setSel(i)}>
-                      {/* Which choice this is. Two buses to the same place, one above the
-                          other, gave no sense of order or of how many there were. */}
-                      <span className="optrank" aria-label={`Route choice ${i + 1} of ${plan.length}`}>
-                        {i + 1}
-                      </span>
+                      {/* Two rows, not three columns. The sign used to sit between the
+                          number and the pills, which left it floating in the middle of
+                          the card with no edge to line up against and squeezed the route
+                          line into a narrow column. The number and the pills own the top
+                          row; the sign gets the full width underneath. */}
+                      <div className="optheadtop">
+                        <span className="optrank" aria-label={`Route choice ${i + 1} of ${plan.length}`}>
+                          {i + 1}
+                        </span>
+                        <span className="optmeta">
+                          {hasApprox(o) && <span className="approxpill">Approx times</span>}
+                          <span className="daypill">{DAY_LABEL[o.day_type] ?? o.day_type}</span>
+                        </span>
+                      </div>
                       <div className="signblock">
                         <div className="signlbl">Look for the bus to</div>
                         <div className="signdest">{sign.terminus}</div>
                         <div className="signroute">Route: {o.route_label}, timetable #{o.timetable_number}</div>
                       </div>
-                      <span className="optmeta">
-                        {hasApprox(o) && <span className="approxpill">Approx times</span>}
-                        <span className="daypill">{DAY_LABEL[o.day_type] ?? o.day_type}</span>
-                      </span>
                     </div>
                     <FarePanel fare={o.fare} />
                     <div className="depshint">Tap a departure to see where you get on and off.</div>
