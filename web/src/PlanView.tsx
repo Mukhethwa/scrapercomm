@@ -345,6 +345,20 @@ export default function PlanView() {
   const stage = !from ? 'from' : !to ? 'reachable' : 'journeys'
   const segment = stage === 'journeys' && plan && plan[sel] ? plan[sel].segment_stops : undefined
   const roadPath = stage === 'journeys' && plan && plan[sel] ? plan[sel].road_path : undefined
+
+  /**
+   * The stop range the rider is actually on, for numbering the map.
+   *
+   * segment_stops deliberately reaches one timing point past the end, because a leg's
+   * road geometry only exists between two of them - so numbering it whole would put a
+   * stop after the one they get off at. BUH REIN to CAPE TOWN ends at CAPE TOWN and the
+   * segment carries BLOEKOMBOS behind it.
+   */
+  const ride = useMemo(() => {
+    if (stage !== 'journeys' || !plan || !plan[sel]) return undefined
+    const d = plan[sel].departures[openDep?.oi === sel ? openDep.di : 0]
+    return d ? { fromSeq: d.from_seq, toSeq: d.to_seq } : undefined
+  }, [stage, plan, sel, openDep])
   const altDays = CORE_DAYS.filter((d) => dayAlts[d]?.length)
 
   return (
@@ -683,7 +697,7 @@ export default function PlanView() {
 
         <section className="planright">
           <PlanMap
-            from={from} to={to} segment={segment} roadPath={roadPath}
+            from={from} to={to} segment={segment} roadPath={roadPath} ride={ride}
             reachable={stage === 'reachable' && from ? [from, ...(reachable ?? [])] : undefined}
             onMapClick={onMapClick}
             armLabel={armed === 'from' ? 'your starting point' : armed === 'to' ? 'your destination' : null}

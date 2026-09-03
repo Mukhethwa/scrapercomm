@@ -19,6 +19,7 @@ export interface Pt {
   name?: string
   lat: number | null
   lon: number | null
+  stop_sequence?: number
 }
 
 /** Frame whatever is being shown, the way fitBounds did before. */
@@ -85,18 +86,62 @@ function Dot({ size, fill, stroke, label }:
   )
 }
 
+/**
+ * A stop on the ride, carrying its position in the journey.
+ *
+ * The order is the whole point: a route drawn as identical dots says where the bus goes
+ * but not which way round, and a rider reading a map wants to know which stop is first.
+ * First and last take the brand's black and orange, the same two colours the trip
+ * breakdown uses for getting on and off, so the map and the list agree.
+ */
+function NumberedStop({ n, first, last, name }:
+  { n: number; first: boolean; last: boolean; name?: string }) {
+  const size = first || last ? 24 : 20
+  const fill = first ? '#111111' : last ? '#ff4500' : '#ffffff'
+  const stroke = first ? '#000000' : last ? '#cc3700' : '#a8afb7'
+  const text = first || last ? '#ffffff' : '#111111'
+  return (
+    <MarkerContent>
+      <span
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: size, height: size, borderRadius: '50%',
+          background: fill, border: `2px solid ${stroke}`, color: text,
+          fontSize: first || last ? 11 : 10, fontWeight: 700, lineHeight: 1,
+          fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
+          boxShadow: '0 1px 3px rgba(0,0,0,.35)',
+        }}
+        aria-label={name ? `Stop ${n}: ${name}` : `Stop ${n}`}
+      >
+        {n}
+      </span>
+    </MarkerContent>
+  )
+}
+
+/** Two coordinates close enough to be the same stop, so it is not marked twice. */
+const samePlace = (a: Pt, b: Pt) =>
+  a.lat != null && b.lat != null
+  && Math.abs((a.lat as number) - (b.lat as number)) < 1e-5
+  && Math.abs((a.lon as number) - (b.lon as number)) < 1e-5
+
 export default function PlanMap({
-  from, to, segment, roadPath, reachable, onMapClick, armLabel,
+  from, to, segment, roadPath, reachable, ride, onMapClick, armLabel,
 }: {
   from?: Pt | null
   to?: Pt | null
   segment?: Pt[]
   roadPath?: [number, number][]
   reachable?: Pt[]
+  /** The stop range actually ridden, so numbering stops where the rider gets off. */
+  ride?: { fromSeq: number; toSeq: number }
   onMapClick?: (lat: number, lon: number) => void
   armLabel?: string | null
 }) {
-  const seg = (segment ?? []).filter((p) => p.lat != null && p.lon != null)
+  const seg = (segment ?? [])
+    .filter((p) => p.lat != null && p.lon != null)
+    .filter((p) => !ride || p.stop_sequence == null
+      || (p.stop_sequence >= ride.fromSeq && p.stop_sequence <= ride.toSeq))
   const segPts = seg.map((p) => lngLat(p.lat as number, p.lon as number))
   // Prefer the real road geometry for the drawn line; fall back to straight segments.
   const line = roadPath && roadPath.length > 1
@@ -136,14 +181,17 @@ export default function PlanMap({
           <MapRoute id="ride" coordinates={line} color="#ff4500" width={4} opacity={0.9} />
         )}
 
-        {seg.map((s, i) =>
-          i > 0 && i < seg.length - 1 ? (
-            <MapMarker key={`s${i}`} longitude={segPts[i][0]} latitude={segPts[i][1]}>
-              <Dot size={9} fill="#c9ced4" stroke="#a8afb7" label={s.name} />
-              <MarkerTooltip>{s.name}</MarkerTooltip>
-            </MapMarker>
-          ) : null,
-        )}
+        {seg.map((s, i) => (
+          <MapMarker key={`s${i}`} longitude={segPts[i][0]} latitude={segPts[i][1]}>
+            <NumberedStop
+              n={i + 1}
+              first={i === 0}
+              last={i === seg.length - 1}
+              name={s.name}
+            />
+            <MarkerTooltip>{`${i + 1}. ${s.name ?? 'stop'}`}</MarkerTooltip>
+          </MapMarker>
+        ))}
 
         {reach.map((s, i) => (
           <MapMarker key={`r${i}`} longitude={s.lon as number} latitude={s.lat as number}>
@@ -152,16 +200,17 @@ export default function PlanMap({
           </MapMarker>
         ))}
 
-        {/* Start of the journey, the brand's black */}
-        {from && from.lat != null && (
+        {/* A dropped pin, or a search with no ride drawn yet. Where the endpoint IS a
+            stop on the ride it is already numbered, and marking it twice stacks two
+            markers on one point. */}
+        {from && from.lat != null && !(seg.length && samePlace(from, seg[0])) && (
           <MapMarker longitude={from.lon as number} latitude={from.lat}>
             <Dot size={17} fill="#111111" stroke="#000000" label={from.name} />
             <MarkerTooltip>{`From: ${from.name ?? 'pin'}`}</MarkerTooltip>
           </MapMarker>
         )}
 
-        {/* Destination: the orange dot the whole brand is built around */}
-        {to && to.lat != null && (
+        {to && to.lat != null && !(seg.length && samePlace(to, seg[seg.length - 1])) && (
           <MapMarker longitude={to.lon as number} latitude={to.lat}>
             <Dot size={17} fill="#ff4500" stroke="#cc3700" label={to.name} />
             <MarkerTooltip>{`To: ${to.name ?? 'pin'}`}</MarkerTooltip>
