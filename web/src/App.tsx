@@ -20,23 +20,25 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-baseline gap-4 bg-black px-5 py-3 text-white">
+      <header className="flex items-baseline gap-2 bg-black px-3 py-2.5 text-white sm:gap-4 sm:px-5 sm:py-3">
         {/* commuttr. wordmark: all-lowercase, heavy, tight, with the orange period.
             font-size and weight are set here rather than inherited, because a button
             that only inherits its family shrinks to the surrounding text. */}
         <button
-          className="group inline-flex cursor-pointer items-baseline text-[22px] leading-none font-bold tracking-[-0.03em] lowercase text-white"
+          className="group inline-flex shrink-0 cursor-pointer items-baseline text-[19px] leading-none font-bold tracking-[-0.03em] lowercase text-white sm:text-[22px]"
           onClick={() => setTab('plan')}
           aria-label="commuttr home"
         >
           commuttr
           <span className="text-accent transition-transform group-hover:scale-135">.</span>
         </button>
-        <nav className="ml-2 flex gap-1">
+        {/* Scrolls rather than wraps: "Plan a trip" broke onto three lines on a
+            phone and the bar grew to fit it. */}
+        <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 [scrollbar-width:none] sm:ml-2 sm:overflow-visible">
           {TABS.map((t) => (
             <button
               key={t.id}
-              className={`cursor-pointer rounded-lg px-3.5 py-1.5 text-sm font-semibold text-white ${
+              className={`shrink-0 cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px] font-semibold whitespace-nowrap text-white sm:px-3.5 sm:text-sm ${
                 tab === t.id ? 'bg-accent-fill' : 'hover:bg-white/12'
               }`}
               onClick={() => setTab(t.id)}

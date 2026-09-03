@@ -177,7 +177,6 @@ body { background: var(--bg); color: var(--ink); }
 .acitem:hover { background: var(--accent-fill); color: #fff; }
 
 .plancontent { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 46%); min-height: 0; }
-@media (max-width: 900px) { .plancontent { grid-template-columns: 1fr; grid-template-rows: 1fr 360px; } }
 .planleft { overflow-y: auto; padding: 16px 22px; }
 .planright { border-left: 1px solid var(--line); display: flex; }
 .planright .map-wrap { flex: 1; display: flex; flex-direction: column; border: none; border-radius: 0; }
@@ -527,6 +526,12 @@ body { background: var(--bg); color: var(--ink); }
 .curtag { font-size: 10px; font-weight: 700; margin-left: 4px; opacity: .8; }
 
 @media (max-width: 620px) {
+  /* Two fields, a swap and two Map buttons do not fit on a phone in one row: the inputs
+     shrank until the stop names were clipped mid-word. */
+  .planbar { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px; }
+  .planbar .field { max-width: none; }
+  .planbar .swapbtn { align-self: center; }
+  .planleft { padding: 12px 14px; }
   .plannertop { flex-wrap: wrap; }
   .plannerside { flex-direction: row; align-items: center; width: 100%; justify-content: flex-end; gap: 10px; }
 }
@@ -626,4 +631,31 @@ body { background: var(--bg); color: var(--ink); }
   .maplibregl-ctrl-attrib-button {
     @apply bg-transparent! dark:invert;
   }
+}
+
+/* ------------------------------------------------- narrow screens
+   Kept at the end deliberately: these override base rules of equal specificity,
+   and with CSS that is decided by source order. */
+/* The switch between times and map belongs to narrow screens only. */
+.mapswitch { display: none; }
+
+@media (max-width: 900px) {
+  /* One pane at a time. A 360px map on a 640px screen left the times in a letterbox,
+     and scrolling results under a fixed map is what made it look like an overlay. */
+  .plancontent { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); }
+  .planright { display: none; }
+  .plancontent.mapopen .planleft { display: none; }
+  .plancontent.mapopen .planright { display: flex; border-left: none; }
+
+  .mapswitch {
+    display: flex; justify-content: flex-end;
+    padding: 8px 14px 0; background: var(--panel);
+  }
+  .mapswitchbtn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 12.5px;
+    font-weight: 700; cursor: pointer;
+  }
+  .mapswitchbtn.on { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
 }

@@ -171,6 +171,12 @@ export default function PlanView() {
     if (ep) pick(ep)
     else setPickError(`Could not find a stop for "${h.name}". Try a nearby stop or place.`)
   }
+  /**
+   * On a phone the map used to take a fixed 360px of a 640px screen, leaving the times
+   * in a letterbox above it. It is a view you switch to now, so whichever one you are
+   * reading gets the whole screen. Desktop is unaffected - there is room for both.
+   */
+  const [mapOpen, setMapOpen] = useState(false)
   const [pickError, setPickError] = useState<string | null>(null)
   const [reachable, setReachable] = useState<ReachableStop[] | null>(null)
   const [connecting, setConnecting] = useState<ConnectingStop[]>([])
@@ -440,7 +446,7 @@ export default function PlanView() {
             way round the journey is, so that is where turning it around belongs. */}
         <button
           type="button"
-          className="mb-2 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center
+          className="swapbtn mb-2 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center
                      self-end rounded-full border border-line bg-panel text-accent
                      hover:border-accent hover:bg-accent-fill hover:text-white
                      disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-panel
@@ -499,7 +505,19 @@ export default function PlanView() {
 
       <ModePicker />
 
-      <div className="plancontent">
+      {/* Only rendered on narrow screens; CSS hides it where both panes fit. */}
+      <div className="mapswitch">
+        <button
+          className={`mapswitchbtn ${mapOpen ? 'on' : ''}`}
+          onClick={() => setMapOpen(!mapOpen)}
+          aria-pressed={mapOpen}
+        >
+          <PinIcon />
+          {mapOpen ? 'Back to times' : 'View map'}
+        </button>
+      </div>
+
+      <div className={`plancontent ${mapOpen ? 'mapopen' : ''}`}>
         <section className="planleft">
           {/* Every timetable, stop and fare here came from Golden Arrow, so turning it
               off leaves nothing to search. Saying so beats an empty result that looks

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { LngLatBounds } from 'maplibre-gl'
 import {
   Map, MapControls, MapMarker, MapRoute, MarkerContent, MarkerTooltip, useMap,
@@ -6,6 +6,14 @@ import {
 import { PinIcon } from './icons'
 import MapThemeToggle from './MapThemeToggle'
 import { useMapTheme } from './mapTheme'
+import { supportsWebGL2 } from './webgl'
+import MapBoundary from './MapBoundary'
+
+/**
+ * Loaded only where MapLibre cannot run. Dynamic so a device that can run it never
+ * downloads Leaflet at all - the fallback costs the common case nothing.
+ */
+const LeafletPlanMap = lazy(() => import('./LeafletPlanMap'))
 
 /**
  * MapLibre, via mapcn, takes [longitude, latitude] where Leaflet took [latitude,
@@ -127,9 +135,7 @@ const samePlace = (a: Pt, b: Pt) =>
   && Math.abs((a.lat as number) - (b.lat as number)) < 1e-5
   && Math.abs((a.lon as number) - (b.lon as number)) < 1e-5
 
-export default function PlanMap({
-  from, to, segment, roadPath, reachable, ride, onMapClick, armLabel,
-}: {
+interface PlanMapProps {
   from?: Pt | null
   to?: Pt | null
   segment?: Pt[]
@@ -139,7 +145,33 @@ export default function PlanMap({
   ride?: { fromSeq: number; toSeq: number }
   onMapClick?: (lat: number, lon: number) => void
   armLabel?: string | null
-}) {
+}
+
+/**
+ * MapLibre where the device can run it, Leaflet where it cannot, and the journey intact
+ * either way. The map is the least important thing on this page and the most likely to
+ * fail, so it is the one part wrapped in a boundary.
+ */
+export default function PlanMap(props: PlanMapProps) {
+  if (!supportsWebGL2()) {
+    return (
+      <MapBoundary>
+        <Suspense fallback={<div className="map-wrap"><p className="map-note">Loading the map…</p></div>}>
+          <LeafletPlanMap {...props} />
+        </Suspense>
+      </MapBoundary>
+    )
+  }
+  return (
+    <MapBoundary>
+      <GlPlanMap {...props} />
+    </MapBoundary>
+  )
+}
+
+function GlPlanMap({
+  from, to, segment, roadPath, reachable, ride, onMapClick, armLabel,
+}: PlanMapProps) {
   const { theme, toggle } = useMapTheme()
 
   const seg = (segment ?? [])

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { LngLatBounds } from 'maplibre-gl'
 import {
   Map, MapControls, MapMarker, MapRoute, MarkerContent, MarkerTooltip, useMap,
@@ -6,6 +6,11 @@ import {
 import type { Stop } from './api'
 import MapThemeToggle from './MapThemeToggle'
 import { useMapTheme } from './mapTheme'
+import { supportsWebGL2 } from './webgl'
+import MapBoundary from './MapBoundary'
+
+/** Loaded only where MapLibre cannot run. See PlanMap. */
+const LeafletMapView = lazy(() => import('./LeafletMapView'))
 
 /** MapLibre takes [longitude, latitude]; everything here is lat/lon. See PlanMap. */
 const lngLat = (lat: number, lon: number): [number, number] => [lon, lat]
@@ -42,6 +47,23 @@ function FitBounds({ pts }: { pts: [number, number][] }) {
 }
 
 export default function MapView({ stops }: { stops: Stop[] }) {
+  if (!supportsWebGL2()) {
+    return (
+      <MapBoundary>
+        <Suspense fallback={<div className="map-wrap"><p className="map-note">Loading the map…</p></div>}>
+          <LeafletMapView stops={stops} />
+        </Suspense>
+      </MapBoundary>
+    )
+  }
+  return (
+    <MapBoundary>
+      <GlMapView stops={stops} />
+    </MapBoundary>
+  )
+}
+
+function GlMapView({ stops }: { stops: Stop[] }) {
   const { theme, toggle } = useMapTheme()
   const geo = stops.filter((s) => s.lat != null && s.lon != null)
   const pts = geo.map((s) => lngLat(s.lat as number, s.lon as number))
