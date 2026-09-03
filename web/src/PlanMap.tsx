@@ -4,6 +4,8 @@ import {
   Map, MapControls, MapMarker, MapRoute, MarkerContent, MarkerTooltip, useMap,
 } from '@/components/ui/map'
 import { PinIcon } from './icons'
+import MapThemeToggle from './MapThemeToggle'
+import { useMapTheme } from './mapTheme'
 
 /**
  * MapLibre, via mapcn, takes [longitude, latitude] where Leaflet took [latitude,
@@ -138,6 +140,8 @@ export default function PlanMap({
   onMapClick?: (lat: number, lon: number) => void
   armLabel?: string | null
 }) {
+  const { theme, toggle } = useMapTheme()
+
   const seg = (segment ?? [])
     .filter((p) => p.lat != null && p.lon != null)
     .filter((p) => !ride || p.stop_sequence == null
@@ -166,8 +170,10 @@ export default function PlanMap({
         ? { outline: '3px solid #ff4500', outlineOffset: '-3px', cursor: 'crosshair' }
         : undefined}
     >
+      <MapThemeToggle theme={theme} onToggle={toggle} />
       <Map
         className="map"
+        theme={theme}
         center={fitPts[0] ?? CAPE_TOWN}
         zoom={12}
         attributionControl={{ compact: true }}

@@ -4,6 +4,8 @@ import {
   Map, MapControls, MapMarker, MapRoute, MarkerContent, MarkerTooltip, useMap,
 } from '@/components/ui/map'
 import type { Stop } from './api'
+import MapThemeToggle from './MapThemeToggle'
+import { useMapTheme } from './mapTheme'
 
 /** MapLibre takes [longitude, latitude]; everything here is lat/lon. See PlanMap. */
 const lngLat = (lat: number, lon: number): [number, number] => [lon, lat]
@@ -40,14 +42,17 @@ function FitBounds({ pts }: { pts: [number, number][] }) {
 }
 
 export default function MapView({ stops }: { stops: Stop[] }) {
+  const { theme, toggle } = useMapTheme()
   const geo = stops.filter((s) => s.lat != null && s.lon != null)
   const pts = geo.map((s) => lngLat(s.lat as number, s.lon as number))
   const missing = stops.length - geo.length
 
   return (
     <div className="map-wrap">
+      <MapThemeToggle theme={theme} onToggle={toggle} />
       <Map
         className="map"
+        theme={theme}
         center={pts[0] ?? CAPE_TOWN}
         zoom={12}
         attributionControl={{ compact: true }}
