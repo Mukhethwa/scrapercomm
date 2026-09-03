@@ -14,6 +14,7 @@ import za.co.commuttr.api.repo.projection.Projections.JourneyDepartureRow;
 import za.co.commuttr.api.repo.projection.Projections.ReachableRow;
 import za.co.commuttr.api.repo.projection.Projections.TripStopRow;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -103,6 +104,24 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
             ORDER BY s2.name
             """, nativeQuery = true)
     List<Object[]> findConnectingFromStop(@Param("stopId") Integer stopId);
+
+    /**
+     * Which stop_sequences each trip on these schedules actually calls at.
+     *
+     * Trips on one schedule skip different stops, so the number of stops on a ride is a
+     * property of the trip, not of the schedule. Fetched once per plan rather than once
+     * per departure.
+     */
+    @Query(value = """
+            SELECT tr.schedule_id  AS "scheduleId",
+                   tr.trip_index   AS "tripIndex",
+                   ss.stop_sequence AS "stopSequence"
+            FROM trip tr
+            JOIN stop_time st     ON st.trip_id = tr.id AND st.cell_type <> 'NONE'
+            JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+            WHERE tr.schedule_id IN (:scheduleIds)
+            """, nativeQuery = true)
+    List<Object[]> findServedSequences(@Param("scheduleIds") Collection<Integer> scheduleIds);
 
     /** GET /api/journeys: schedules where some trip serves both stops, in order. */
     @Query(value = """

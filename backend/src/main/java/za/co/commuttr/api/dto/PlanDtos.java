@@ -65,7 +65,8 @@ public final class PlanDtos {
                                    Integer scheduleId,
                                    Integer tripIndex,
                                    Integer fromSeq,
-                                   Integer toSeq) { }
+                                   Integer toSeq,
+                                    Integer stopCount) { }
 
     /** {@code roadPath} is a list of [lat, lon] pairs stitched across the segment. */
     /**

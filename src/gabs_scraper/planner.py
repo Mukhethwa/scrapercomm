@@ -288,6 +288,32 @@ def _road_path(conn, seg, from_pos, to_pos, leg_cache=None):
 
 # ---- journeys ----
 
+def _served_sequences(conn, schedule_ids):
+    """Which stop_sequences each trip actually calls at, keyed by (schedule, trip).
+
+    Trips on one schedule skip different stops, so the number of stops on a ride is a
+    property of the trip and cannot be read off the schedule. Fetched once for the whole
+    plan rather than per departure.
+    """
+    if not schedule_ids:
+        return {}
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT tr.schedule_id, tr.trip_index, ss.stop_sequence
+        FROM trip tr
+        JOIN stop_time st      ON st.trip_id = tr.id AND st.cell_type <> 'NONE'
+        JOIN schedule_stop ss  ON ss.id = st.schedule_stop_id
+        WHERE tr.schedule_id = ANY(%s)
+        """,
+        (list(schedule_ids),),
+    )
+    out = {}
+    for sch, ti, seq in cur.fetchall():
+        out.setdefault((sch, ti), []).append(seq)
+    return out
+
+
 def journey_fare(conn, from_stop_id, to_stop_id):
     """The published fare for riding between two stops, or None.
 
@@ -354,6 +380,7 @@ def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
         raw.append((sch, ti, b, a))
 
     meta = _schedule_meta(conn, {r[0] for r in raw})
+    served = _served_sequences(conn, {r[0] for r in raw})
     groups = {}
     seg_cache = {}
     leg_cache = {}
@@ -387,6 +414,12 @@ def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
             "schedule_id": sch, "trip_index": ti,
             "from_seq": max(0, math.ceil(b["position"] - 1e-6)),
             "to_seq": int(a["position"] + 1e-6),
+            # Stops between getting on and getting off - what a rider means by "how many
+            # stops", so both ends are excluded.
+            "stop_count": sum(
+                1 for q in served.get((sch, ti), [])
+                if max(0, math.ceil(b["position"] - 1e-6)) < q < int(a["position"] + 1e-6)
+            ),
         })
 
     options = []

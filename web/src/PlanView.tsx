@@ -12,6 +12,7 @@ import ModePicker from './ModePicker'
 import { useModes } from './modes'
 import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
+import { stopLabel } from './stops'
 import { rands } from './money'
 import { ArrowRightLeft, CircleCheck, CircleX, Info, Lightbulb, TriangleAlert } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
@@ -713,14 +714,24 @@ export default function PlanView() {
                                       <span className="depfare">{rands(o.fare.per_ride_cents)}</span>
                                     )}
                                   </button>
-                                  <button
-                                    className={`addbtn ${planned ? 'on' : ''}`}
-                                    onClick={() => togglePlanned(o, d)}
-                                    title={planned ? 'Remove from your planner' : 'Add to your planner'}
-                                    aria-pressed={planned}
-                                  >
-                                    {planned ? '✓ Added' : '+ Add'}
-                                  </button>
+                                  {/* The stop count shares the row with Add, so a rider
+                                      can tell a fast bus from a slow one without opening
+                                      each departure in turn. */}
+                                  <div className="depfoot">
+                                    <button
+                                      className={`addbtn ${planned ? 'on' : ''}`}
+                                      onClick={() => togglePlanned(o, d)}
+                                      title={planned ? 'Remove from your planner' : 'Add to your planner'}
+                                      aria-pressed={planned}
+                                    >
+                                      {planned ? '✓ Added' : '+ Add'}
+                                    </button>
+                                    {stopLabel(d.stop_count) && (
+                                      <span className={`depstops ${d.stop_count === 0 ? 'direct' : ''}`}>
+                                        {stopLabel(d.stop_count)}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               )
                             })}

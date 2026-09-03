@@ -45,7 +45,12 @@ export interface SavedJourney {
     tripIndex: number
     fromSeq: number
     toSeq: number
+    /** Stops between getting on and off. Saved so the planner can show it without
+     *  re-fetching the trip for every card. */
+    stopCount?: number
   }
+  /** What the ride cost when it was saved, so the planner does not have to ask again. */
+  fare?: { perRideCents: number | null; code: string | null } | null
   addedAt: number
 }
 
@@ -85,6 +90,9 @@ export function buildJourney(
       dayLabel: option.day_label,
     },
     approx: { board: option.board_approx, alight: option.alight_approx },
+    fare: option.fare
+      ? { perRideCents: option.fare.per_ride_cents, code: option.fare.code }
+      : null,
     departure: {
       boardRaw: departure.board_raw,
       arriveRaw: departure.arrive_raw,
@@ -94,6 +102,7 @@ export function buildJourney(
       tripIndex: departure.trip_index,
       fromSeq: departure.from_seq,
       toSeq: departure.to_seq,
+      stopCount: departure.stop_count,
     },
     addedAt: Date.now(),
   }

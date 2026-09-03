@@ -213,7 +213,7 @@ class ApiContractTest {
                 "004401", "NYANGA - BELLVILLE", "WEEKDAY", "MONDAYS TO FRIDAYS",
                 List.of(new PlanSegmentStopDto(3, "NYANGA TERM", -33.98, 18.58, 0)),
                 List.of(new double[] { -33.98, 18.58 }, new double[] { -33.90, 18.62 }),
-                List.of(new PlanDepartureDto("0605", false, 365, "06:47", true, 407.5, 88, 2, 0, 6)),
+                List.of(new PlanDepartureDto("0605", false, 365, "06:47", true, 407.5, 88, 2, 0, 6, 3)),
                 false, true, "NYANGA TERM", "near A–B",
                 new FareDto("CIBV", 2320, 11600, 21500, 94600, "Zero",
                         "exact", "Cape Town", "Bellville", false));

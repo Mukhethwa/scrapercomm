@@ -191,6 +191,8 @@ export interface PlanDeparture {
   trip_index: number
   from_seq: number
   to_seq: number
+  /** Stops between getting on and off, both ends excluded. */
+  stop_count: number
 }
 
 export interface TripStop {

@@ -16,6 +16,8 @@ import {
 } from './planner'
 import TripStrip from './TripStrip'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
+import { stopLabel } from './stops'
+import { rands } from './money'
 
 const DAY_LABEL: Record<string, string> = {
   WEEKDAY: 'Mon-Fri', SATURDAY: 'Saturday', SUNDAY: 'Sunday',
@@ -206,6 +208,22 @@ function SortableJourney(props: {
             {j.route.timetableNumber
               ? <span className="plannerttn"> · timetable #{j.route.timetableNumber}</span>
               : null}
+          </div>
+          {/* Stops and price, on the card rather than behind it. Somebody reviewing a
+              plan the next morning has forgotten which departure they picked and why,
+              and both are the reasons they picked it. */}
+          <div className="plannerfacts">
+            {stopLabel(j.departure.stopCount) && (
+              <span className={`depstops ${j.departure.stopCount === 0 ? 'direct' : ''}`}>
+                {stopLabel(j.departure.stopCount)}
+              </span>
+            )}
+            {j.fare?.perRideCents != null && (
+              <span className="plannerfare">
+                {rands(j.fare.perRideCents)} a ride
+                {j.fare.code ? <span className="plannerttn"> · {j.fare.code}</span> : null}
+              </span>
+            )}
           </div>
         </button>
 

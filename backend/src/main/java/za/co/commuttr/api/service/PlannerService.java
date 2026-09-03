@@ -476,8 +476,19 @@ public class PlannerService {
             }
         }
 
-        Map<Integer, ScheduleMetaRow> meta = scheduleMeta(
-                candidates.stream().map(c -> c.key().scheduleId()).distinct().toList());
+        List<Integer> scheduleIds = candidates.stream()
+                .map(c -> c.key().scheduleId()).distinct().toList();
+        Map<Integer, ScheduleMetaRow> meta = scheduleMeta(scheduleIds);
+
+        // Which stops each trip actually calls at, so a departure can say how many are
+        // on the ride before the rider opens it.
+        Map<AnchorKey, List<Integer>> served = new HashMap<>();
+        if (!scheduleIds.isEmpty()) {
+            for (Object[] r : stopTimes.findServedSequences(scheduleIds)) {
+                AnchorKey k = new AnchorKey(((Number) r[0]).intValue(), ((Number) r[1]).intValue());
+                served.computeIfAbsent(k, x -> new ArrayList<>()).add(((Number) r[2]).intValue());
+            }
+        }
 
         Map<GroupKey, PlanGroup> groups = new LinkedHashMap<>();
         Map<Integer, List<PlanSegmentStopDto>> segmentCache = new HashMap<>();
@@ -518,7 +529,10 @@ public class PlannerService {
                     c.key().scheduleId(), c.key().tripIndex(),
                     // source trip + segment range, so the UI can fetch a stop-by-stop breakdown
                     Math.max(0, (int) Math.ceil(c.board().position() - 1e-6)),
-                    (int) (c.alight().position() + 1e-6)));
+                    (int) (c.alight().position() + 1e-6),
+                    stopsBetween(served.get(c.key()),
+                            Math.max(0, (int) Math.ceil(c.board().position() - 1e-6)),
+                            (int) (c.alight().position() + 1e-6))));
         }
 
         List<PlanOptionDto> options = new ArrayList<>(groups.size());
@@ -538,6 +552,20 @@ public class PlannerService {
                 .thenComparing(PlanOptionDto::routeLabel,
                         Comparator.nullsFirst(Comparator.naturalOrder())));
         return options;
+    }
+
+    /** Stops between getting on and getting off - both ends excluded, as a rider means it. */
+    private static Integer stopsBetween(List<Integer> sequences, int fromSeq, int toSeq) {
+        if (sequences == null) {
+            return 0;
+        }
+        int n = 0;
+        for (int seq : sequences) {
+            if (seq > fromSeq && seq < toSeq) {
+                n++;
+            }
+        }
+        return n;
     }
 
     private static Anchor earliestByPosition(List<Anchor> anchors) {
