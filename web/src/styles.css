@@ -167,7 +167,6 @@ body { background: var(--bg); color: var(--ink); }
 }
 .planbar input:focus { border-color: var(--accent); border-width: 2px; }
 .planbar input:disabled { background: var(--bg); color: var(--muted); }
-.planbar .arrow { font-size: 22px; color: var(--accent); padding-bottom: 8px; }
 .ac { position: relative; }
 .acmenu {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 1000;

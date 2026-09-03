@@ -13,7 +13,7 @@ import { useModes } from './modes'
 import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
 import { rands } from './money'
-import { ArrowRight, CircleCheck, CircleX, Info, Lightbulb, TriangleAlert } from 'lucide-react'
+import { ArrowRightLeft, CircleCheck, CircleX, Info, Lightbulb, TriangleAlert } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
 
@@ -250,6 +250,38 @@ export default function PlanView() {
       .finally(() => setLoading(false))
   }
 
+  /**
+   * Turn the journey around.
+   *
+   * Not pickFrom followed by pickTo: pickFrom clears the destination, because choosing a
+   * new starting point normally invalidates it. Here both ends are known and only their
+   * order changes, so they are set together and the search is run once.
+   *
+   * Both ends or nothing. The destination field is disabled until a starting point
+   * exists, so swapping with only one end set would leave a filled box the rider cannot
+   * edit and an empty one above it.
+   */
+  function swapEnds() {
+    if (!from || !to) return
+    const nextFrom = to
+    const nextTo = from
+    const nextFromText = toText
+    const nextToText = fromText
+
+    setFrom(nextFrom); setTo(nextTo)
+    setFromText(nextFromText); setToText(nextToText)
+    setFromHits([]); setToHits([]); setArmed(null); setSel(0)
+    setPlan(null); setDayAlts({}); setOpenDep(null); setTripStops(null)
+    setConns(null); setConnLegs(null); setPickError(null)
+    setReachable(null); setConnecting([])
+
+    if (nextFrom) {
+      reachableFor(nextFrom).then(setReachable).catch(() => setReachable([]))
+      connectingFor(nextFrom).then(setConnecting).catch(() => setConnecting([]))
+    }
+    if (nextFrom && nextTo) runPlan(nextFrom, nextTo)
+  }
+
   function pickTo(ep: Endpoint) {
     setTo(ep); setToText(ep.name); setToHits([]); setArmed(null); setSel(0)
     runPlan(from!, ep)
@@ -403,7 +435,22 @@ export default function PlanView() {
           </div>
         </div>
 
-        <div className="arrow"><ArrowRight size={16} aria-hidden="true" /></div>
+        {/* The arrow between the two fields is where a rider already looks to see which
+            way round the journey is, so that is where turning it around belongs. */}
+        <button
+          type="button"
+          className="mb-2 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center
+                     self-end rounded-full border border-line bg-panel text-accent
+                     hover:border-accent hover:bg-accent-fill hover:text-white
+                     disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-panel
+                     disabled:hover:text-accent"
+          onClick={swapEnds}
+          disabled={!from || !to}
+          title="Swap starting point and destination"
+          aria-label="Swap starting point and destination"
+        >
+          <ArrowRightLeft size={15} aria-hidden="true" />
+        </button>
 
         <div className="field">
           <label>Destination</label>
