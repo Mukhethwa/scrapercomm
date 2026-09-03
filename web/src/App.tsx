@@ -37,7 +37,7 @@ export default function App() {
             <button
               key={t.id}
               className={`cursor-pointer rounded-lg px-3.5 py-1.5 text-sm font-semibold text-white ${
-                tab === t.id ? 'bg-accent' : 'hover:bg-white/12'
+                tab === t.id ? 'bg-accent-fill' : 'hover:bg-white/12'
               }`}
               onClick={() => setTab(t.id)}
             >

@@ -20,6 +20,12 @@
   --color-accent: #ff4500;
   --color-accent-soft: #fff1eb;
   --color-accent-deep: #cc3700;
+  --color-accent-fill: #cc3700;
+  /* Status colours, solid rather than tinted. A pale wash of a colour behind dark text
+     reads as a glow; a solid block with white on it reads as a state. */
+  --color-good: #2f6b4f;
+  --color-warn: #ff4500;
+  --color-bad: #b3261e;
   --font-sans: 'Arimo', Arial, 'Helvetica Neue', Helvetica, sans-serif;
 }
 
@@ -50,7 +56,15 @@
   --muted: #111111;       /* secondary text stays black; hierarchy comes from size and weight */
   --line: #e4e7eb;
   --accent: #ff4500;      /* brand identifier, the "destination" orange */
-  --accent-soft: #fff1eb; /* soft tint of #ff4500 on white */
+  --accent-soft: #fff1eb; /* retained only where a solid fill would shout */
+  --good: #2f6b4f;        /* solid green - a state, not a wash */
+  --bad: #b3261e;         /* solid red */
+  --wash: #eff1f4;        /* solid neutral for long explanatory text */
+  /* The brand orange carries white text at only 3.44:1, under the 4.5 body text needs.
+     Fills that carry white use this deeper orange instead - still solid, still orange,
+     and legible at 5.04:1. #ff4500 stays the brand colour for text, borders and icons
+     on light backgrounds, where it is doing no such work. */
+  --accent-fill: #cc3700;
   font-family: 'Arimo', Arial, 'Helvetica Neue', Helvetica, sans-serif;
 }
 
@@ -70,7 +84,7 @@ body { background: var(--bg); color: var(--ink); }
   margin: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
   font-size: 14px; outline: none;
 }
-.search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search:focus { border-color: var(--accent); border-width: 2px; }
 .routelist { overflow-y: auto; flex: 1; padding: 0 8px 12px; }
 .routeitem {
   width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px;
@@ -78,7 +92,7 @@ body { background: var(--bg); color: var(--ink); }
   text-align: left; cursor: pointer; font-size: 13.5px; color: var(--ink);
 }
 .routeitem:hover { background: var(--bg); }
-.routeitem.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.routeitem.active { background: var(--accent-fill); color: #fff; font-weight: 600; }
 .rcount { font-size: 11px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 1px 8px; }
 .routeitem.active .rcount { background: #fff; color: var(--accent); }
 .empty { padding: 16px; color: var(--muted); font-size: 13px; }
@@ -148,7 +162,7 @@ body { background: var(--bg); color: var(--ink); }
 .planbar input {
   padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; outline: none; width: 100%;
 }
-.planbar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.planbar input:focus { border-color: var(--accent); border-width: 2px; }
 .planbar input:disabled { background: var(--bg); color: var(--muted); }
 .planbar .arrow { font-size: 22px; color: var(--accent); padding-bottom: 8px; }
 .ac { position: relative; }
@@ -158,7 +172,7 @@ body { background: var(--bg); color: var(--ink); }
   max-height: 280px; overflow-y: auto;
 }
 .acitem { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 9px 12px; font-size: 13.5px; cursor: pointer; }
-.acitem:hover { background: var(--accent-soft); color: var(--accent); }
+.acitem:hover { background: var(--accent-fill); color: #fff; }
 
 .plancontent { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 46%); min-height: 0; }
 @media (max-width: 900px) { .plancontent { grid-template-columns: 1fr; grid-template-rows: 1fr 360px; } }
@@ -177,7 +191,7 @@ body { background: var(--bg); color: var(--ink); }
   display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
   border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 9px 12px; cursor: pointer; text-align: left;
 }
-.reachitem:hover { border-color: var(--accent); background: var(--accent-soft); }
+.reachitem:hover { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; }
 .reachitem .rname { font-size: 13.5px; font-weight: 600; }
 .reachitem .rtrips { font-size: 11px; color: var(--muted); }
 
@@ -199,7 +213,7 @@ body { background: var(--bg); color: var(--ink); }
 .dep .aprx { font-size: 12.5px; }
 .aprxlegend {
   font-size: 11.5px; line-height: 1.5; color: var(--muted);
-  background: var(--accent-soft); border-radius: 8px;
+  background: var(--wash); border-radius: 8px;
   padding: 7px 10px; margin: 0 0 10px;
 }
 .aprxlegend b { font-style: italic; color: var(--ink); white-space: nowrap; }
@@ -241,7 +255,7 @@ body { background: var(--bg); color: var(--ink); }
   font-size: 11px; font-weight: 700; white-space: nowrap;
 }
 .faretag.once { background: var(--ink); color: #fff; }
-.faretag.many { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+.faretag.many { background: var(--accent-fill); color: #fff; border: 1px solid var(--accent-fill); }
 .faretag.area { background: var(--bg); color: var(--muted); border: 1px dashed var(--line); font-weight: 600; }
 .connfarelbl.once { color: var(--ink); font-weight: 700; }
 .connfarelbl.many { color: var(--accent); font-weight: 700; }
@@ -260,7 +274,12 @@ body { background: var(--bg); color: var(--ink); }
    name is not its area, and telling somebody "no" about KHAYELITSHA while SITE C and
    MAKHAZA are one change away answers the wrong question. */
 .altbox { margin: 0 0 12px; }
-.altbox.better { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; }
+/* A call to action, so it takes the solid accent rather than a wash of it. Everything
+   sitting on that fill has to be told it is on a dark surface: --muted is near-black by
+   design, and inheriting it here is what once left a boarding time invisible. */
+.altbox.better { border: 1px solid var(--accent-fill); background: var(--accent-fill); border-radius: 10px; padding: 10px 12px; }
+.altbox.better .altlbl { color: #fff; }
+.altbox.better .alticon { color: #fff; }
 .altbox.better .altlbl { font-weight: 500; display: flex; align-items: flex-start; gap: 7px; }
 .alticon { flex: none; color: var(--accent); margin-top: 1px; }
 .altlbl { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 7px; }
@@ -270,7 +289,7 @@ body { background: var(--bg); color: var(--ink); }
   border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
   padding: 7px 10px; font: inherit; cursor: pointer;
 }
-.altitem:hover { border-color: var(--accent); background: var(--accent-soft); }
+.altitem:hover { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; }
 .altname { font-size: 13px; font-weight: 700; }
 .altmeta { font-size: 11px; color: var(--muted); }
 
@@ -297,14 +316,14 @@ body { background: var(--bg); color: var(--ink); }
   border-radius: 7px; padding: 3px 8px; font: inherit; font-size: 11px;
   font-weight: 700; cursor: pointer;
 }
-.tsclose:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.tsclose:hover { border-color: var(--accent-fill); color: #fff; background: var(--accent-fill); }
 
 .optcard {
   display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: #fff;
   border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer;
 }
 .optcard:hover { border-color: var(--accent); }
-.optcard.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.optcard.active { border-color: var(--accent); border-width: 2px; }
 .opthead { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
 .optroute { font-weight: 700; font-size: 14px; }
 .optmeta { display: flex; gap: 6px; flex-shrink: 0; }
@@ -338,14 +357,19 @@ body { background: var(--bg); color: var(--ink); }
 .pinbtn.armed { background: var(--accent); color: #fff; border-color: var(--accent); }
 .acsub { color: var(--muted); font-size: 11px; }
 .approxtag { color: var(--accent); font-weight: 600; }
-.approxpill { font-size: 11px; background: var(--accent-soft); color: var(--accent); border-radius: 6px; padding: 2px 8px; font-weight: 700; }
+.approxpill { font-size: 11px; background: var(--accent-fill); color: #fff; border-radius: 6px; padding: 2px 8px; font-weight: 700; }
 
 /* clickable departures + stop-by-stop strip */
 .opthead { cursor: pointer; }
 .depshint { font-size: 11px; color: var(--muted); margin: 0 0 7px; }
 .browsehint { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
 .dep { border: none; cursor: pointer; font: inherit; }
-.dep:hover { background: var(--accent-soft); }
+/* Solid on hover, with the children given a colour for the dark fill - .da, .at,
+   .aprx and .depfare all resolve to near-black otherwise and vanish. */
+.dep:hover { background: var(--accent-fill); color: #fff; }
+.dep:hover .da, .dep:hover .at { color: #fff; }
+.dep:hover .aprx { color: rgba(255,255,255,.85); border-bottom-color: rgba(255,255,255,.6); }
+.dep:hover .depfare { color: #fff; }
 .dep.on { background: var(--ink); color: #fff; }
 .dep.on .da, .dep.on .at { color: #fff; }
 /* An approximate time sets its own muted colour, which on the selected chip's dark
@@ -408,7 +432,7 @@ body { background: var(--bg); color: var(--ink); }
 .arrowin { color: var(--accent); font-weight: 700; margin: 0 5px; }
 .placerow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .placelbl { font-size: 12px; color: var(--muted); }
-.placechip { border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent);
+.placechip { border: 1px solid var(--accent-fill); background: var(--accent-fill); color: #fff;
   border-radius: 20px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
 .placechip:hover { background: var(--accent); color: #fff; }
 
@@ -417,7 +441,7 @@ body { background: var(--bg); color: var(--ink); }
 .nearbyitem { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
   border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 9px 12px; margin-bottom: 8px;
   cursor: pointer; text-align: left; }
-.nearbyitem:hover { border-color: var(--accent); background: var(--accent-soft); }
+.nearbyitem:hover { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; }
 .nearbyitem .rname { font-size: 14px; font-weight: 600; }
 .nearbyitem .rtrips { font-size: 12px; color: var(--muted); }
 .dayalt { margin-bottom: 10px; }
@@ -431,7 +455,7 @@ body { background: var(--bg); color: var(--ink); }
 .depwrap { display: flex; flex-direction: column; gap: 3px; }
 .depwrap .dep { width: 100%; }
 .addbtn { border: 1px dashed var(--line); background: transparent; color: var(--muted); border-radius: 7px; padding: 3px 6px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
-.addbtn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.addbtn:hover { border-color: var(--accent-fill); color: #fff; background: var(--accent-fill); }
 .addbtn.on { border-style: solid; border-color: var(--accent); background: var(--accent); color: #fff; }
 .depwrap.planned .dep { box-shadow: inset 0 0 0 2px var(--accent); }
 
@@ -453,7 +477,7 @@ body { background: var(--bg); color: var(--ink); }
 .plannercard.dragging { box-shadow: 0 10px 28px rgba(0,0,0,.16); }
 .plannercard.clash { border-color: var(--accent); }
 
-.clashnote { background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; padding: 7px 12px; border-bottom: 1px solid var(--line); }
+.clashnote { background: var(--accent-fill); color: #fff; font-size: 12px; font-weight: 700; padding: 7px 12px; border-bottom: 1px solid var(--line); }
 
 .plannertop { display: flex; align-items: stretch; gap: 10px; padding: 10px 12px; }
 
@@ -507,10 +531,10 @@ body { background: var(--bg); color: var(--ink); }
 /* ---- Result banners: direct (green), needs a change (orange), impossible (red) ---- */
 .banner { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border-radius: 9px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; border: 1px solid; }
 .banner svg { flex: none; margin-top: 1px; }
-.banner.good { background: #eefaf1; border-color: #9ed8b0; color: #12683a; }
-.banner.warn { background: var(--accent-soft); border-color: #ffb494; color: #a32b00; }
-.banner.bad  { background: #fdeeee; border-color: #eaa7a7; color: #9c1c1c; }
-.banner.info { background: #f2f4f7; border-color: var(--line); color: var(--muted); }
+.banner.good { background: var(--good); border-color: var(--good); color: #fff; }
+.banner.warn { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+.banner.bad  { background: var(--bad); border-color: var(--bad); color: #fff; }
+.banner.info { background: var(--wash); border-color: var(--line); color: var(--ink); }
 
 .connlist { display: flex; flex-direction: column; gap: 10px; }
 .conncard { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 11px 12px; }
@@ -533,13 +557,17 @@ body { background: var(--bg); color: var(--ink); }
   background: none; border: none; font: inherit; color: inherit;
   text-align: left; cursor: pointer;
 }
-.connlegbtn:hover { background: var(--accent-soft); }
+.connlegbtn:hover { background: var(--accent-fill); color: #fff; }
+.connlegbtn:hover .connlegroute,
+.connlegbtn:hover .connlegdash,
+.connlegbtn:hover .connlegfare,
+.connlegbtn:hover .connlegchev { color: #fff; }
 .connlegchev { flex: none; color: var(--muted); transition: transform .15s ease; }
 .connlegchev.up { transform: rotate(180deg); }
 .connlegdetail { padding: 0 9px 9px; }
 .connlegfarenote {
   margin: 0 0 8px; padding: 6px 9px; border-radius: 7px;
-  background: var(--accent-soft); font-size: 11.5px; line-height: 1.5; color: var(--muted);
+  background: var(--wash); font-size: 11.5px; line-height: 1.5; color: var(--ink);
 }
 .connlegfarenote b { color: var(--ink); }
 .connlegno { width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
@@ -559,7 +587,7 @@ body { background: var(--bg); color: var(--ink); }
 
 .tsfoot p { margin: 0 0 6px; }
 .tsfoot p:last-child { margin-bottom: 0; }
-.tsfoot code { background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 0 4px; font-size: 11px; }
+.tsfoot code { background: var(--wash); color: var(--ink); border-radius: 4px; padding: 0 4px; font-size: 11px; }
 .notelist { margin: 4px 0 0; padding-left: 18px; }
 .notelist li { margin-bottom: 2px; }
 
