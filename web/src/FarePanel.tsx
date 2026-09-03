@@ -60,8 +60,8 @@ export default function FarePanel(
         )}
         <span className="farelbl">
           {perLeg && tickets ? <>for all {tickets} buses. </> : null}
-          <b>Golden Arrow Gold Card</b> price. Cash is <b>higher in peak</b> (16:00–08:00),
-          lower off-peak.
+          <b>Golden Arrow Gold Card</b> price. Cash is <b>higher at peak times</b>, lower
+          off-peak.
         </span>
         {(fare as Fare).zone_approx && (
           <span className="faretag area" title="Published for the surrounding area, not this exact stop">
@@ -129,10 +129,9 @@ export default function FarePanel(
             {isFlat(fare.basis)
               ? 'These are GO Easy prices on a Golden Arrow Gold Card'
               : 'These are Golden Arrow Gold Card prices'}
-            {' '}and do not change with the time of day. A cash fare does: it is higher
-            in peak, which runs 16:00 to 08:00, and lower off-peak between 08:00 and
-            16:00. Golden Arrow does not publish cash fares per journey, so this app
-            cannot show you one.
+            {' '}and do not change with the time of day. A cash fare does: it is higher at
+            peak times and lower off-peak. Golden Arrow does not publish cash fares per
+            journey, so this app cannot show you one — ask the driver.
           </p>
         </div>
       )}
