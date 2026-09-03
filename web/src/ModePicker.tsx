@@ -85,10 +85,7 @@ export default function ModePicker() {
   }, [showAll])
 
   return (
-    <div className="relative mb-3 flex flex-wrap items-center gap-3" ref={box}>
-      <span className="text-[11px] font-bold tracking-[.05em] text-muted uppercase">
-        Transport
-      </span>
+    <div className="modepicker relative flex flex-wrap items-center gap-1.5" ref={box}>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
         {ready.map((m) => (
           <Chip key={m.id} mode={m} on={modes.has(m.id)} onToggle={() => modes.toggle(m.id)} />

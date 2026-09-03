@@ -574,9 +574,7 @@ export default function PlanView() {
           )}
           {!modes.none && stage === 'from' && (
             <div className="placeholder">
-              Type where you want to start. It can be a bus stop, or any place or address,
-              even one that is not a listed stop like Woodstock. You can also tap <b>Map</b> and
-              pick a point.
+              Search a stop or place above, or tap <b>Map</b> to drop a pin.
             </div>
           )}
 
@@ -731,6 +729,11 @@ export default function PlanView() {
                 return (
                   <div key={i} className={`optcard ${i === sel ? 'active' : ''}`}>
                     <div className="opthead" onClick={() => setSel(i)}>
+                      {/* Which choice this is. Two buses to the same place, one above the
+                          other, gave no sense of order or of how many there were. */}
+                      <span className="optrank" aria-label={`Route choice ${i + 1} of ${plan.length}`}>
+                        {i + 1}
+                      </span>
                       <div className="signblock">
                         <div className="signlbl">Look for the bus to</div>
                         <div className="signdest">{sign.terminus}</div>

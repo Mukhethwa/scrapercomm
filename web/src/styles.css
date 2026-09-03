@@ -176,6 +176,10 @@ body { background: var(--bg); color: var(--ink); }
 .acitem { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 9px 12px; font-size: 13.5px; cursor: pointer; }
 .acitem:hover { background: var(--accent-fill); color: #fff; }
 
+/* The transport row lines up with the fields above it: it had no padding of its own,
+   so it sat flush against the window edge while everything else was inset. */
+.modepicker { padding: 10px 24px; background: var(--bg); border-bottom: 1px solid var(--line); }
+
 .plancontent { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 46%); min-height: 0; }
 .planleft { overflow-y: auto; padding: 16px 22px; }
 .planright { border-left: 1px solid var(--line); display: flex; }
@@ -541,6 +545,12 @@ body { background: var(--bg); color: var(--ink); }
   /* Two fields, a swap and two Map buttons do not fit on a phone in one row: the inputs
      shrank until the stop names were clipped mid-word. */
   .planbar { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px; }
+  .modepicker { padding: 10px 14px; }
+  /* The route line had to share its row with the day pills and wrapped into a column
+     three words wide. It gets the full width now and the pills sit above it. */
+  .opthead { flex-wrap: wrap; }
+  .optmeta { order: -1; width: 100%; justify-content: flex-end; }
+  .signblock { width: 100%; }
   .planbar .field { max-width: none; }
   .planbar .swapbtn { align-self: center; }
   .planleft { padding: 12px 14px; }
@@ -643,6 +653,14 @@ body { background: var(--bg); color: var(--ink); }
   .maplibregl-ctrl-attrib-button {
     @apply bg-transparent! dark:invert;
   }
+}
+
+/* Which route choice this is, so two buses to the same place read as first and second. */
+.optrank {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--ink); color: #fff; font-size: 11.5px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------- narrow screens

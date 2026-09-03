@@ -23,9 +23,12 @@ export default function App() {
       <header className="flex items-baseline gap-2 bg-black px-3 py-2.5 text-white sm:gap-4 sm:px-5 sm:py-3">
         {/* commuttr. wordmark: all-lowercase, heavy, tight, with the orange period.
             font-size and weight are set here rather than inherited, because a button
-            that only inherits its family shrinks to the surrounding text. */}
+            that only inherits its family shrinks to the surrounding text.
+
+            It always returned home, but at 88x19 it was too small to hit with a thumb;
+            -my-2 py-2 grows the tap target without moving the word. */}
         <button
-          className="group inline-flex shrink-0 cursor-pointer items-baseline text-[19px] leading-none font-bold tracking-[-0.03em] lowercase text-white sm:text-[22px]"
+          className="group -my-2 inline-flex shrink-0 cursor-pointer items-baseline py-2 pr-1 text-[19px] leading-none font-bold tracking-[-0.03em] lowercase text-white sm:text-[22px]"
           onClick={() => setTab('plan')}
           aria-label="commuttr home"
         >
