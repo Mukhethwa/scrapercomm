@@ -20,7 +20,7 @@ function duration(minutes: number | null): string {
   return m === 0 ? `${h} h` : `${h} h ${m}`
 }
 
-function legToJourney(leg: ConnectionLeg, dayType: string, dayLabel: string): SavedJourney {
+export function legToJourney(leg: ConnectionLeg, dayType: string, dayLabel: string): SavedJourney {
   return {
     id: `${leg.schedule_id}-${leg.trip_index}-${leg.from_seq}-${leg.to_seq}-${Date.now()}-${Math.random()}`,
     from: { kind: 'stop', id: leg.from_stop_id, name: leg.from_name,

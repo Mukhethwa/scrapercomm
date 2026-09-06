@@ -4,6 +4,24 @@ import PlanView from './PlanView'
 import PlannerView from './PlannerView'
 import RouteBrowser from './RouteBrowser'
 import { usePlanner } from './planner'
+import NewApp from './NewApp'
+
+/**
+ * Which layout to run.
+ *
+ * Two results layouts exist while the operator-grouped one is being judged against the
+ * original. The choice is remembered so a reload does not throw the reviewer back to the
+ * other one mid-comparison. When the new layout wins, this and the old view go together.
+ */
+const SHELL_KEY = 'commuttr:shell'
+
+function readShell(): 'classic' | 'grouped' {
+  try {
+    return localStorage.getItem(SHELL_KEY) === 'grouped' ? 'grouped' : 'classic'
+  } catch {
+    return 'classic'
+  }
+}
 
 type Tab = 'plan' | 'planner' | 'browse'
 
@@ -24,6 +42,7 @@ function Badge({ n }: { n: number }) {
 }
 
 export default function App() {
+  const [shell, setShell] = useState<'classic' | 'grouped'>(readShell)
   const [tab, setTab] = useState<Tab>('plan')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBox = useRef<HTMLDivElement>(null)
@@ -45,6 +64,13 @@ export default function App() {
       document.removeEventListener('mousedown', onDown)
     }
   }, [menuOpen])
+
+  function switchTo(next: 'classic' | 'grouped') {
+    try { localStorage.setItem(SHELL_KEY, next) } catch { /* private window; this visit only */ }
+    setShell(next)
+  }
+
+  if (shell === 'grouped') return <NewApp onLeave={() => switchTo('classic')} />
 
   return (
     <div className="flex h-full flex-col">
@@ -82,6 +108,13 @@ export default function App() {
             </button>
           ))}
         </nav>
+
+        <button
+          className="ml-auto hidden shrink-0 cursor-pointer rounded-lg border border-white/25 px-2.5 py-1.5 text-[12px] font-semibold whitespace-nowrap text-white hover:bg-white/12 sm:inline-flex"
+          onClick={() => switchTo('grouped')}
+        >
+          Try new layout
+        </button>
 
         <div className="relative ml-auto sm:hidden" ref={menuBox}>
           <button
@@ -129,6 +162,22 @@ export default function App() {
                   )}
                 </button>
               ))}
+              {/* The way across to the other layout. It lives in this menu on a phone
+                  for the same reason the tabs do: the header has room for a wordmark and
+                  one control, and that control is the menu. Putting it only in the
+                  desktop bar left the new layout unreachable on the device it was
+                  designed for. */}
+              <div className="border-t border-line" />
+              <button
+                role="menuitem"
+                className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-ink hover:bg-black/5"
+                onClick={() => { switchTo('grouped'); setMenuOpen(false) }}
+              >
+                <span>Try new layout</span>
+                <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold tracking-wide text-white uppercase">
+                  new
+                </span>
+              </button>
             </div>
           )}
         </div>

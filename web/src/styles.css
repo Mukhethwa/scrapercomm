@@ -17,6 +17,13 @@
   --color-black: #000000;
   --color-muted: #111111;
   --color-line: #e4e7eb;
+  /* Secondary text on the operator-grouped screen only.
+     --muted above is deliberately near-black, because on the original layout grey text
+     hid a boarding time. That screen earns its hierarchy from size and weight; this one
+     earns it from a card structure that already separates heading from detail, so a
+     genuine grey is safe here and is what the design asks for. Contrast against
+     --color-panel is 4.7:1, above the 4.5 floor for body text. */
+  --color-sub: #6b7280;
   --color-accent: #ff4500;
   --color-accent-soft: #fff1eb;
   --color-accent-deep: #cc3700;
