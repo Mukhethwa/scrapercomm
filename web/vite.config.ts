@@ -14,6 +14,10 @@ export default defineConfig({
   },
   base: './',
   server: {
+    // Listen on every interface, not just loopback, so a phone on the same Wi-Fi can
+    // reach the dev server. The /api proxy below is made by this server rather than by
+    // the browser, so it still resolves localhost:8000 correctly from a remote device.
+    host: true,
     proxy: { '/api': 'http://localhost:8000' },
   },
   build: { outDir: 'dist', emptyOutDir: true },
