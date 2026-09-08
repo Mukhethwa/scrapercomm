@@ -83,7 +83,7 @@ function Block({ block, planned, onAdd, onOpen, open }: {
      * The open one deepens rather than lightens, and takes a white ring: on a row of
      * identical orange blocks a border colour alone does not register.
      */
-    <div className={`flex w-[150px] shrink-0 flex-col gap-1 p-3 text-white ${
+    <div className={`flex h-full w-[150px] shrink-0 flex-col gap-1 p-3 text-white ${
       open ? 'bg-accent-fill ring-2 ring-white ring-inset' : 'bg-accent'}`}>
       <button className="cursor-pointer text-left" onClick={onOpen}
         title="See the whole trip, and where you get on and off">
@@ -111,7 +111,7 @@ function Block({ block, planned, onAdd, onOpen, open }: {
         {stops && <span className={d.stop_count === 0 ? 'font-semibold text-white' : ''}>{stops}</span>}
       </div>
       <button
-        className={`mt-1 cursor-pointer border px-2 py-1.5 text-[11px] font-semibold ${
+        className={`mt-auto cursor-pointer border px-2 py-1.5 text-[11px] font-semibold ${
           planned
             ? 'border-white bg-white text-accent-fill'
             : 'border-white/60 text-white hover:bg-white/15'
@@ -159,7 +159,7 @@ function FullDay({ group, shown, onClose, isPlanned, onAdd, onOpen, openKey }: {
             <div className="mb-2 text-[11px] font-bold tracking-[.05em] text-sub uppercase">
               {bucket.label}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-stretch gap-2">
               {bucket.blocks.map((b) => (
                 <Block
                   key={`${b.optionIndex}-${b.departureIndex}`}
@@ -236,7 +236,7 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
           square. */}
       <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto py-1">
         {shown.map((b) => (
-          <div className="snap-start" key={`${b.optionIndex}-${b.departureIndex}`}>
+          <div className="flex snap-start" key={`${b.optionIndex}-${b.departureIndex}`}>
             <Block
               block={b}
               planned={isPlanned(b)}

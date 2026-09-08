@@ -92,7 +92,7 @@ function OptionBlock({ conn, chosen, planned, onChoose, onAdd }: {
   return (
     /* The same solid tile the direct departures use, so the two carousels read as one
        system rather than two. */
-    <div className={`flex w-[172px] shrink-0 flex-col gap-1 p-3 text-white ${
+    <div className={`flex h-full w-[172px] shrink-0 flex-col gap-1 p-3 text-white ${
       chosen ? 'bg-accent-fill ring-2 ring-white ring-inset' : 'bg-accent'}`}>
       <button className="flex cursor-pointer flex-col items-start gap-1 text-left" onClick={onChoose}
         title="See the buses on this journey">
@@ -128,7 +128,7 @@ function OptionBlock({ conn, chosen, planned, onChoose, onAdd }: {
         </div>
       )}
       <button
-        className={`mt-1 cursor-pointer border px-2 py-1.5 text-[11px] font-semibold ${
+        className={`mt-auto cursor-pointer border px-2 py-1.5 text-[11px] font-semibold ${
           planned
             ? 'border-white bg-white text-accent-fill'
             : 'border-white/60 text-white hover:bg-white/15'
@@ -226,7 +226,7 @@ export default function ConnectionsCard({ connections, onChoose }: {
 
       <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto py-1">
         {options.map((c, i) => (
-          <div className="snap-start" key={i}>
+          <div className="flex snap-start" key={i}>
             <OptionBlock
               conn={c}
               chosen={i === pick}
