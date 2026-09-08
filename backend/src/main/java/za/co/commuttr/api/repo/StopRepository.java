@@ -66,10 +66,10 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
             FROM stop s
             LEFT JOIN operator o ON o.id = s.operator_id
             WHERE s.lat IS NOT NULL
-              AND lat BETWEEN :minLat AND :maxLat
-              AND lon BETWEEN :minLon AND :maxLon
-              AND id <> :toStopId
-              AND id <> COALESCE(CAST(:excludeStopId AS integer), -1)
+              AND s.lat BETWEEN :minLat AND :maxLat
+              AND s.lon BETWEEN :minLon AND :maxLon
+              AND s.id <> :toStopId
+              AND s.id <> COALESCE(CAST(:excludeStopId AS integer), -1)
             """, nativeQuery = true)
     List<StopRow> findInBoundingBox(@Param("minLat") double minLat,
                                     @Param("maxLat") double maxLat,
