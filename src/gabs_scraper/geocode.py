@@ -162,26 +162,37 @@ def geocode_nominatim(session, name):
     return None
 
 
-def run(force: bool = False, retry_failed: bool = False) -> dict:
+def run(force: bool = False, retry_failed: bool = False,
+        operator: str | None = None) -> dict:
     key = os.environ.get("GOOGLE_MAPS_API_KEY") or None
     google_enabled = key is not None
 
     conn = db.connect()
     ensure_columns(conn)
     cur = conn.cursor()
+    # One operator at a time, because a provider can be reliable for one and not another.
+    # Every Golden Arrow stop was placed by Google and none is badly wrong; the Metrorail
+    # stations fell back to Nominatim when no key was set, and it put WELLINGTON and
+    # MBEKWENI about fifty kilometres from the towns they are in. Redoing those without
+    # touching the 527 that are already right is the difference between a five minute job
+    # and an hour of re-asking questions that were answered correctly the first time.
+    scope = "" if operator is None else " AND o.code = %(operator)s"
+    params = {"operator": operator}
+
     if force:
-        cur.execute("""SELECT s.id, s.name, o.kind FROM stop s
-                       LEFT JOIN operator o ON o.id = s.operator_id ORDER BY s.name""")
+        cur.execute("SELECT s.id, s.name, o.kind FROM stop s "
+                    "LEFT JOIN operator o ON o.id = s.operator_id "
+                    "WHERE true" + scope + " ORDER BY s.name", params)
     elif retry_failed:
         # Everything still unplaced, including stops already marked "notfound" - the point
         # of a retry is that the readings tried have changed.
-        cur.execute("""SELECT s.id, s.name, o.kind FROM stop s
-                       LEFT JOIN operator o ON o.id = s.operator_id
-                       WHERE s.lat IS NULL ORDER BY s.name""")
+        cur.execute("SELECT s.id, s.name, o.kind FROM stop s "
+                    "LEFT JOIN operator o ON o.id = s.operator_id "
+                    "WHERE s.lat IS NULL" + scope + " ORDER BY s.name", params)
     else:
-        cur.execute("""SELECT s.id, s.name, o.kind FROM stop s
-                       LEFT JOIN operator o ON o.id = s.operator_id
-                       WHERE s.geocoded_at IS NULL ORDER BY s.name""")
+        cur.execute("SELECT s.id, s.name, o.kind FROM stop s "
+                    "LEFT JOIN operator o ON o.id = s.operator_id "
+                    "WHERE s.geocoded_at IS NULL" + scope + " ORDER BY s.name", params)
     rows = cur.fetchall()
 
     g = requests.Session(); g.headers.update({"User-Agent": USER_AGENT})
@@ -251,5 +262,7 @@ if __name__ == "__main__":
     ap.add_argument("--force", action="store_true", help="re-geocode every stop from scratch")
     ap.add_argument("--retry-failed", action="store_true",
                     help="re-try every stop that still has no coordinates")
+    ap.add_argument("--operator", metavar="CODE",
+                    help="only this operator's stops, e.g. metrorail")
     args = ap.parse_args()
-    run(force=args.force, retry_failed=args.retry_failed)
+    run(force=args.force, retry_failed=args.retry_failed, operator=args.operator)
