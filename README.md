@@ -1,12 +1,17 @@
-# Commuttr — Cape Town bus journey planner
+# Commuttr — Cape Town journey planner
 
-Commuttr tells a commuter which Golden Arrow bus to catch, from where, and at what time.
+Commuttr tells a commuter which bus or train to catch, from where, and at what time.
 
 Golden Arrow publishes its timetables as roughly 1,900 PDF files on
 <https://www.gabs.co.za/Timetable.aspx> — readable by a person, useless to software. This
 project downloads every one of them, reads the departure grids out of them, stores the
 result in a database, and serves it through an API that a React app turns into a trip
 planner.
+
+Metrorail's are worse: five PDFs of **scanned images**, with no text layer to read and no
+GTFS feed anywhere. Those go through an OCR pipeline of their own — see
+[Refreshing the train timetables](#refreshing-the-train-timetables) — into the same tables,
+so a train is planned by the same engine that plans a bus.
 
 **New here? Jump to [Getting it running](#getting-it-running).**
 **Just want a command? Jump to [Command reference](#command-reference).**
@@ -21,7 +26,8 @@ planner.
 - [Command reference](#command-reference) — every command, what it does, when you need it
 - [Looking inside the database](#looking-inside-the-database)
 - [Reading the search analytics](#reading-the-search-analytics)
-- [Refreshing the timetables](#refreshing-the-timetables)
+- [Refreshing the bus timetables](#refreshing-the-bus-timetables)
+- [Refreshing the train timetables](#refreshing-the-train-timetables) — the OCR pipeline
 - [How the pieces fit together](#how-the-pieces-fit-together)
 - [Data model](#data-model)
 - [Example queries](#example-queries)
@@ -93,8 +99,9 @@ The repository ships a snapshot of the fully-loaded database, so you don't have 
 download and parse 1,900 PDFs yourself. **This takes seconds.**
 
 The snapshot carries everything the app needs to be useful: timetables, stop coordinates
-and the fare tables. You do not need to run the scraper, the geocoder or the fare jobs to
-get a working app with prices on it.
+and the fare tables, for both operators - Golden Arrow's buses and Metrorail's trains. You
+do not need to run the scraper, the geocoder, the fare jobs or the OCR to get a working
+app with prices on it.
 
 ```bash
 docker cp data/gabs_dump.sql.gz gabs_pg:/tmp/dump.sql.gz
@@ -114,9 +121,16 @@ journeys with no prices:
 docker exec gabs_pg psql -U gabs -d gabs -c "SELECT count(*) FROM journey_fare"
 ```
 
-Around **20,400** is right.
+Around **20,400** is right. And that both operators are there, since the Metro Rail
+filter is dead without the train timetables:
 
-> No snapshot in your copy? See [Refreshing the timetables](#refreshing-the-timetables) to
+```bash
+docker exec gabs_pg psql -U gabs -d gabs -c "SELECT o.code, count(r.id) FROM operator o LEFT JOIN route r ON r.operator_id = o.id GROUP BY o.code"
+```
+
+**793** for `gabs` and **13** for `metrorail` is right.
+
+> No snapshot in your copy? See [Refreshing the bus timetables](#refreshing-the-bus-timetables) to
 > build the database from the live site instead. That takes about 90 minutes.
 
 ### Step 3 — Start the API
@@ -249,7 +263,7 @@ cd web && npm run build
 ### `python -m gabs_scraper.pipeline --all`
 
 **Downloads the latest timetables from Golden Arrow and loads them.** Takes roughly
-90 minutes. See [Refreshing the timetables](#refreshing-the-timetables) before running it —
+90 minutes. See [Refreshing the bus timetables](#refreshing-the-bus-timetables) before running it —
 it also *deletes* withdrawn timetables.
 
 ```bash
@@ -293,6 +307,27 @@ Python service read one set of numbers instead of each resolving fares themselve
 
 ```bash
 PYTHONPATH=src python -m gabs_scraper.pricing
+```
+
+### `python -m prasa_scraper.pipeline`
+
+**Reads the Metrorail timetables** out of the scanned PDFs in `data/prasa/pdfs` and loads
+what passes its checks. Takes about 20 minutes for all five files.
+
+Each table on a page is read and checked on its own, and a table that fails is reported
+and **held back rather than loaded** — the whole point of the checks is that times nobody
+has looked at do not quietly become departure times a rider trusts.
+
+```bash
+# Everything
+PYTHONPATH=src python -m prasa_scraper.pipeline
+
+# One file, or one page of it, writing nothing
+PYTHONPATH=src python -m prasa_scraper.pipeline --pdf southern-line-weekday.pdf --dry-run
+PYTHONPATH=src python -m prasa_scraper.pipeline --page 2 --dry-run
+
+# Load a held table anyway, once its problems have been reviewed
+PYTHONPATH=src python -m prasa_scraper.pipeline --pdf northern-line-weekday.pdf --force
 ```
 
 ### `python -m pytest -q`
@@ -498,7 +533,7 @@ recorded.
 
 ---
 
-## Refreshing the timetables
+## Refreshing the bus timetables
 
 Golden Arrow republishes timetables constantly — 16 changed during a single afternoon in
 August 2026, and many files expire within days. **Data goes stale fast.** This should
@@ -578,6 +613,39 @@ PYTHONPATH=src python -m gabs_scraper.pipeline --load       # read them into the
 
 ---
 
+## Refreshing the train timetables
+
+PRASA does not publish a feed. What it publishes is five PDFs, and inside them are
+photographs of printed sheets: about 50 characters of text layer per page against 3,249 on
+a Golden Arrow one. There is nothing to parse, so the grids are read with OCR.
+
+```bash
+# Read every PDF and load what passes (~20 minutes)
+PYTHONPATH=src python -m prasa_scraper.pipeline
+
+# Put the new stations on the map
+PYTHONPATH=src python -m gabs_scraper.geocode
+```
+
+The PDFs live in `data/prasa/pdfs` and are committed, the same way the Golden Arrow ones
+are, so a rerun reads the same sheets rather than whatever the site serves today.
+
+### What "held" means in the output
+
+Reading a photograph of a table is guesswork, so every cell is checked twice: against the
+shape of a time, and against the column it sits in — a train cannot reach a later station
+earlier than an earlier one. A table with anything unresolved is printed as `HOLD` and
+**not loaded**.
+
+```
+  load  southern-line-weekday.pdf p2.1: RETREAT - CAPE TOWN - 16 stops, 42 trips, 672 times
+  HOLD  central-line-kapteinsklip-weekday.pdf p3.1: 9 unresolved of 148 times
+```
+
+Roughly 97% of cells read cleanly. The Central Line's weekend sheets are printed on a blue
+ground that defeats grid detection entirely, and those tables are still held — the app
+shows no Central Line weekend trains rather than wrong ones.
+
 ## How the pieces fit together
 
 ```
@@ -622,9 +690,11 @@ Technical detail on the Java service is in [backend/README.md](backend/README.md
 
 | Table | What it holds |
 |---|---|
-| `route` | Origin–destination pair (`AIRPORT IND-BELLVILLE`), letter group |
+| `operator` | Who runs the service: `gabs` (bus), `metrorail` (train) |
+| `route` | Origin–destination pair (`AIRPORT IND-BELLVILLE`), letter group, `operator_id` |
 | `timetable` | One PDF version: number, public-holiday flag, effective dates, URL, sha256, `raw_text`, `parse_status` |
-| `stop` | Distinct stop / timing-point names, plus coordinates once geocoded |
+| `stop` | Distinct stop / timing-point names, plus coordinates once geocoded, `operator_id` |
+| `stop_interchange` | Where a bus stop and a station are the same place, for changing between them |
 | `schedule` | A (direction, day-type) block: direction label, `day_type`, `day_label`, per-page number, `no_service` |
 | `schedule_stop` | Ordered stops of a schedule (`stop_sequence`) |
 | `trip` | One bus run (a column in the printed grid), with footnote `note_codes` |
@@ -633,6 +703,11 @@ Technical detail on the Java service is in [backend/README.md](backend/README.md
 | `leg_geometry` | The real road path between two consecutive stops, for map drawing and custom-stop matching |
 | `search_analytics` | One row per journey search |
 | `search_analytics_option` | One row per route a search returned |
+
+Stops and routes are unique **per operator**, not globally: RETREAT is both a Golden
+Arrow stop and a Metrorail station, and they are different places a rider stands. That is
+why the search results label each one, and why `stop_interchange` exists to say where two
+such rows are in fact walking distance apart.
 
 `day_type` is a coarse bucket (`WEEKDAY`/`SATURDAY`/`SUNDAY`/`PUBLIC_HOLIDAY`/`OTHER`);
 `day_label` preserves the exact PDF header, e.g. `MONDAYS TO FRIDAYS`. Public-holiday PDFs
