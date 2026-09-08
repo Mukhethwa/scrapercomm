@@ -34,6 +34,11 @@ ALIASES = {
     # Read as one word, or with the full stop the sheet does not print. The key already
     # joins these to the right station; what they need is the spelling to store, because
     # whichever variant happened to be read first is the one a rider sees in the list.
+    # The weekend outbound sheet is printed in Afrikaans where the inbound one is not:
+    # it lists VISHOEK between KALKBAAI and SUNNY COVE, which is exactly where FISH HOEK
+    # sits on the inbound sheet. Same station, same line, two languages - and without
+    # this, one of them becomes a station the other half of the line cannot reach.
+    "VISHOEK": "FISH HOEK",
     "ST.JAMES": "ST JAMES",
     "STJAMES": "ST JAMES",
     "MELTONROSE": "MELTON ROSE",

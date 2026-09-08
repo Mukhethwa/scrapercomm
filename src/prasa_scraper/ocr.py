@@ -77,6 +77,13 @@ LABEL_CONFIG = "--psm 11"
 # detection outright.
 REFERENCE_WIDTH = 3250
 
+# Both conditions matter, because neither alone separates a table from the page's own
+# furniture. On the Southern Line's weekend sheets the title bar and footer measure 40 to
+# 104 pixels with 0 or 1 column rules; the shallowest real table - a three-station branch
+# working - is 92 pixels, the same height, but has 24. A tall band with no columns is the
+# Central Line's blue sheets, which is a detection failure worth reporting, not furniture.
+MIN_TABLE_HEIGHT = 150
+
 
 def _scale(width: int) -> float:
     return max(0.5, width / REFERENCE_WIDTH)
@@ -436,6 +443,16 @@ def _read_block(gray, panel_ink, left, top, y0, y1, heading) -> Grid:
     grid = Grid(heading=heading)
     cols = _column_edges(ink)
     if len(cols) < 10:
+        # No columns at all, on a band too shallow to hold a timetable, is the page's own
+        # furniture: the red title bar at the top and the operator logos at the foot are
+        # both split off as blocks. Calling those failed tables made a fully-read page
+        # report two failures out of four blocks, and I read that as lost services and
+        # went looking for a coverage problem that was not there.
+        #
+        # A real table is many rows deep. Anything under a few is not one, and saying so
+        # is not the same as passing over a grid that could not be found.
+        if len(cols) < 3 and (y1 - y0) < MIN_TABLE_HEIGHT:
+            return grid
         grid.problems.append(Problem("grid", f"only {len(cols)} column rules found"))
         return grid
 

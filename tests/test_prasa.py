@@ -197,6 +197,16 @@ def test_prasas_own_variants_are_stated_not_derived():
     assert canonical("DIEPRIVER") == "DIEPRIVIER"
 
 
+def test_the_afrikaans_name_is_the_same_station():
+    from prasa_scraper.stations import canonical, key
+    # One line, two sheets, two languages: the weekend outbound timetable lists VISHOEK
+    # where the inbound one lists FISH HOEK, in the same position between KALKBAAI and
+    # SUNNY COVE. Loading both spellings puts half the Southern Line out of reach of the
+    # other half. No rule derives one from the other, so it is stated.
+    assert canonical("VISHOEK") == "FISH HOEK"
+    assert key(canonical("VISHOEK")) == key(canonical("FISH HOEK"))
+
+
 def test_a_station_is_stored_under_the_spelling_a_rider_reads():
     from prasa_scraper.stations import canonical, key
     # Collapsing variants to one row is only half the job: the row keeps whichever
@@ -334,3 +344,33 @@ def test_a_damaged_neighbour_cannot_prove_anything():
     _restore_dropped_hour(g)
     assert [r[0] for r in g.times] == ["7:10", "7:20"]
     assert len(g.unverified()) == 2
+
+
+# ---------------------------------------- telling a table from the page's furniture
+
+def test_a_title_bar_is_not_a_failed_table():
+    # The red banner and the footer logos are split off as blocks like anything else.
+    # Reporting them as tables that failed made a fully-read page look half lost, and I
+    # went looking for missing services that were never missing.
+    from prasa_scraper.ocr import _read_block
+    import numpy as np
+    from PIL import Image
+
+    page = np.zeros((200, PAGE_WIDTH), dtype=bool)
+    gray = Image.fromarray(np.full((200, PAGE_WIDTH), 255, dtype=np.uint8))
+    grid = _read_block(gray, page, 0, 0, 0, 100, "")     # short, no column rules
+    assert grid.problems == []
+
+
+def test_a_tall_band_with_no_grid_is_still_reported():
+    # The Central Line's weekend sheets are printed on a ground that defeats detection
+    # outright. Those are full-page tables and a real failure - saying nothing about them
+    # is how a missing line goes unnoticed.
+    from prasa_scraper.ocr import _read_block
+    import numpy as np
+    from PIL import Image
+
+    page = np.zeros((900, PAGE_WIDTH), dtype=bool)
+    gray = Image.fromarray(np.full((900, PAGE_WIDTH), 255, dtype=np.uint8))
+    grid = _read_block(gray, page, 0, 0, 0, 800, "")
+    assert any(p.kind == "grid" for p in grid.problems)
