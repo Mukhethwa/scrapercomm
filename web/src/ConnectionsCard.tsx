@@ -66,6 +66,49 @@ export function connectionsFrom(connections: Connection[], minutes: number | nul
   })
 }
 
+/** A clock time inside a cell, if the timetable printed one. */
+const CLOCK = /\d{1,2}:\d{2}[a-z]?/i
+
+function clockIn(raw: string | null | undefined): string | null {
+  const m = (raw || '').match(CLOCK)
+  return m ? m[0] : null
+}
+
+/**
+ * What a leg's end actually says, in words a reader can act on.
+ *
+ * Most Metrorail and Golden Arrow stops are printed as "via": the service passes, but no
+ * time is published for it. Rendering that literally produced "arrives via", which tells a
+ * rider nothing and reads like a bug.
+ *
+ * The most that can honestly be said is that it cannot get there before the last time the
+ * timetable does publish - so that is what is said, using the nearest known time on the
+ * same journey. Where nothing nearby is published either, it says so plainly rather than
+ * inventing a bound.
+ */
+function endLabel(raw: string | null | undefined, fallback: string | null,
+                  notBefore: string | null = null): string {
+  const own = clockIn(raw)
+  if (own) return own
+  // A bound equal to the time the rider boards adds nothing, and worse, "17:00 to after
+  // 17:00" hints the ride is instant. Where the bound would only repeat what they already
+  // know, say plainly that no time is published.
+  if (!fallback || (notBefore && fallback === notBefore)) return 'no set time'
+  return `after ${fallback}`
+}
+
+/** The last time this journey publishes at or before a given leg. */
+function knownBy(conn: Connection, index: number): string | null {
+  for (let i = index; i >= 0; i--) {
+    const leg = conn.legs[i]
+    const arrive = i < index ? clockIn(leg.arrive_raw) : null
+    if (arrive) return arrive
+    const board = clockIn(leg.board_raw)
+    if (board) return board
+  }
+  return null
+}
+
 /** One whole itinerary, carrying everything that used to separate one card from another. */
 function OptionBlock({ conn, chosen, planned, onChoose, onAdd }: {
   conn: Connection
@@ -86,8 +129,10 @@ function OptionBlock({ conn, chosen, planned, onChoose, onAdd }: {
    * unpublished the arrival leads instead, because it is published and it differs.
    */
   const departureKnown = first.board_minutes != null
-  const lead = departureKnown ? first.board_raw : last.arrive_raw
-  const under = departureKnown ? `arrives ${last.arrive_raw}` : 'no published departure'
+  const lastIndex = conn.legs.length - 1
+  const arrival = endLabel(last.arrive_raw, knownBy(conn, lastIndex))
+  const lead = departureKnown ? first.board_raw : arrival
+  const under = departureKnown ? `arrives ${arrival}` : 'no published departure'
 
   return (
     /* The same solid tile the direct departures use, so the two carousels read as one
@@ -149,6 +194,15 @@ export default function ConnectionsCard({ connections, onChoose }: {
 }) {
   const planner = usePlanner()
   const [pick, setPick] = useState(0)
+  /**
+   * Which journey is opened, if any.
+   *
+   * Nothing is expanded until a rider asks for it. The card's job is to let them compare
+   * six ways of making the trip; the legs, the fare breakdown and the planner button
+   * belong to one of those six, and showing them for whichever happened to be first put a
+   * screenful of detail about an arbitrary choice under the row they were still reading.
+   */
+  const [expanded, setExpanded] = useState(false)
   const [openLeg, setOpenLeg] = useState<number | null>(null)
   const [stops, setStops] = useState<TripStop[] | null>(null)
   const [notes, setNotes] = useState<TripNote[]>([])
@@ -231,7 +285,12 @@ export default function ConnectionsCard({ connections, onChoose }: {
               conn={c}
               chosen={i === pick}
               planned={isPlanned(c)}
-              onChoose={() => { setPick(i); setOpenLeg(null) }}
+              onChoose={() => {
+                // Tapping the open one closes it again, the way the departure tiles do.
+                setExpanded(!(expanded && i === pick))
+                setPick(i)
+                setOpenLeg(null)
+              }}
               onAdd={() => toggle(c)}
             />
           </div>
@@ -241,8 +300,12 @@ export default function ConnectionsCard({ connections, onChoose }: {
       {options.length > 1 && (
         <div className="mt-1 text-[11px] text-sub">
           Ordered by least waiting. They differ in where you change and how long you wait.
+          {!expanded && ' Tap one to see its buses.'}
         </div>
       )}
+
+      {expanded && (
+        <>
 
       {/* The buses on the chosen journey. */}
       <div className="mt-3 flex flex-col gap-1.5">
@@ -269,7 +332,8 @@ export default function ConnectionsCard({ connections, onChoose }: {
             </span>
             <span className="flex shrink-0 items-baseline gap-2 sm:flex-col sm:items-end sm:gap-0 sm:text-right">
               <span className="text-[12px] font-semibold text-ink">
-                {l.board_raw} to {l.arrive_raw}
+                {endLabel(l.board_raw, knownBy(conn, i - 1))} to{' '}
+                {endLabel(l.arrive_raw, knownBy(conn, i), clockIn(l.board_raw))}
               </span>
               {l.fare?.per_ride_cents != null && (
                 <span className="text-[11px] text-sub">{rands(l.fare.per_ride_cents)}</span>
@@ -335,6 +399,8 @@ export default function ConnectionsCard({ connections, onChoose }: {
           ? <><Check size={15} weight="bold" aria-hidden="true" /> All {conn.legs.length} legs on your planner</>
           : <><Plus size={15} weight="bold" aria-hidden="true" /> Add all {conn.legs.length} legs to planner</>}
       </button>
+        </>
+      )}
     </div>
   )
 }

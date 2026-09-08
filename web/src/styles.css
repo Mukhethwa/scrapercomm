@@ -253,44 +253,44 @@ body { background: var(--bg); color: var(--ink); }
   border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0;
 }
 .search {
-  margin: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+  margin: 12px; padding: 10px 12px; border: 1px solid var(--line);
   font-size: 14px; outline: none;
 }
 .search:focus { border-color: var(--accent); border-width: 2px; }
 .routelist { overflow-y: auto; flex: 1; padding: 0 8px 12px; }
 .routeitem {
   width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px;
-  padding: 9px 12px; margin: 2px 0; border: none; background: transparent; border-radius: 8px;
+  padding: 9px 12px; margin: 2px 0; border: none; background: transparent;
   text-align: left; cursor: pointer; font-size: 13.5px; color: var(--ink);
 }
 .routeitem:hover { background: var(--bg); }
 .routeitem.active { background: var(--accent-fill); color: #fff; font-weight: 600; }
-.rcount { font-size: 11px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 1px 8px; }
+.rcount { font-size: 11px; color: var(--muted); background: var(--bg); padding: 1px 8px; }
 .routeitem.active .rcount { background: #fff; color: var(--accent); }
 .empty { padding: 16px; color: var(--muted); font-size: 13px; }
 
 .main { flex: 1; overflow-y: auto; padding: 20px 24px; min-width: 0; }
 /* Only ever shown on a phone, where the route list is off screen. */
-.backtolist { display: none; align-items: center; gap: 4px; margin-bottom: 12px; padding: 7px 12px 7px 8px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.backtolist { display: none; align-items: center; gap: 4px; margin-bottom: 12px; padding: 7px 12px 7px 8px; border: 1px solid var(--line); background: var(--panel); font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }
 .backtolist:hover { border-color: var(--accent); color: var(--accent); }
 .placeholder { color: var(--muted); padding: 40px 0; font-size: 15px; }
 .routetitle { font-size: 22px; margin: 0 0 14px; }
 
 .ttbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .chip {
-  border: 1px solid var(--line); background: #fff; border-radius: 20px; padding: 6px 14px;
+  border: 1px solid var(--line); background: #fff; padding: 6px 14px;
   font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
 }
 .chip:hover { border-color: var(--accent); }
 .chip.active { background: var(--ink); color: #fff; border-color: var(--ink); }
 .chip.ph { border-style: dashed; }
-.phbadge { font-size: 9px; font-weight: 700; background: var(--accent); color: #fff; border-radius: 4px; padding: 1px 4px; }
+.phbadge { font-size: 9px; font-weight: 700; background: var(--accent); color: #fff; padding: 1px 4px; }
 
 .toggles { display: flex; flex-wrap: wrap; gap: 22px; margin-bottom: 14px; }
 .toggle-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tlabel { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-right: 2px; }
 .toggle {
-  border: 1px solid var(--line); background: #fff; border-radius: 7px; padding: 6px 12px;
+  border: 1px solid var(--line); background: #fff; padding: 6px 12px;
   font-size: 13px; cursor: pointer; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .toggle:hover { border-color: var(--accent); }
@@ -299,7 +299,7 @@ body { background: var(--bg); color: var(--ink); }
 .content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 44%); gap: 18px; align-items: start; }
 @media (max-width: 1000px) { .content { grid-template-columns: 1fr; } }
 
-.gridpane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+.gridpane { background: var(--panel); border: 1px solid var(--line); padding: 14px; min-width: 0; }
 .daylabel { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
 .noservice { padding: 24px; text-align: center; color: var(--muted); font-style: italic; }
 
@@ -322,7 +322,7 @@ body { background: var(--bg); color: var(--ink); }
 .mappane { position: sticky; top: 8px; }
 /* position: relative so the map's own overlay controls anchor to the map rather
    than escaping to the page. */
-.map-wrap { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.map-wrap { position: relative; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
 .map { height: 520px; width: 100%; }
 .map-note { font-size: 12px; color: var(--muted); padding: 8px 12px; margin: 0; border-top: 1px solid var(--line); }
 
@@ -337,14 +337,14 @@ body { background: var(--bg); color: var(--ink); }
 .planbar .field { display: flex; flex-direction: column; gap: 5px; flex: 1; max-width: 380px; }
 .planbar label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .planbar input {
-  padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; outline: none; width: 100%;
+  padding: 10px 12px; border: 1px solid var(--line); font-size: 14px; outline: none; width: 100%;
 }
 .planbar input:focus { border-color: var(--accent); border-width: 2px; }
 .planbar input:disabled { background: var(--bg); color: var(--muted); }
 .ac { position: relative; }
 .acmenu {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 1000;
-  background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  background: #fff; border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.12);
   max-height: 280px; overflow-y: auto;
 }
 .acitem { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 9px 12px; font-size: 13.5px; cursor: pointer; }
@@ -357,13 +357,13 @@ body { background: var(--bg); color: var(--ink); }
 .plancontent { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 46%); min-height: 0; }
 .planleft { overflow-y: auto; padding: 16px 22px; }
 .planright { border-left: 1px solid var(--line); display: flex; }
-.planright .map-wrap { flex: 1; display: flex; flex-direction: column; border: none; border-radius: 0; }
+.planright .map-wrap { flex: 1; display: flex; flex-direction: column; border: none; }
 .planright .map { flex: 1; height: auto; }
 .mappanel { display: flex; flex-direction: column; min-height: 0; }
 /* A free-standing map is 520px tall. In the new layout it is given a box - a 288px strip
    on a phone, the full right-hand column on a wide screen - and 520px inside either one
    crops the map rather than fitting it, which moves the route off centre. */
-.mappanel .map-wrap { flex: 1; display: flex; flex-direction: column; border: none; border-radius: 0; min-height: 0; }
+.mappanel .map-wrap { flex: 1; display: flex; flex-direction: column; border: none; min-height: 0; }
 .mappanel .map { flex: 1; height: auto; min-height: 0; }
 
 .mapempty { margin: auto; color: var(--muted); font-size: 14px; padding: 24px; text-align: center; }
@@ -375,7 +375,7 @@ body { background: var(--bg); color: var(--ink); }
 .reachlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .reachitem {
   display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
-  border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 9px 12px; cursor: pointer; text-align: left;
+  border: 1px solid var(--line); background: #fff; padding: 9px 12px; cursor: pointer; text-align: left;
 }
 .reachitem:hover { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; }
 .reachitem .rname { font-size: 13.5px; font-weight: 600; }
@@ -399,7 +399,7 @@ body { background: var(--bg); color: var(--ink); }
 .dep .aprx { font-size: 12.5px; }
 .aprxlegend {
   font-size: 11.5px; line-height: 1.5; color: var(--muted);
-  background: var(--wash); border-radius: 8px;
+  background: var(--wash);
   padding: 7px 10px; margin: 0 0 10px;
 }
 .aprxlegend b { font-style: italic; color: var(--ink); white-space: nowrap; }
@@ -415,7 +415,7 @@ body { background: var(--bg); color: var(--ink); }
 .depwrap.planned .depfare { color: inherit; }
 
 .farebox {
-  border: 1px solid var(--line); border-radius: 10px;
+  border: 1px solid var(--line);
   padding: 9px 12px; margin: 0 0 10px; background: var(--panel);
 }
 .farebox.none {
@@ -428,7 +428,7 @@ body { background: var(--bg); color: var(--ink); }
 .farelbl b { font-weight: 700; }
 .farecode {
   font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
-  color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px;
+  color: var(--muted); border: 1px solid var(--line); padding: 1px 5px;
 }
 .fareline .infobtn { margin-left: auto; }
 
@@ -437,7 +437,7 @@ body { background: var(--bg); color: var(--ink); }
    is stated as a fact beside the price rather than buried in the notes. */
 .faretag {
   display: inline-flex; align-items: center; gap: 4px;
-  border-radius: 999px; padding: 2px 8px;
+ padding: 2px 8px;
   font-size: 11px; font-weight: 700; white-space: nowrap;
 }
 .faretag.once { background: var(--ink); color: #fff; }
@@ -463,7 +463,7 @@ body { background: var(--bg); color: var(--ink); }
 /* A call to action, so it takes the solid accent rather than a wash of it. Everything
    sitting on that fill has to be told it is on a dark surface: --muted is near-black by
    design, and inheriting it here is what once left a boarding time invisible. */
-.altbox.better { border: 1px solid var(--accent-fill); background: var(--accent-fill); border-radius: 10px; padding: 10px 12px; }
+.altbox.better { border: 1px solid var(--accent-fill); background: var(--accent-fill); padding: 10px 12px; }
 .altbox.better .altlbl { color: #fff; }
 .altbox.better .alticon { color: #fff; }
 .altbox.better .altlbl { font-weight: 500; display: flex; align-items: flex-start; gap: 7px; }
@@ -472,7 +472,7 @@ body { background: var(--bg); color: var(--ink); }
 .altlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
 .altitem {
   display: flex; flex-direction: column; gap: 2px; text-align: left;
-  border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel);
   padding: 7px 10px; font: inherit; cursor: pointer;
 }
 .altitem:hover { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; }
@@ -499,14 +499,14 @@ body { background: var(--bg); color: var(--ink); }
 .tsclose {
   margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
   border: 1px solid var(--line); background: var(--panel); color: var(--muted);
-  border-radius: 7px; padding: 3px 8px; font: inherit; font-size: 11px;
+ padding: 3px 8px; font: inherit; font-size: 11px;
   font-weight: 700; cursor: pointer;
 }
 .tsclose:hover { border-color: var(--accent-fill); color: #fff; background: var(--accent-fill); }
 
 .optcard {
   display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: #fff;
-  border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer;
+ padding: 12px 14px; margin-bottom: 10px; cursor: pointer;
 }
 .optcard:hover { border-color: var(--accent); }
 .optcard.active { border-color: var(--accent); border-width: 2px; }
@@ -516,7 +516,7 @@ body { background: var(--bg); color: var(--ink); }
 .optroute { font-weight: 700; font-size: 14px; }
 .optmeta { display: flex; gap: 6px; flex-shrink: 0; }
 .daypill { font-size: 11px; background: var(--ink); color: #fff; padding: 2px 8px; }
-.numpill { font-size: 11px; background: var(--bg); color: var(--muted); border-radius: 6px; padding: 2px 8px; }
+.numpill { font-size: 11px; background: var(--bg); color: var(--muted); padding: 2px 8px; }
 .deps { display: flex; flex-wrap: wrap; gap: 6px; }
 .dep {
   /* Times on one line, the fare under them. They used to share a single row, which
@@ -524,7 +524,7 @@ body { background: var(--bg); color: var(--ink); }
      on top of the next departure. */
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
   font-variant-numeric: tabular-nums;
-  font-size: 12.5px; background: var(--bg); border-radius: 6px; padding: 4px 9px;
+  font-size: 12.5px; background: var(--bg); padding: 4px 9px;
 }
 .deptimes { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
 .dep .bt { font-weight: 700; }
@@ -533,7 +533,7 @@ body { background: var(--bg); color: var(--ink); }
 
 /* From/To stop-or-place controls */
 .fhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.modeswitch { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.modeswitch { display: flex; border: 1px solid var(--line); overflow: hidden; }
 .modeswitch button { border: none; background: #fff; font-size: 11px; padding: 2px 9px; cursor: pointer; color: var(--muted); }
 .modeswitch button.on { background: var(--accent); color: #fff; }
 .planbar .ac input { padding-right: 92px; }
@@ -551,13 +551,13 @@ body { background: var(--bg); color: var(--ink); }
 .clearbtn:hover { background: var(--bg); color: var(--accent); }
 .pinbtn {
   border: 1px solid var(--line); background: #fff;
-  border-radius: 6px; font-size: 11px; font-weight: 600; padding: 4px 8px; cursor: pointer;
+ font-size: 11px; font-weight: 600; padding: 4px 8px; cursor: pointer;
   display: inline-flex; align-items: center; gap: 4px; color: var(--ink);
 }
 .pinbtn.armed { background: var(--accent); color: #fff; border-color: var(--accent); }
 .acsub { color: var(--muted); font-size: 11px; }
 .approxtag { color: var(--accent); font-weight: 600; }
-.approxpill { font-size: 11px; background: var(--accent-fill); color: #fff; border-radius: 6px; padding: 2px 8px; font-weight: 700; }
+.approxpill { font-size: 11px; background: var(--accent-fill); color: #fff; padding: 2px 8px; font-weight: 700; }
 
 /* clickable departures + stop-by-stop strip */
 .opthead { cursor: pointer; }
@@ -600,7 +600,7 @@ body { background: var(--bg); color: var(--ink); }
 .tsrow.context .tsname { color: var(--muted); font-style: italic; }
 .tstag.ctx { background: #e9ecef; color: var(--ink); }
 
-.tripstrip { margin-top: 12px; background: var(--bg); border-radius: 10px; padding: 12px 14px; }
+.tripstrip { margin-top: 12px; background: var(--bg); padding: 12px 14px; }
 .tsttitle { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 10px; }
 .tslist { list-style: none; margin: 0; padding: 0; }
 .tsrow { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; padding: 5px 0; position: relative; }
@@ -612,7 +612,7 @@ body { background: var(--bg); color: var(--ink); }
 .tsrow.get-off .tsdot { background: var(--accent); border-color: #cc3700; width: 14px; height: 14px; }
 .tsname { font-size: 13.5px; }
 .tsrow.get-on .tsname, .tsrow.get-off .tsname { font-weight: 700; }
-.tstag { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+.tstag { font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
 .tstag.on { background: var(--black); color: #fff; }
 .tstag.off { background: var(--accent); color: #fff; }
 .tstime { font-variant-numeric: tabular-nums; font-size: 12.5px; font-family: 'SF Mono', 'Consolas', monospace; }
@@ -623,7 +623,7 @@ body { background: var(--bg); color: var(--ink); }
 /* unified search + nearby suggestions */
 .hittag {
   display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .04em; color: #fff; background: var(--black); border-radius: 3px;
+  letter-spacing: .04em; color: #fff; background: var(--black);
   padding: 1px 5px; margin-right: 8px; vertical-align: 1px;
 }
 .acitem:hover .hittag { background: var(--accent); }
@@ -632,13 +632,13 @@ body { background: var(--bg); color: var(--ink); }
 .placerow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .placelbl { font-size: 12px; color: var(--muted); }
 .placechip { border: 1px solid var(--accent-fill); background: var(--accent-fill); color: #fff;
-  border-radius: 20px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
+ padding: 5px 12px; font-size: 13px; cursor: pointer; }
 .placechip:hover { background: var(--accent); color: #fff; }
 
-.nearbybox { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 12px; }
+.nearbybox { background: var(--panel); border: 1px solid var(--line); padding: 14px; margin-top: 12px; }
 .nearbyhead { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
 .nearbyitem { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
-  border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 9px 12px; margin-bottom: 8px;
+  border: 1px solid var(--line); background: #fff; padding: 9px 12px; margin-bottom: 8px;
   cursor: pointer; text-align: left; }
 .nearbyitem:hover { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; }
 .nearbyitem .rname { font-size: 14px; font-weight: 600; }
@@ -667,7 +667,7 @@ body { background: var(--bg); color: var(--ink); }
   font-variant-numeric: tabular-nums;
 }
 .depwrap .dep { width: 100%; }
-.addbtn { border: 1px dashed var(--line); background: transparent; color: var(--muted); border-radius: 7px; padding: 3px 6px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.addbtn { border: 1px dashed var(--line); background: transparent; color: var(--muted); padding: 3px 6px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
 .addbtn:hover { border-color: var(--accent-fill); color: #fff; background: var(--accent-fill); }
 .addbtn.on { border-style: solid; border-color: var(--accent); background: var(--accent); color: #fff; }
 .depwrap.planned .dep { box-shadow: inset 0 0 0 2px var(--accent); }
@@ -687,7 +687,7 @@ body { background: var(--bg); color: var(--ink); }
 .plannerempty { max-width: 46ch; margin: 48px auto; text-align: center; }
 .plannerempty h2 { margin: 0 0 8px; font-size: 19px; }
 .plannerempty p { font-size: 13.5px; color: var(--muted); line-height: 1.55; }
-.primary { margin-top: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+.primary { margin-top: 10px; background: var(--accent); color: #fff; border: none; padding: 9px 18px; font: inherit; font-weight: 700; cursor: pointer; }
 .primary:hover { background: #e03d00; }
 
 .plannerlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -768,7 +768,7 @@ body { background: var(--bg); color: var(--ink); }
 .arrow svg { display: block; }
 
 /* ---- Result banners: direct (green), needs a change (orange), impossible (red) ---- */
-.banner { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border-radius: 9px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; border: 1px solid; }
+.banner { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; border: 1px solid; }
 .banner svg { flex: none; margin-top: 1px; }
 .banner.good { background: var(--good); border-color: var(--good); color: #fff; }
 .banner.warn { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
@@ -776,7 +776,7 @@ body { background: var(--bg); color: var(--ink); }
 .banner.info { background: var(--wash); border-color: var(--line); color: var(--ink); }
 
 .connlist { display: flex; flex-direction: column; gap: 10px; }
-.conncard { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 11px 12px; }
+.conncard { border: 1px solid var(--line); background: var(--panel); padding: 11px 12px; }
 .conncard.planned { border-color: var(--accent); }
 .connhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .connsummary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
@@ -787,7 +787,7 @@ body { background: var(--bg); color: var(--ink); }
 .connwait.long { color: var(--accent); font-weight: 700; }
 
 .connlegs { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.connleg { background: #fafbfc; border-radius: 8px; overflow: hidden; }
+.connleg { background: #fafbfc; overflow: hidden; }
 .connleg.open { box-shadow: inset 0 0 0 1px var(--line); }
 /* The row is a button now, so a leg can be opened where it is read. Its chrome is
    stripped rather than restyled: the row already had the layout it needs. */
@@ -805,7 +805,7 @@ body { background: var(--bg); color: var(--ink); }
 .connlegchev.up { transform: rotate(180deg); }
 .connlegdetail { padding: 0 9px 9px; }
 .connlegfarenote {
-  margin: 0 0 8px; padding: 6px 9px; border-radius: 7px;
+  margin: 0 0 8px; padding: 6px 9px;
   background: var(--wash); font-size: 11.5px; line-height: 1.5; color: var(--ink);
 }
 .connlegfarenote b { color: var(--ink); }
@@ -826,7 +826,7 @@ body { background: var(--bg); color: var(--ink); }
 
 .tsfoot p { margin: 0 0 6px; }
 .tsfoot p:last-child { margin-bottom: 0; }
-.tsfoot code { background: var(--wash); color: var(--ink); border-radius: 4px; padding: 0 4px; font-size: 11px; }
+.tsfoot code { background: var(--wash); color: var(--ink); padding: 0 4px; font-size: 11px; }
 .notelist { margin: 4px 0 0; padding-left: 18px; }
 .notelist li { margin-bottom: 2px; }
 
@@ -880,7 +880,7 @@ body { background: var(--bg); color: var(--ink); }
   .mapswitchbtn {
     display: inline-flex; align-items: center; gap: 6px;
     border: 1px solid var(--line); background: var(--panel); color: var(--ink);
-    border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 12.5px;
+ padding: 6px 14px; font: inherit; font-size: 12.5px;
     font-weight: 700; cursor: pointer;
   }
   .mapswitchbtn.on { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
