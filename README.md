@@ -642,9 +642,30 @@ earlier than an earlier one. A table with anything unresolved is printed as `HOL
   HOLD  central-line-kapteinsklip-weekday.pdf p3.1: 9 unresolved of 148 times
 ```
 
-Roughly 97% of cells read cleanly. The Central Line's weekend sheets are printed on a blue
-ground that defeats grid detection entirely, and those tables are still held — the app
-shows no Central Line weekend trains rather than wrong ones.
+**A cell the checks flagged is never written** — not by `--force`, not by anything. So a
+hold is not the difference between right and wrong times in the database; it is the
+difference between having a table and not having it.
+
+That matters at the margins, because all-or-nothing gets those wrong. One unreadable cell
+out of 737 was hiding 24 stations and a full day's service, to avoid one stop reading "no
+published time". `--allow-unverified` names how much of that a run will accept:
+
+```bash
+# Load a table when under 1% of its cells are unverified. Those cells still do not load.
+PYTHONPATH=src python -m prasa_scraper.pipeline --allow-unverified 1
+```
+
+It defaults to none, so a plain run holds anything imperfect.
+
+Roughly 97% of cells read cleanly, and a common failure repairs itself. PRASA pads its
+hours — the sheets print `05:25`, never `5:25` — so a cell read as `7:11` has lost its
+first digit and has exactly two possible readings, `07:11` and `17:11`. The column decides
+which: the value has to sit between the published time above it and the one below. If both
+fit or neither does, nothing is written and the cell stays flagged.
+
+The Central Line's weekend sheets are printed on a blue ground that defeats grid detection
+entirely, and those tables are still held — the app shows no Central Line weekend trains
+rather than wrong ones.
 
 ## How the pieces fit together
 

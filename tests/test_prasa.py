@@ -315,3 +315,22 @@ def test_a_sound_grid_names_no_cells():
     g = grid_with([["05:00"], ["05:10"]])
     _check(g)
     assert g.unverified() == set()
+
+
+def test_an_unpadded_hour_is_flagged_even_when_the_column_is_happy():
+    # 07:11 for 17:11 in a sparse column offends no ordering, so nothing caught it and it
+    # loaded as a train ten hours early. PRASA pads, so the cell is wrong on its face.
+    g = grid_with([["7:11"], ["", ]])
+    _check(g)
+    assert any(p.kind == "shape" and "unpadded" in p.detail for p in g.problems)
+
+
+def test_a_damaged_neighbour_cannot_prove_anything():
+    # Two dropped digits in a row would otherwise agree with each other into a confident
+    # wrong answer, so only padded neighbours are used as bounds. Neither cell here has a
+    # trustworthy neighbour, so neither is repaired.
+    g = grid_with([["7:10"], ["7:20"]])
+    _check(g)
+    _restore_dropped_hour(g)
+    assert [r[0] for r in g.times] == ["7:10", "7:20"]
+    assert len(g.unverified()) == 2

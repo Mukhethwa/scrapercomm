@@ -524,15 +524,21 @@ def _second_look(grid: Grid, gray: Image.Image) -> None:
 
 
 def _column_bounds(grid: Grid, ri: int, ci: int) -> tuple[float | None, float | None]:
-    """The published times immediately above and below a cell, in minutes."""
+    """
+    The nearest trustworthy times above and below a cell, in minutes.
+
+    PADDED_TIME rather than TIME: a neighbour that is itself missing an hour digit cannot
+    be used to prove anything, and two damaged cells in a row would otherwise agree with
+    each other into a confident wrong answer.
+    """
     before = after = None
     for r in range(ri - 1, -1, -1):
-        m = TIME.match(grid.times[r][ci] if ci < len(grid.times[r]) else "")
+        m = PADDED_TIME.match(grid.times[r][ci] if ci < len(grid.times[r]) else "")
         if m:
             before = _minutes(m)
             break
     for r in range(ri + 1, len(grid.times)):
-        m = TIME.match(grid.times[r][ci] if ci < len(grid.times[r]) else "")
+        m = PADDED_TIME.match(grid.times[r][ci] if ci < len(grid.times[r]) else "")
         if m:
             after = _minutes(m)
             break
@@ -558,9 +564,9 @@ def _restore_dropped_hour(grid: Grid) -> None:
     had reached 17:09 held 304 verified times off the site, and "5:27:00" under 15:18
     held another 30.
     """
-    for problem in [p for p in grid.problems if p.kind == "order"]:
-        ri, ci = problem.row, problem.column
-        if ri < 0 or ri >= len(grid.times) or ci >= len(grid.times[ri]):
+    suspect = {(p.row, p.column) for p in grid.problems if p.kind in ("order", "shape")}
+    for ri, ci in sorted(suspect):
+        if ri < 0 or ci < 0 or ri >= len(grid.times) or ci >= len(grid.times[ri]):
             continue
         cell = grid.times[ri][ci]
         m = TIME.match(cell or "")
@@ -584,7 +590,7 @@ def _restore_dropped_hour(grid: Grid) -> None:
         if len(fits) == 1:
             grid.times[ri][ci] = fits[0]
 
-    if any(p.kind == "order" for p in grid.problems):
+    if grid.problems:
         grid.problems.clear()
         _check(grid)
 
@@ -603,8 +609,20 @@ def _check(grid: Grid) -> None:
 
     for ri, row in enumerate(grid.times):
         for ci, cell in enumerate(row):
-            if cell and not TIME.match(cell):
+            if not cell:
+                continue
+            m = TIME.match(cell)
+            if not m:
                 grid.problems.append(Problem("shape", f"{cell!r} is not a time", ri, ci))
+            elif len(m.group(1)) == 1:
+                # PRASA prints 05:25, never 5:25, so an unpadded hour is a digit the
+                # reader lost rather than a time the sheet published. Flagged wherever it
+                # appears, not only where it breaks the column: in a sparse column 07:11
+                # for 17:11 offends no ordering and would have loaded as a train ten
+                # hours early. Most of these are then repaired outright - see
+                # _restore_dropped_hour - and what is left stays flagged and unwritten.
+                grid.problems.append(
+                    Problem("shape", f"{cell!r} has an unpadded hour", ri, ci))
 
     # A train runs forwards. Anything that goes back more than an hour is a misread, not a
     # service crossing midnight - these are weekday daytime timetables.
