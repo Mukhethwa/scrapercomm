@@ -74,6 +74,11 @@ def main() -> None:
                     label = f"{os.path.basename(path)} p{page.page_number}.{index}"
                     counts = grid.counts()
 
+                    # A label that could not be read is reported, never counted against
+                    # the table: a train number is what a platform indicator shows, and
+                    # nothing it affects is a departure time.
+                    blocking = [p for p in grid.problems if p.kind != "label"]
+
                     # Problems first. A table whose grid could not be found has no
                     # stations either, and reporting that as "nothing here" hid real
                     # detection failures behind a message about empty pages.
@@ -85,9 +90,9 @@ def main() -> None:
                         skipped += 1
                         continue
 
-                    if grid.problems and not (grid.stations and counts["times"]):
-                        print(f"  FAIL  {label}: {grid.problems[0].kind}: "
-                              f"{grid.problems[0].detail}", flush=True)
+                    if blocking and not (grid.stations and counts["times"]):
+                        print(f"  FAIL  {label}: {blocking[0].kind}: "
+                              f"{blocking[0].detail}", flush=True)
                         held += 1
                         continue
 
@@ -108,15 +113,15 @@ def main() -> None:
                     share = 100.0 * lost / counts["times"] if counts["times"] else 100.0
                     tolerable = args.allow_unverified > 0 and share <= args.allow_unverified
 
-                    if grid.problems and not args.force and not tolerable:
-                        print(f"  HOLD  {label}: {len(grid.problems)} unresolved "
+                    if blocking and not args.force and not tolerable:
+                        print(f"  HOLD  {label}: {len(blocking)} unresolved "
                               f"of {counts['times']} times", flush=True)
-                        for problem in grid.problems[:4]:
+                        for problem in blocking[:4]:
                             print(f"          {problem.kind}: {problem.detail}", flush=True)
                         held += 1
                         continue
 
-                    if grid.problems and tolerable and not args.force:
+                    if blocking and tolerable and not args.force:
                         print(f"  part  {label}: {lost} of {counts['times']} times "
                               f"unverified ({share:.2f}%) - loading the rest", flush=True)
 

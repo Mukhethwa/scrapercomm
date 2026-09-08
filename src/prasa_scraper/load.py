@@ -23,7 +23,7 @@ import re
 from datetime import date, datetime, timezone
 
 from . import db_compat as db
-from .ocr import TIME, Grid
+from .ocr import TIME, TRAIN_NO, Grid
 from .stations import canonical, key
 
 OPERATOR_CODE = "metrorail"
@@ -275,7 +275,10 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
         number = grid.train_numbers[ci] if ci < len(grid.train_numbers) else None
         cur.execute(
             "INSERT INTO trip (schedule_id, trip_index, label) VALUES (%s, %s, %s) RETURNING id",
-            (schedule_id, ci, number or None),
+            # Only a label that reads as one. A misread "1" against a train is worse
+            # than no label: a rider matches it to the platform indicator and it matches
+            # nothing.
+            (schedule_id, ci, number if number and TRAIN_NO.match(number) else None),
         )
         trip_id = cur.fetchone()[0]
         for ri, row in enumerate(grid.times):

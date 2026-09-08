@@ -264,18 +264,29 @@ def _row_bands(ink: np.ndarray, label_width: int) -> list[tuple[int, int]]:
     """
     profile = ink[:, :label_width].mean(axis=1)
 
-    # The threshold has to be measured, not chosen.
+    # The threshold has to sit just above the gap, not near the text.
     #
     # The gap between two rows is not blank: the ruled column edges pass through it, so it
     # carries a low but non-zero amount of ink - 0.044 on the Southern Line against 0.11 to
     # 0.24 for a row of text. A fixed 0.02 called the gaps text and merged an entire table
     # into one band, which is why the Simon's Town workings were silently skipped.
     #
-    # Sitting the threshold a third of the way from the quiet level to the busy one
-    # separates them on every line, whatever the rules happen to weigh.
+    # A third of the way to the peak fixed that and broke the Central Line, which is a
+    # different shape of page: its label column is 132 pixels holding names like
+    # MITCHELL'S PLAIN, so the ink fraction where the glyphs are densest reaches 0.89
+    # against 0.32 on the Southern Line, where the names sit in 205 pixels with room to
+    # spare. A third of 0.89 is above everything but the middle scanline of each row, so
+    # every row came back one or two pixels tall, every one was discarded as too thin, and
+    # a page of thirty-five stations was read as six. That is the whole reason the Central
+    # Line has never appeared in the app.
+    #
+    # Measured across every page in the five PDFs, the row count is identical anywhere
+    # from 0.08 to 0.20 and only breaks above it. 0.15 sits in the middle of that plateau.
+    # It is the distance from the gap that matters, and the peak only says how far a page
+    # is willing to let a threshold drift before it falls off a cliff.
     floor = float(np.percentile(profile, 20))
     peak = float(np.percentile(profile, 90))
-    threshold = floor + 0.35 * (peak - floor) if peak > floor else 0.02
+    threshold = floor + 0.15 * (peak - floor) if peak > floor else 0.02
     inked = profile > threshold
     min_band = max(6, int(10 * _scale(ink.shape[1])))
     bands: list[tuple[int, int]] = []
@@ -413,6 +424,11 @@ def _blocks(ink: np.ndarray) -> list[tuple[int, int]]:
 # at different pitches, so almost nothing lines up - and forgiving enough to survive a
 # rule found in one band and missed in the other.
 COLUMN_AGREEMENT = 0.9
+
+# How much of a row must read as train numbers for it to be the header. High enough that a
+# row of anything else is never taken for it, low enough to survive a page that prints
+# sixty of them in a row.
+HEADER_AGREEMENT = 0.8
 
 
 def _same_columns(a: list[int], b: list[int], tol: int) -> bool:
@@ -575,14 +591,22 @@ def _read_block(gray, panel_ink, left, top, y0, y1, heading) -> Grid:
     # It usually is, but not on every line: some pages carry a spanning title band above
     # it. Assuming position put the train numbers into the body, where every one of them
     # was then reported as "not a time" - the checker doing its job about the wrong row.
-    # The header is the row whose cells are train numbers and never times.
+    #
+    # Most of the cells, not all of them. The Central Line prints sixty trains across a
+    # page, and requiring every one to read cleanly meant a single slip in sixty demoted
+    # the header to a station row - after which all sixty train numbers were reported as
+    # times that were not times, and the table was held over an error in the checker's
+    # own reading of what the row was. A row of times is still never mistaken for it,
+    # because a single cell that parses as a time rules the row out.
     header_index, header_cells = -1, None
     for i, r in enumerate(rows[:2]):
         cells = read_row(r)
         filled = [c for c in cells if c]
         if not filled:
             continue
-        if all(TRAIN_NO.match(c) for c in filled) and not any(TIME.match(c) for c in filled):
+        numbers = sum(1 for c in filled if TRAIN_NO.match(c))
+        if (numbers >= HEADER_AGREEMENT * len(filled)
+                and not any(TIME.match(c) for c in filled)):
             header_index, header_cells = i, cells
             break
     if header_cells is None:
@@ -737,7 +761,18 @@ def _check(grid: Grid) -> None:
     """Everything we can prove about the numbers without a second source."""
     for i, t in enumerate(grid.train_numbers):
         if t and not TRAIN_NO.match(t):
-            grid.problems.append(Problem("shape", f"train number {t!r}", 0, i))
+            # Its own kind, and no cell coordinates, for two reasons.
+            #
+            # It was filed at (row 0, column i), and those coordinates are what the loader
+            # uses to skip a time it cannot vouch for - so an unreadable label was quietly
+            # deleting the first station's real departure in that column. A train number
+            # is not at row 0 of the times; it is not in the times at all.
+            #
+            # And it should not hold a table back. A train number is what the platform
+            # indicator shows: useful, and cosmetic beside a departure time. Sixty of them
+            # across a Central Line page, a few misread, and the whole day's service was
+            # held over labels. A wrong time strands somebody; a missing label does not.
+            grid.problems.append(Problem("label", f"train number {t!r}"))
 
     for ri, row in enumerate(grid.times):
         for ci, cell in enumerate(row):
