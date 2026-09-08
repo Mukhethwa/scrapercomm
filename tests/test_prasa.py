@@ -393,3 +393,62 @@ def test_the_similarity_threshold_separates_variants_from_neighbours():
         assert _similar(key(a), key(b)) >= SIMILAR, (a, b)
     for a, b in different:
         assert _similar(key(a), key(b)) < SIMILAR, (a, b)
+
+
+# ------------------------------------- one table, however many rules are drawn in it
+
+def bands_with(column_pitches, height=200):
+    """A page of stacked bands, each ruled at its own column pitch."""
+    import numpy as np
+    ink = np.zeros((height * len(column_pitches), PAGE_WIDTH), dtype=bool)
+    for i, pitch in enumerate(column_pitches):
+        top = i * height
+        for x in range(0, PAGE_WIDTH, pitch):
+            ink[top:top + height, x] = True
+        if i:
+            ink[top, :] = True          # the rule between this band and the one above
+    return ink
+
+
+def test_bands_on_the_same_columns_are_one_table():
+    # The Northern Line page is divided into five groups of stations by ruled lines, and
+    # all five carry the same 41 columns because they are the same 41 trains. Train 2500
+    # runs KRAAIFONTEIN to CAPE TOWN across four of those rules; split there it became a
+    # stub to Stikland and an unrelated route out of Bellville, and a rider asking to go
+    # from Kraaifontein into town was told no train does it.
+    blocks = _blocks(bands_with([66, 66, 66]))
+    assert len(blocks) == 1
+    assert blocks[0] == (0, 600)
+
+
+def test_bands_on_different_columns_stay_apart():
+    # Where the column layout really does change, the tables really are different, and
+    # joining them would read one table's cells at another's column positions - times
+    # silently swapped between neighbouring trains, every one of them plausible.
+    blocks = _blocks(bands_with([66, 90, 66]))
+    assert len(blocks) == 3
+
+
+def test_a_rule_alone_does_not_divide_a_table():
+    # The ink between two rows was never what made them separate tables.
+    assert len(_blocks(bands_with([66, 66]))) == 1
+
+
+# ------------------------------------------------ rows that are not stations
+
+def test_the_platform_row_is_not_a_station():
+    from prasa_scraper.ocr import _is_platform_row
+    # Bellville's arrivals become its departures, and PRASA prints the platform between
+    # them. Once the bands either side are joined, that row lands in the body of the
+    # table and every cell in it was reported as a time that was not a time.
+    assert _is_platform_row("PLATFORM NO", ["5", "10", "3", "8"])
+    assert _is_platform_row("", ["5", "10", "3", "8"])
+
+
+def test_a_station_is_not_mistaken_for_a_platform_row():
+    from prasa_scraper.ocr import _is_platform_row
+    # A row of real times, and a row whose times were read badly, are both stations. Only
+    # a row that is entirely small integers - or says so - is the platform strip.
+    assert not _is_platform_row("RETREAT", ["05:03", "05:18", "05:30"])
+    assert not _is_platform_row("RETREAT", ["5", "05:18"])
+    assert not _is_platform_row("WYNBERG", [])
