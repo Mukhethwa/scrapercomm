@@ -103,6 +103,10 @@ export default function PlanView() {
     modes, planner,
   } = usePlanSearch()
 
+  // Bus or train, taken from where the rider is standing - see PlanScreen for why.
+  const vehicle = from?.mode === 'train' ? 'train' : 'bus'
+  const vehicles = `${vehicle}s`
+
   return (
     <div className="planwrap">
       <div className="planbar">
@@ -265,7 +269,7 @@ export default function PlanView() {
                   </button>
                 ))}
                 {reachable != null && filteredReach.length === 0 && (
-                  <div className="empty">No direct bus goes to "{toText}" from here.</div>
+                  <div className="empty">No direct {vehicle} goes to "{toText}" from here.</div>
                 )}
               </div>
 
@@ -336,7 +340,7 @@ export default function PlanView() {
               {plan && !loading && plan.length === 0 && connLoading && (
                 <div className="banner info">
                   <Info size={16} aria-hidden="true" />
-                  <span>No direct bus. Looking for a journey with a change…</span>
+                  <span>No direct {vehicle}. Looking for a journey with a change…</span>
                 </div>
               )}
 
@@ -345,8 +349,8 @@ export default function PlanView() {
                   <div className="banner warn">
                     <TriangleAlert size={16} aria-hidden="true" />
                     <span>
-                      <b>No direct bus</b> from {from!.name} to {to!.name}. You can still get there
-                      by taking <b>{connLegs} buses</b>, changing at <b>{conns[0].change_at.join(' then ')}</b>.
+                      <b>No direct {vehicle}</b> from {from!.name} to {to!.name}. You can still get there
+                      by taking <b>{connLegs} {vehicles}</b>, changing at <b>{conns[0].change_at.join(' then ')}</b>.
                     </span>
                   </div>
                   <ConnectionsPanel connections={conns} legsRequired={connLegs} />
@@ -357,8 +361,8 @@ export default function PlanView() {
                 <div className="banner bad">
                   <CircleX size={16} aria-hidden="true" />
                   <span>
-                    <b>No way to get there by bus.</b> There is no direct service from {from!.name} to{' '}
-                    {to!.name}, and no combination of up to three buses connects them either.
+                    <b>No way to get there by {vehicle}.</b> There is no direct service from {from!.name} to{' '}
+                    {to!.name}, and no combination of up to three {vehicles} connects them either.
                   </span>
                 </div>
               )}
@@ -388,8 +392,8 @@ export default function PlanView() {
                 <div className="banner bad">
                   <CircleX size={16} aria-hidden="true" />
                   <span>
-                    <b>No direct bus.</b> Journeys with a change can only be worked out between
-                    named bus stops, not dropped pins.
+                    <b>No direct {vehicle}.</b> Journeys with a change can only be worked out between
+                    named stops, not dropped pins.
                   </span>
                 </div>
               )}
@@ -490,7 +494,7 @@ export default function PlanView() {
               {plan && !loading && altDays.length > 0 && (
                 <div className="nearbybox">
                   <div className="nearbyhead">
-                    {plan.length ? 'On other days, the nearest stop with a direct bus:' : 'Nearest stops with a direct bus there:'}
+                    {plan.length ? `On other days, the nearest stop with a direct ${vehicle}:` : `Nearest stops with a direct ${vehicle} there:`}
                   </div>
                   {altDays.map((d) => (
                     <div key={d} className="dayalt">
@@ -499,7 +503,7 @@ export default function PlanView() {
                         <button key={o.id} className="nearbyitem" onClick={() => useAlt(o)}>
                           <span className="rname">{o.name}</span>
                           <span className="rtrips">
-                            {(o.distance_m / 1000).toFixed(1)} km away{o.earliest ? `, first bus ${o.earliest}` : ''}, {o.trip_count} trips
+                            {(o.distance_m / 1000).toFixed(1)} km away{o.earliest ? `, first ${vehicle} ${o.earliest}` : ''}, {o.trip_count} trips
                           </span>
                         </button>
                       ))}
@@ -509,7 +513,7 @@ export default function PlanView() {
               )}
 
               {plan && !loading && plan.length === 0 && altDays.length === 0 && (
-                <div className="empty">No stop within 8 km has a direct bus there either.</div>
+                <div className="empty">No stop within 8 km has a direct {vehicle} there either.</div>
               )}
             </>
           )}

@@ -191,6 +191,17 @@ export default function PlanScreen() {
    */
   const operators = useLoadedOperators()
 
+  /**
+   * Bus or train, in the app's own sentences.
+   *
+   * Taken from where the rider is standing rather than from what came back, because these
+   * lines are mostly written for the case where nothing came back. Telling somebody at
+   * FISH HOEK station that "no bus goes there" is a true sentence about the wrong network,
+   * and it reads as though the app has not understood the question.
+   */
+  const ride = s.from?.mode === 'train' ? 'train' : 'bus'
+  const rides = `${ride}s`
+
   const groups = useMemo(() => groupByOperator(s.plan ?? []), [s.plan])
   /** The journey-with-changes the map should draw, when there is no direct one. */
   const [chosenConn, setChosenConn] = useState<Connection | null>(null)
@@ -393,7 +404,7 @@ export default function PlanScreen() {
             ))}
             {s.reachable != null && s.filteredReach.length === 0 && (
               <div className="py-4 text-center text-[13px] text-sub">
-                No direct bus goes to “{s.toText}” from here.
+                No direct {ride} goes to “{s.toText}” from here.
               </div>
             )}
           </div>
@@ -413,7 +424,7 @@ export default function PlanScreen() {
 
       {s.plan && !s.loading && s.plan.length === 0 && s.connLoading && (
         <Banner tone="info" icon={Info}>
-          No direct bus. Looking for a journey with a change...
+          No direct {ride}. Looking for a journey with a change...
         </Banner>
       )}
 
@@ -423,8 +434,8 @@ export default function PlanScreen() {
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && liveConns && liveConns.length > 0 && (
         <>
           <Banner tone="warn" icon={Warning}>
-            <b>No direct bus</b> from {s.from!.name} to {s.to!.name}. You can still get there by taking{' '}
-            <b>{s.connLegs} buses</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
+            <b>No direct {ride}</b> from {s.from!.name} to {s.to!.name}. You can still get there by taking{' '}
+            <b>{s.connLegs} {rides}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
           </Banner>
           <ConnectionsCard connections={liveConns} onChoose={setChosenConn} />
         </>
@@ -435,7 +446,7 @@ export default function PlanScreen() {
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading
         && s.conns && s.conns.length > 0 && liveConns && liveConns.length === 0 && (
         <Banner tone="warn" icon={Warning}>
-          <b>No direct bus</b> from {s.from!.name} to {s.to!.name}, and the {s.connLegs}-bus
+          <b>No direct {ride}</b> from {s.from!.name} to {s.to!.name}, and the {s.connLegs}-{ride}
           journey through <b>{s.conns[0].change_at.join(' then ')}</b> has finished for today.
           Choose an earlier time, or “Any time”, to see how it runs.
         </Banner>
@@ -443,8 +454,8 @@ export default function PlanScreen() {
 
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns && s.conns.length === 0 && (
         <Banner tone="bad" icon={XCircle}>
-          <b>No way to get there by bus.</b> There is no direct service from {s.from!.name} to{' '}
-          {s.to!.name}, and no combination of up to three buses connects them either.
+          <b>No way to get there by {ride}.</b> There is no direct service from {s.from!.name} to{' '}
+          {s.to!.name}, and no combination of up to three {rides} connects them either.
         </Banner>
       )}
 
@@ -462,8 +473,8 @@ export default function PlanScreen() {
           stops - so this is a limit of the question, not of the network. */}
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns === null && (
         <Banner tone="bad" icon={XCircle}>
-          <b>No direct bus.</b> Journeys with a change can only be worked out between named
-          bus stops, not dropped pins.
+          <b>No direct {ride}.</b> Journeys with a change can only be worked out between named
+          stops, not dropped pins.
         </Banner>
       )}
 
@@ -537,8 +548,8 @@ export default function PlanScreen() {
         <div className="border border-line bg-panel p-4">
           <div className="mb-3 text-[13px] font-bold text-ink">
             {s.plan.length
-              ? 'On other days, the nearest stop with a direct bus:'
-              : 'Nearest stops with a direct bus there:'}
+              ? `On other days, the nearest stop with a direct ${ride}:`
+              : `Nearest stops with a direct ${ride} there:`}
           </div>
           {s.altDays.map((d) => (
             <div key={d} className="mb-3 last:mb-0">
@@ -555,7 +566,7 @@ export default function PlanScreen() {
                     <span className="text-[13px] font-semibold text-ink">{o.name}</span>
                     <span className="text-[11px] text-sub">
                       {(o.distance_m / 1000).toFixed(1)} km away
-                      {o.earliest ? `, first bus ${o.earliest}` : ''}, {o.trip_count} trips
+                      {o.earliest ? `, first ${ride} ${o.earliest}` : ''}, {o.trip_count} trips
                     </span>
                   </button>
                 ))}
@@ -567,7 +578,7 @@ export default function PlanScreen() {
 
       {s.plan && !s.loading && s.plan.length === 0 && s.altDays.length === 0 && !s.connLoading && (
         <div className="px-1 text-[12px] text-sub">
-          No stop within 8 km has a direct bus there either.
+          No stop within 8 km has a direct {ride} there either.
         </div>
       )}
 
