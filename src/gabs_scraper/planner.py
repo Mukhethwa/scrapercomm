@@ -193,14 +193,19 @@ def _schedule_meta(conn, schedule_ids):
     cur.execute(
         """
         SELECT sc.id, sc.direction_label, sc.day_type, sc.day_label,
-               t.timetable_number
-        FROM schedule sc JOIN timetable t ON t.id = sc.timetable_id
+               t.timetable_number, o.code, o.name, o.kind
+        FROM schedule sc
+        JOIN timetable t     ON t.id = sc.timetable_id
+        JOIN route r         ON r.id = t.route_id
+        LEFT JOIN operator o ON o.id = r.operator_id
         WHERE sc.id = ANY(%s)
         """,
         (list(schedule_ids),),
     )
     return {r[0]: {"direction_label": r[1], "day_type": r[2], "day_label": r[3],
-                   "timetable_number": r[4]} for r in cur.fetchall()}
+                   "timetable_number": r[4], "operator_code": r[5],
+                   "operator_name": r[6], "operator_kind": r[7]}
+            for r in cur.fetchall()}
 
 
 def _segment(conn, schedule_id, from_pos, to_pos):
@@ -396,6 +401,9 @@ def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
             seg = seg_cache[sch]
             g = groups[gkey] = {
                 "timetable_number": m["timetable_number"], "route_label": m["direction_label"],
+                # A journey card has to be able to say whether it is describing a bus.
+                "operator_code": m["operator_code"], "operator_name": m["operator_name"],
+                "operator_kind": m["operator_kind"],
                 "day_type": m["day_type"], "day_label": m["day_label"],
                 "segment_stops": seg,
                 "road_path": _road_path(conn, seg, b["position"], a["position"], leg_cache),

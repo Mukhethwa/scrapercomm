@@ -33,6 +33,19 @@ app.add_middleware(
 )
 
 
+# One stop row, as both services return it.
+#
+# Stops are unique per operator rather than globally now, so RETREAT the station and
+# RETREAT the bus stop are two rows with one name. A row that does not say which is which
+# leaves a caller with two identical entries and no way to choose. LEFT JOIN because a
+# stop with no operator is a bug worth seeing as a null rather than a missing row.
+STOP_SELECT = """
+    SELECT s.id, s.name, s.lat, s.lon,
+           o.code AS operator_code, o.kind AS operator_kind
+    FROM stop s LEFT JOIN operator o ON o.id = s.operator_id
+"""
+
+
 def _rows(cur):
     cols = [c[0] for c in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
@@ -208,13 +221,13 @@ def list_stops(q: str | None = None, limit: int = 20):
             # nothing for a stop that plainly exists.
             squashed = q.replace(" ", "")
             cur.execute(
-                "SELECT id, name, lat, lon FROM stop "
-                "WHERE name ILIKE %s OR replace(name, ' ', '') ILIKE %s "
-                "ORDER BY (name ILIKE %s) DESC, name LIMIT %s",
+                STOP_SELECT +
+                "WHERE s.name ILIKE %s OR replace(s.name, ' ', '') ILIKE %s "
+                "ORDER BY (s.name ILIKE %s) DESC, s.name LIMIT %s",
                 (f"%{q}%", f"%{squashed}%", f"{q}%", limit),
             )
         else:
-            cur.execute("SELECT id, name, lat, lon FROM stop ORDER BY name LIMIT %s", (limit,))
+            cur.execute(STOP_SELECT + "ORDER BY s.name LIMIT %s", (limit,))
         return {"stops": _rows(cur)}
     finally:
         conn.close()
@@ -226,7 +239,7 @@ def reachable(stop_id: int):
     conn = db.connect()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT id, name, lat, lon FROM stop WHERE id=%s", (stop_id,))
+        cur.execute(STOP_SELECT + "WHERE s.id=%s", (stop_id,))
         origin = _rows(cur)
         if not origin:
             raise HTTPException(404, "stop not found")
@@ -301,7 +314,7 @@ def journeys(from_: int = Query(..., alias="from"), to: int = Query(...)):
     conn = db.connect()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT id, name, lat, lon FROM stop WHERE id = ANY(%s)", ([from_, to],))
+        cur.execute(STOP_SELECT + "WHERE s.id = ANY(%s)", ([from_, to],))
         stops = {r["id"]: r for r in _rows(cur)}
         if from_ not in stops or to not in stops:
             raise HTTPException(404, "stop not found")
@@ -312,6 +325,8 @@ def journeys(from_: int = Query(..., alias="from"), to: int = Query(...)):
             SELECT sc.id AS schedule_id, sc.direction_label, sc.day_type, sc.day_label,
                    r.id AS route_id, r.name AS route_name, t.id AS timetable_id,
                    t.timetable_number AS timetable_number,
+                   o.code AS operator_code, o.name AS operator_name,
+                   o.kind AS operator_kind,
                    ssx.id AS ssx, ssy.id AS ssy,
                    ssx.stop_sequence AS bseq, ssy.stop_sequence AS aseq
             FROM schedule_stop ssx
@@ -320,6 +335,7 @@ def journeys(from_: int = Query(..., alias="from"), to: int = Query(...)):
             JOIN schedule sc       ON sc.id = ssx.schedule_id
             JOIN timetable t       ON t.id = sc.timetable_id
             JOIN route r           ON r.id = t.route_id
+            LEFT JOIN operator o   ON o.id = r.operator_id
             WHERE ssx.stop_id = %s AND ssy.stop_id = %s
               AND EXISTS (
                 SELECT 1 FROM stop_time bx
@@ -356,6 +372,9 @@ def journeys(from_: int = Query(..., alias="from"), to: int = Query(...)):
                 g = groups[key] = {
                     "timetable_number": c["timetable_number"],
                     "route_label": c["direction_label"],  # the actual bus path
+                    "operator_code": c["operator_code"],
+                    "operator_name": c["operator_name"],
+                    "operator_kind": c["operator_kind"],
                     "day_type": c["day_type"], "day_label": c["day_label"],
                     "timetable_ids": set(), "segment_stops": _rows(cur),
                     "departures": [], "_seen": set(),
@@ -413,10 +432,42 @@ def _endpoint(stop_id, lat, lon):
 def _describe(conn, ep):
     if ep["kind"] == "stop":
         cur = conn.cursor()
-        cur.execute("SELECT id, name, lat, lon FROM stop WHERE id=%s", (ep["stop_id"],))
+        cur.execute(STOP_SELECT + "WHERE s.id=%s", (ep["stop_id"],))
         r = _rows(cur)
         return r[0] if r else None
     return {"kind": "pin", "lat": ep["lat"], "lon": ep["lon"]}
+
+
+@app.get("/api/operators")
+def operators():
+    """
+    Who the app can plan with, and how much of each it holds.
+
+    Counted rather than listed, because the question the UI is asking is whether pressing
+    an operator's filter will show a rider anything: a chip that returns an empty screen
+    is worse than one that is visibly not ready yet.
+    """
+    conn = db.connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT o.code, o.name, o.kind,
+                   count(DISTINCT r.id)::int AS routes,
+                   count(st.id)              AS departures
+            FROM operator o
+            LEFT JOIN route r      ON r.operator_id = o.id
+            LEFT JOIN timetable t  ON t.route_id = r.id
+            LEFT JOIN schedule sc  ON sc.timetable_id = t.id
+            LEFT JOIN trip tr      ON tr.schedule_id = sc.id
+            LEFT JOIN stop_time st ON st.trip_id = tr.id
+            GROUP BY o.code, o.name, o.kind
+            ORDER BY o.name
+            """
+        )
+        return {"operators": _rows(cur)}
+    finally:
+        conn.close()
 
 
 @app.get("/api/areas")

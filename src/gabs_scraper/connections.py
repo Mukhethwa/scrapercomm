@@ -247,9 +247,19 @@ def _minutes(v):
 
 
 def _stop(cur, stop_id):
-    cur.execute("SELECT id, name, lat, lon FROM stop WHERE id=%s", (stop_id,))
+    # The operator comes along because two stops can share a name across operators, and
+    # the endpoints of a journey are the two places a rider has to recognise.
+    cur.execute(
+        """
+        SELECT s.id, s.name, s.lat, s.lon, o.code, o.kind
+        FROM stop s LEFT JOIN operator o ON o.id = s.operator_id
+        WHERE s.id = %s
+        """,
+        (stop_id,),
+    )
     r = cur.fetchone()
-    return None if r is None else {"id": r[0], "name": r[1], "lat": r[2], "lon": r[3]}
+    return None if r is None else {"id": r[0], "name": r[1], "lat": r[2], "lon": r[3],
+                                   "operator_code": r[4], "operator_kind": r[5]}
 
 
 def _coords(cur, stop_ids):
