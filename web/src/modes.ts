@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { getOperators } from './api'
 
 /**
  * The transport a journey can use.
@@ -105,5 +106,44 @@ export function useModes() {
     has: (id: string) => selected.includes(id),
     /** Nothing to search. Every result in the app comes from Golden Arrow. */
     none: selected.length === 0,
+  }
+}
+
+
+/**
+ * Which operators the API can actually plan with.
+ *
+ * The `available` flags in MODES above say what the app is built to support. This says
+ * what is loaded right now, which is not the same thing and is the honest basis for
+ * deciding whether a filter chip can be pressed: a chip that returns nothing is worse
+ * than one that visibly is not ready.
+ *
+ * Until the answer arrives, the static flags stand. That keeps Golden Arrow pressable on
+ * first paint rather than making every rider wait on a round trip to learn that the app
+ * has buses.
+ */
+export function useLoadedOperators() {
+  const [loaded, setLoaded] = useState<Set<string> | null>(null)
+
+  useEffect(() => {
+    let live = true
+    getOperators()
+      .then((r) => {
+        if (!live) return
+        // An operator with routes but no departures has been half-loaded; it cannot
+        // answer a search, so it does not count as ready.
+        setLoaded(new Set(r.operators.filter((o) => o.departures > 0).map((o) => o.code)))
+      })
+      .catch(() => { /* an older API has no such endpoint; the static flags stand */ })
+    return () => { live = false }
+  }, [])
+
+  return {
+    /** Whether this operator can answer a search right now. */
+    ready: (id: string) => {
+      if (loaded === null) return MODES.find((m) => m.id === id)?.available ?? false
+      return loaded.has(id)
+    },
+    known: loaded !== null,
   }
 }

@@ -21,7 +21,16 @@ import { useModes } from './modes'
 import { buildJourney, usePlanner } from './planner'
 
 /** A suggestion in either endpoint field: a real stop, a geocoded place, or an area. */
-export interface Hit { kind: 'stop' | 'place' | 'area'; id?: number; name: string; lat: number | null; lon: number | null; sub?: string }
+export interface Hit {
+  kind: 'stop' | 'place' | 'area'
+  id?: number
+  name: string
+  lat: number | null
+  lon: number | null
+  sub?: string
+  /** For a stop: 'bus' or 'train'. RETREAT is both, and they are different places. */
+  mode?: 'bus' | 'train'
+}
 
 /** The three day types every journey is published for. */
 export const CORE_DAYS = ['WEEKDAY', 'SATURDAY', 'SUNDAY']
@@ -55,7 +64,8 @@ export async function mergedSearch(q: string, areas: string[]): Promise<Hit[]> {
    * failure than an unreachable destination.
    */
   const stops: Hit[] = s.stops.slice(0, 6)
-    .map((x) => ({ kind: 'stop', id: x.id, name: x.name, lat: x.lat, lon: x.lon }))
+    .map((x) => ({ kind: 'stop', id: x.id, name: x.name, lat: x.lat, lon: x.lon,
+                   mode: x.operator_kind }))
   const places: Hit[] = g.results.slice(0, 3)
     .map((x) => ({ kind: 'place', name: x.name, lat: x.lat, lon: x.lon, sub: x.full }))
   return [...areaHits, ...stops, ...places]
@@ -91,7 +101,9 @@ export function usePlanSearch() {
    * the timetables, rather than a point the planner has to work out anchors for.
    */
   async function resolveHit(h: Hit): Promise<Endpoint | null> {
-    if (h.kind === 'stop') return { kind: 'stop', id: h.id, name: h.name, lat: h.lat, lon: h.lon }
+    if (h.kind === 'stop') {
+      return { kind: 'stop', id: h.id, name: h.name, lat: h.lat, lon: h.lon, mode: h.mode }
+    }
     if (h.kind === 'place') return { kind: 'pin', name: h.name, lat: h.lat, lon: h.lon }
 
     const words = h.name.split(/\s+/).filter(Boolean)
@@ -101,7 +113,8 @@ export function usePlanSearch() {
       // plans, so it beats falling through to a geocoded guess at the area's name.
       const hit = r.stops.find((x) => x.lat != null && x.lon != null) ?? r.stops[0]
       if (hit) {
-        return { kind: 'stop', id: hit.id, name: hit.name, lat: hit.lat, lon: hit.lon }
+        return { kind: 'stop', id: hit.id, name: hit.name,
+                 lat: hit.lat, lon: hit.lon, mode: hit.operator_kind }
       }
     }
     const r = await getGeocode(h.name).catch(() => ({ results: [] as GeoHit[] }))

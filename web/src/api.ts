@@ -88,6 +88,10 @@ export const getTimetable = (id: number) =>
 // ---- Journey planner ----
 
 export interface StopHit {
+  /** Who serves it. Two stops can share a name across operators. */
+  operator_code?: string
+  operator_kind?: 'bus' | 'train'
+
   id: number
   name: string
   lat: number | null
@@ -153,6 +157,14 @@ export interface Endpoint {
   kind: 'stop' | 'pin'
   id?: number
   name: string
+  /**
+   * Bus stop or railway station, when it is a named stop.
+   *
+   * Not sent to the API - a stop is planned by its id alone. It is here so the screen can
+   * say "on one train" to somebody standing at RETREAT station, rather than telling every
+   * rider about buses whichever network they are on.
+   */
+  mode?: 'bus' | 'train'
   /**
    * Where it is, if we know.
    *
@@ -248,6 +260,10 @@ export const getNearbyOrigins = (
 export interface PlanOption {
   timetable_number: string
   route_label: string
+  /** Who runs it: 'gabs', 'metrorail'. Matches the ids in modes.ts. */
+  operator_code?: string
+  operator_name?: string
+  operator_kind?: 'bus' | 'train'
   day_type: string
   day_label: string
   segment_stops: SegmentStop[]
@@ -264,6 +280,18 @@ export const getGeocode = (q: string) =>
   getJSON<{ results: GeoHit[] }>(`${API}/geocode?q=${encodeURIComponent(q)}`)
 
 export const getAreas = () => getJSON<{ areas: string[] }>(`${API}/areas`)
+
+/** An operator the API can actually plan with, and how much of it is loaded. */
+export interface OperatorInfo {
+  code: string
+  name: string
+  kind: 'bus' | 'train'
+  routes: number
+  departures: number
+}
+
+export const getOperators = () =>
+  getJSON<{ operators: OperatorInfo[] }>(`${API}/operators`)
 
 export const getReachablePoint = (lat: number, lon: number) =>
   getJSON<{ reachable: ReachableStop[] }>(`${API}/reachable_point?lat=${lat}&lon=${lon}`)

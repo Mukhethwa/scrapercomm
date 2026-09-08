@@ -63,14 +63,20 @@ export interface TravelRange {
 /**
  * Which operator ran a plan option.
  *
- * Every timetable, stop and fare in the database came from Golden Arrow, so there is
- * nothing on PlanOption to group by yet and this answers the same way every time. It is
- * a function rather than a constant because this is the seam: when a second operator is
- * loaded, the API grows an `operator` field, this reads it, and the screen above needs
- * no change at all.
+ * This was the seam left for a second operator, and it is now load-bearing: the API sends
+ * the operator with every option, so a Metrorail service groups into its own card beside
+ * Golden Arrow's without the screen above changing at all.
+ *
+ * The fallback is not defensive padding. Everything loaded before operators existed is
+ * Golden Arrow, and an older API that does not send the field would otherwise leave every
+ * card unlabelled.
  */
-export function operatorOf(_option: PlanOption): { id: string; name: string; kind: 'bus' | 'train' } {
-  return { id: 'gabs', name: 'Golden Arrow Buses', kind: 'bus' }
+export function operatorOf(option: PlanOption): { id: string; name: string; kind: 'bus' | 'train' } {
+  return {
+    id: option.operator_code ?? 'gabs',
+    name: option.operator_name ?? 'Golden Arrow Buses',
+    kind: option.operator_kind ?? 'bus',
+  }
 }
 
 /**
@@ -227,6 +233,9 @@ export function fromTime(blocks: DepartureBlock[], minutes: number | null): Depa
 /** The day types a timetable is published for, in a rider's words. */
 export const DAY_LABEL: Record<string, string> = {
   WEEKDAY: 'Weekdays', SATURDAY: 'Saturday', SUNDAY: 'Sunday',
+  // Metrorail publishes one sheet for the weekend without saying whether Sunday differs,
+  // so it is shown as it is printed rather than resolved to a day it may not mean.
+  WEEKEND: 'Weekends',
   PUBLIC_HOLIDAY: 'Public Holiday', OTHER: 'Other',
 }
 

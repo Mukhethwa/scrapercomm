@@ -40,19 +40,32 @@ function stopsLabel(n: number | null | undefined): string | null {
   return n === 1 ? '1 stop' : `${n} stops`
 }
 
-function busTo(routeLabel: string): string {
+function busTo(routeLabel: string, kind: 'bus' | 'train' = 'bus'): string {
+  /*
+   * What a rider is looking for as the vehicle arrives.
+   *
+   * On a bus that is the destination painted on the front, which is the last place its
+   * route names. A train is not signed that way: PRASA labels the service by its line and
+   * direction, and that is what the platform indicator shows - so "Southern Line" is the
+   * useful thing, and "to Southern line inbound" is nonsense a rider cannot act on.
+   */
+  if (kind === 'train') {
+    const line = routeLabel.replace(/\b(INBOUND|OUTBOUND)\b/i, '').trim()
+    return line ? line.replace(/\s+/g, ' ') : routeLabel
+  }
   const parts = routeLabel.split(' - ').map((s) => s.trim()).filter(Boolean)
   const terminus = parts[parts.length - 1] ?? routeLabel
   // Title case: the data shouts, and a small grey line under a time should not.
   return `to ${terminus.charAt(0)}${terminus.slice(1).toLowerCase()}`
 }
 
-function Block({ block, planned, onAdd, onOpen, open }: {
+function Block({ block, planned, onAdd, onOpen, open, kind }: {
   block: DepartureBlock
   planned: boolean
   onAdd: () => void
   onOpen: () => void
   open: boolean
+  kind: 'bus' | 'train'
 }) {
   const d = block.departure
   const board = shortTime(d.board_raw, d.board_approx)
@@ -104,7 +117,7 @@ function Block({ block, planned, onAdd, onOpen, open }: {
       </button>
       {fare && <div className="text-[13px] font-bold text-white">{fare}</div>}
       <div className="truncate text-[11px] text-white/90" title={block.routeLabel}>
-        {busTo(block.routeLabel)}
+        {busTo(block.routeLabel, kind)}
       </div>
       {/* The two things that separate one bus from another at the same minute. */}
       <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-white/90">
@@ -165,6 +178,7 @@ function FullDay({ group, shown, onClose, isPlanned, onAdd, onOpen, openKey }: {
                   key={`${b.optionIndex}-${b.departureIndex}`}
                   block={b}
                   planned={isPlanned(b)}
+                  kind={group.kind}
                   open={openKey === `${b.optionIndex}-${b.departureIndex}`}
                   onAdd={() => onAdd(b)}
                   onOpen={() => onOpen(b)}
@@ -222,7 +236,7 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
                 the board, and it should read like one without taking a row to do it. */}
             <span className="inline-flex shrink-0 items-center gap-1 bg-good-soft px-2 py-0.5 text-[10px] font-bold tracking-[.04em] text-good-strong uppercase">
               <Check size={11} weight="bold" aria-hidden="true" />
-              Direct bus
+              Direct {group.kind === 'train' ? 'train' : 'bus'}
             </span>
           </div>
           {travel && <div className="text-[12px] text-sub">{travel} depending on route</div>}
@@ -240,6 +254,7 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
             <Block
               block={b}
               planned={isPlanned(b)}
+              kind={group.kind}
               open={openKey === `${b.optionIndex}-${b.departureIndex}`}
               onAdd={() => onAdd(b)}
               onOpen={() => onOpen(b)}
@@ -247,7 +262,9 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
           </div>
         ))}
         {shown.length === 0 && (
-          <div className="py-4 text-[13px] text-sub">No more buses today at that time.</div>
+          <div className="py-4 text-[13px] text-sub">
+            No more {group.kind === 'train' ? 'trains' : 'buses'} today at that time.
+          </div>
         )}
       </div>
 

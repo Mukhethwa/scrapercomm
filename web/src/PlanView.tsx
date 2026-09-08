@@ -253,7 +253,7 @@ export default function PlanView() {
             <>
               <div className="reachhead">
                 {reachable == null ? 'Finding destinations…'
-                  : <>You can reach {filteredReach.length} stop{filteredReach.length === 1 ? '' : 's'} from <b>{from!.name}</b> on one bus{from!.kind === 'pin' ? <span className="approxtag"> (near your point)</span> : null}</>}
+                  : <>You can reach {filteredReach.length} stop{filteredReach.length === 1 ? '' : 's'} from <b>{from!.name}</b> on one {from!.mode === 'train' ? 'train' : 'bus'}{from!.kind === 'pin' ? <span className="approxtag"> (near your point)</span> : null}</>}
               </div>
               <div className="browsehint">Popular places you can reach from here. You can also type any stop or place above.</div>
               <div className="reachlist">

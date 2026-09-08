@@ -13,7 +13,7 @@ import {
 import { usePlanSearch, type Hit } from './usePlanSearch'
 import type { Connection } from './api'
 import type { Pt } from './PlanMap'
-import { MODES } from './modes'
+import { MODES, useLoadedOperators } from './modes'
 import {
   groupByOperator, fromTime, alightOrNone, DAY_LABEL, type DepartureBlock,
 } from './results'
@@ -154,8 +154,11 @@ function Field({ label, value, onChange, onFocus, onBlur, hits, open, onPick, on
               aria-label={h.sub ? `${h.name}, ${h.sub}` : h.name}
             >
               <span className="flex items-center gap-1.5">
+                {/* A stop says which mode it is, because two operators can name a place
+                    the same way and mean two different corners of it: RETREAT the station
+                    and RETREAT the bus stop are 800m apart. */}
                 <span className="bg-ink px-1 text-[9px] font-bold tracking-wide text-onink uppercase">
-                  {h.kind}
+                  {h.kind === 'stop' && h.mode ? h.mode : h.kind}
                 </span>
                 <span className="text-[13px] font-semibold text-ink">{h.name}</span>
               </span>
@@ -179,6 +182,14 @@ export default function PlanScreen() {
   const [showMap, setShowMap] = useState(false)
   /** Which operator's card to show. Null is "All". */
   const [only, setOnly] = useState<string | null>(null)
+  /**
+   * Which operators the API can plan with right now.
+   *
+   * The chips are pressable on this rather than on the static list, so Metrorail goes
+   * live the moment its timetables load and not before. Nothing has to be redeployed to
+   * turn it on, and nothing offers a rider a filter that returns an empty screen.
+   */
+  const operators = useLoadedOperators()
 
   const groups = useMemo(() => groupByOperator(s.plan ?? []), [s.plan])
   /** The journey-with-changes the map should draw, when there is no direct one. */
@@ -253,7 +264,7 @@ export default function PlanScreen() {
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-4 p-3">
-      <div className="mx-auto min-h-0 w-full max-w-lg min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto lg:mx-0 lg:max-w-none">
+      <div className={`mx-auto min-h-0 w-full max-w-lg min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto ${hasRoute ? 'lg:mx-0 lg:max-w-none' : ''}`}>
       {/* Block layout with margins, not a column flex box. As a flex container this
           squashed its own children: flex items shrink by default, so the moment results
           overflowed, the operator chips were crushed to a sliver peeking out under the
@@ -316,20 +327,23 @@ export default function PlanScreen() {
         >
           All
         </button>
-        {MODES.filter((m) => m.available || m.id === 'myciti' || m.id === 'metrorail').map((m) => (
-          <button
-            key={m.id}
-            className={`shrink-0 border px-4 py-1.5 text-[13px] font-semibold ${
-              only === m.id ? 'border-ink bg-ink text-onink' : 'border-line bg-panel text-ink'
-            } ${m.available ? 'cursor-pointer' : 'cursor-not-allowed opacity-45'}`}
-            onClick={() => m.available && setOnly(m.id)}
-            disabled={!m.available}
-            aria-pressed={m.available ? only === m.id : undefined}
-            title={m.available ? m.note : `${m.note} - not yet available`}
-          >
-            {m.name}
-          </button>
-        ))}
+        {MODES.filter((m) => m.available || m.id === 'myciti' || m.id === 'metrorail').map((m) => {
+          const ready = operators.ready(m.id)
+          return (
+            <button
+              key={m.id}
+              className={`shrink-0 border px-4 py-1.5 text-[13px] font-semibold ${
+                only === m.id ? 'border-ink bg-ink text-onink' : 'border-line bg-panel text-ink'
+              } ${ready ? 'cursor-pointer' : 'cursor-not-allowed opacity-45'}`}
+              onClick={() => ready && setOnly(m.id)}
+              disabled={!ready}
+              aria-pressed={ready ? only === m.id : undefined}
+              title={ready ? m.note : `${m.note} - not yet available`}
+            >
+              {m.name}
+            </button>
+          )
+        })}
       </div>
 
       {s.pickError && (
@@ -357,7 +371,8 @@ export default function PlanScreen() {
             {s.reachable == null
               ? 'Finding destinations…'
               : <>You can reach {s.filteredReach.length} stop{s.filteredReach.length === 1 ? '' : 's'} from{' '}
-                  <span className="text-accent">{s.from!.name}</span> on one bus</>}
+                  <span className="text-accent">{s.from!.name}</span>{' '}
+                  on one {s.from!.mode === 'train' ? 'train' : 'bus'}</>}
           </div>
           <div className="mb-3 text-[12px] text-sub">
             Tap one, or type any stop or place above.
