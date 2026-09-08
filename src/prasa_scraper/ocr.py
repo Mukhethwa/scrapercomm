@@ -408,17 +408,38 @@ def _blocks(ink: np.ndarray) -> list[tuple[int, int]]:
     return _merge_shared_columns(ink, out)
 
 
+# How much of two bands' column rules must line up for them to be one table. High enough
+# that two tables drawn for different numbers of trains never reach it - their rules fall
+# at different pitches, so almost nothing lines up - and forgiving enough to survive a
+# rule found in one band and missed in the other.
+COLUMN_AGREEMENT = 0.9
+
+
 def _same_columns(a: list[int], b: list[int], tol: int) -> bool:
     """
     Do two bands stand on the same column rules?
 
-    Same count and every edge within a few pixels. Not exact equality: the rules are found
-    from a threshold over each band's own ink, so a band with sparser text can place an
-    edge a pixel or two off its neighbour's while both are reading the same drawn line.
+    Matched as sets rather than pairwise down the list. The edges come from a threshold
+    over each band's own ink, and a band with denser text picks up a rule its neighbour
+    misses - the Northern Line page reads 41 columns in one band and 42 in the next, off
+    the same printed grid. Compared position by position, one extra edge at the front
+    shifts every later comparison by a whole column, and two bands whose rules sit exactly
+    on top of each other reported a 46-pixel disagreement.
+
+    That is how Kraaifontein stayed lost after I thought I had found it: I checked the
+    merge against an ink threshold the reader does not use, saw one clean band, and
+    believed it.
     """
-    if len(a) != len(b) or not a:
+    if not a or not b:
         return False
-    return all(abs(x - y) <= tol for x, y in zip(a, b))
+    # A rule or two more in one band than the other is a threshold artefact. Many more is
+    # a different table, drawn for a different set of trains.
+    if abs(len(a) - len(b)) > 2:
+        return False
+    hits_a = sum(1 for x in a if any(abs(x - y) <= tol for y in b))
+    hits_b = sum(1 for y in b if any(abs(x - y) <= tol for x in a))
+    return (hits_a >= COLUMN_AGREEMENT * len(a)
+            and hits_b >= COLUMN_AGREEMENT * len(b))
 
 
 def _merge_shared_columns(ink: np.ndarray, bands: list[tuple[int, int]]) -> list[tuple[int, int]]:

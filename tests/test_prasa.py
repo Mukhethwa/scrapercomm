@@ -421,6 +421,28 @@ def test_bands_on_the_same_columns_are_one_table():
     assert blocks[0] == (0, 600)
 
 
+def test_a_spurious_rule_does_not_split_a_table():
+    from prasa_scraper.ocr import _same_columns
+    # The Northern Line page reads 41 columns in one band and 42 in the next off the same
+    # printed grid, because the edges come from a threshold over each band's own ink.
+    # Compared position by position, one extra edge at the front shifts every later
+    # comparison by a whole column and two identical bands disagreed by 46 pixels.
+    grid = list(range(0, 40 * 66, 66))
+    assert _same_columns(grid, grid + [40 * 66], tol=6)
+    assert _same_columns(grid, [-70] + grid, tol=6)
+    # Every edge nudged a pixel or two is still the same drawn grid.
+    assert _same_columns(grid, [x + 2 for x in grid], tol=6)
+
+
+def test_a_different_pitch_is_a_different_table():
+    from prasa_scraper.ocr import _same_columns
+    # Two tables drawn for different numbers of trains put their rules at a different
+    # pitch, so almost nothing lines up. Joining them would read one table's cells at the
+    # other's column positions and swap times between trains, every one of them plausible.
+    assert not _same_columns(list(range(0, 40 * 66, 66)),
+                             list(range(0, 40 * 90, 90)), tol=6)
+
+
 def test_bands_on_different_columns_stay_apart():
     # Where the column layout really does change, the tables really are different, and
     # joining them would read one table's cells at another's column positions - times
