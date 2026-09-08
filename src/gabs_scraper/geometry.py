@@ -139,7 +139,20 @@ def fetch_leg_osrm(session, a: tuple[float, float], b: tuple[float, float], _key
     raise RoutingError("osrm: still rate-limited after 4 attempts")
 
 
-def distinct_legs(conn):
+def distinct_legs(conn, kinds: tuple[str, ...] = ("bus",)):
+    """
+    Every consecutive pair of located stops, for the kinds of service asked for.
+
+    Buses only, by default, and that is not an oversight. What this fetches is a driving
+    path: the roads a vehicle takes between two points. A train does not use roads. Asking
+    Directions for the way from KRAAIFONTEIN to BELLVILLE returns the way a car would go,
+    and drawing it on the map states that the train goes down those streets - which is a
+    more confident lie than the straight line the map draws when there is no path at all.
+
+    Where rail and road run together, along the coast to Simon's Town, the answer would
+    look right and still be a guess. Where they diverge it would look wrong. Neither is
+    worth paying a routing service for.
+    """
     cur = conn.cursor()
     cur.execute(
         """
@@ -150,8 +163,10 @@ def distinct_legs(conn):
                              AND s2.stop_sequence = s1.stop_sequence + 1
         JOIN stop sa ON sa.id = s1.stop_id
         JOIN stop sb ON sb.id = s2.stop_id
+        JOIN operator oa ON oa.id = sa.operator_id AND oa.kind = ANY(%s)
         WHERE sa.lat IS NOT NULL AND sb.lat IS NOT NULL AND s1.stop_id <> s2.stop_id
-        """
+        """,
+        (list(kinds),),
     )
     return cur.fetchall()
 
