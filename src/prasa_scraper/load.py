@@ -133,6 +133,9 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
     cur = conn.cursor()
     op = operator_id(cur)
     skip = _marker_column(grid)
+    # Cells the checks could not vouch for are never written, even under --force. Forcing
+    # says "this table is worth having", not "write times nobody has verified".
+    unverified = grid.unverified()
     # What the page says it is, then what the caller asked for, then a weekday.
     day_type = day_type_of(grid.heading, grid.title) or day_type or "WEEKDAY"
 
@@ -247,6 +250,11 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
             m = TIME.match(row[ci])
             if not m:
                 continue          # already reported by the checker; never guessed at
+            if (ri, ci) in unverified:
+                # Well-formed but unproven: 07:11 in a column that had reached 17:09. The
+                # rest of the table is sound, so it loads; this one cell does not, and the
+                # stop reads as having no published time rather than a wrong one.
+                continue
             cur.execute(
                 "INSERT INTO stop_time (trip_id, schedule_stop_id, cell_type, "
                 "departure_time, raw_value) VALUES (%s, %s, 'time', %s, %s)",

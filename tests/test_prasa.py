@@ -9,7 +9,8 @@ import pytest
 
 from prasa_scraper.load import day_type_of, effective_from, route_name
 from prasa_scraper.ocr import (PADDED_TIME, TIME, Grid, _blocks, _check,
-                               _column_edges, clean_station)
+                               _column_edges, _restore_dropped_hour,
+                               clean_station)
 
 
 # ---------------------------------------------------------------- time shapes
@@ -247,3 +248,70 @@ def test_the_engine_is_found_where_the_installer_puts_it():
     # Nothing to assert about the machine running the tests beyond this: whatever the
     # lookup settles on, it must be something that actually runs.
     assert ocr._tesseract().get_tesseract_version()
+
+
+# ------------------------------------------------- putting back a dropped hour digit
+
+def flagged(times):
+    g = grid_with(times)
+    _check(g)
+    _restore_dropped_hour(g)
+    return g
+
+
+def test_a_dropped_leading_digit_is_restored_when_the_column_proves_it():
+    # PRASA prints 17:11, never 7:11, so the cell lost its tens digit rather than saying
+    # something unusual. Between 17:09 and 17:20 only one of 07:11 and 17:11 can be true.
+    # One cell like this held 304 verified times off the site.
+    g = flagged([["17:09"], ["7:11"], ["17:20"]])
+    assert g.times[1][0] == "17:11"
+    assert g.problems == []
+
+
+def test_seconds_do_not_stop_the_repair():
+    g = flagged([["15:18"], ["5:27:00"], ["15:40"]])
+    assert g.times[1][0] == "15:27:00"
+    assert g.problems == []
+
+
+def test_an_ambiguous_cell_is_left_flagged():
+    # Nothing published below it, and 07:11 sits after nothing - so both readings are
+    # consistent with the column and neither is proven. An unverified time is worse than
+    # no time, so the cell stays flagged and the loader will not write it.
+    g = Grid(heading="")
+    g.times = [["7:11"]]
+    g.stations = ["S0"]
+    _check(g)
+    _restore_dropped_hour(g)
+    assert g.times[0][0] == "7:11"
+
+
+def test_a_padded_hour_is_never_rewritten():
+    # 05:00 after 17:00 is a real problem - a whole column read in the wrong order, or a
+    # block boundary missed. Quietly turning it into 15:00 would paper over that.
+    g = flagged([["17:00"], ["05:00"], ["17:30"]])
+    assert g.times[1][0] == "05:00"
+    assert any(p.kind == "order" for p in g.problems)
+
+
+def test_the_repair_does_not_disturb_a_sound_column():
+    g = flagged([["05:00"], ["05:10"], ["05:25"]])
+    assert [r[0] for r in g.times] == ["05:00", "05:10", "05:25"]
+    assert g.problems == []
+
+
+# -------------------------------------------- what a forced load is allowed to write
+
+def test_a_flagged_cell_is_named_so_a_forced_load_can_drop_it():
+    g = grid_with([["17:09"], ["7:11"], ["17:20"], ["oh dear"]])
+    _check(g)
+    # Both the well-formed-but-unproven cell and the unreadable one are named. The first
+    # is the dangerous one: it would insert as 07:11, a train a rider misses by ten hours.
+    assert (1, 0) in g.unverified()
+    assert (3, 0) in g.unverified()
+
+
+def test_a_sound_grid_names_no_cells():
+    g = grid_with([["05:00"], ["05:10"]])
+    _check(g)
+    assert g.unverified() == set()

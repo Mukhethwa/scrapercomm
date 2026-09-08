@@ -8,6 +8,15 @@ A page carries several tables, each read and checked on its own. One that fails 
 is reported and held back, because the entire point of the checks is that times nobody has
 looked at do not silently become departure times a rider trusts. --force loads anyway, for
 when the problems have been reviewed and are understood.
+
+A cell the checks flagged is never written, under --force or otherwise, so the question a
+hold actually decides is whether an imperfect table is worth having at all. All-or-nothing
+answered that badly at the margins: one unreadable cell out of 737 was hiding 24 stations
+and a full day of service. --allow-unverified 1 loads a table whose flagged cells are
+under one per cent of it - those cells still do not load, so the affected stop reads as
+having no published time rather than a wrong one.
+
+    PYTHONPATH=src python -m prasa_scraper.pipeline --allow-unverified 1
 """
 from __future__ import annotations
 
@@ -30,6 +39,9 @@ def main() -> None:
     ap.add_argument("--page", type=int, help="just this page number")
     ap.add_argument("--dry-run", action="store_true", help="read and check, write nothing")
     ap.add_argument("--force", action="store_true", help="load tables that failed their checks")
+    ap.add_argument("--allow-unverified", type=float, default=0.0, metavar="PCT",
+                    help="load a table if at most PCT%% of its cells are unverified; "
+                         "those cells are still not written")
     args = ap.parse_args()
 
     paths = ([os.path.join(args.dir, args.pdf)] if args.pdf
@@ -60,13 +72,29 @@ def main() -> None:
                         skipped += 1
                         continue
 
-                    if grid.problems and not args.force:
+                    # A table is held when anything in it is unproven. That is the right
+                    # default and it is why this pipeline can be trusted at all - but it
+                    # is all-or-nothing, and one unreadable cell out of 737 was costing a
+                    # rider 24 stations and a whole day's service. Since a flagged cell is
+                    # never written whatever happens, the choice is not between right and
+                    # wrong times: it is between one stop reading "no published time" and
+                    # the entire table being invisible. --allow-unverified names how much
+                    # of that a run will accept, and defaults to none.
+                    lost = len(grid.unverified())
+                    share = 100.0 * lost / counts["times"] if counts["times"] else 100.0
+                    tolerable = args.allow_unverified > 0 and share <= args.allow_unverified
+
+                    if grid.problems and not args.force and not tolerable:
                         print(f"  HOLD  {label}: {len(grid.problems)} unresolved "
                               f"of {counts['times']} times", flush=True)
                         for problem in grid.problems[:4]:
                             print(f"          {problem.kind}: {problem.detail}", flush=True)
                         held += 1
                         continue
+
+                    if grid.problems and tolerable and not args.force:
+                        print(f"  part  {label}: {lost} of {counts['times']} times "
+                              f"unverified ({share:.2f}%) - loading the rest", flush=True)
 
                     if args.dry_run:
                         print(f"  ok    {label}: {counts['stations']} stations, "

@@ -120,6 +120,20 @@ class Grid:
     def ok(self) -> bool:
         return not self.problems
 
+    def unverified(self) -> set[tuple[int, int]]:
+        """
+        Which cells the checks could not vouch for, as (row, column).
+
+        A cell that failed its shape check is already refused at load time - it is not a
+        time, so there is nothing to insert. A cell that failed the ordering check is the
+        dangerous one: 07:11 where the sheet says 17:11 is a perfectly well-formed time
+        and a train a rider would miss by ten hours. Naming the flagged cells lets a
+        forced load drop exactly those and keep the rest of a table that is otherwise
+        sound, instead of choosing between all of it and none of it.
+        """
+        return {(p.row, p.column) for p in self.problems
+                if p.row >= 0 and p.column >= 0}
+
     def counts(self) -> dict:
         filled = sum(1 for r in self.times for c in r if c)
         return {
@@ -506,6 +520,80 @@ def _second_look(grid: Grid, gray: Image.Image) -> None:
         grid.problems.clear()
         _check(grid)
 
+    _restore_dropped_hour(grid)
+
+
+def _column_bounds(grid: Grid, ri: int, ci: int) -> tuple[float | None, float | None]:
+    """The published times immediately above and below a cell, in minutes."""
+    before = after = None
+    for r in range(ri - 1, -1, -1):
+        m = TIME.match(grid.times[r][ci] if ci < len(grid.times[r]) else "")
+        if m:
+            before = _minutes(m)
+            break
+    for r in range(ri + 1, len(grid.times)):
+        m = TIME.match(grid.times[r][ci] if ci < len(grid.times[r]) else "")
+        if m:
+            after = _minutes(m)
+            break
+    return before, after
+
+
+def _restore_dropped_hour(grid: Grid) -> None:
+    """
+    Put back a leading hour digit the reader dropped, where the column proves which.
+
+    PRASA pads its hours: the sheets print 05:25, never 5:25. So a cell that came back
+    with a single-digit hour is not a time PRASA printed - it is a two-digit hour with
+    the first digit lost, and there are exactly two candidates, 0x and 1x. That is not a
+    guess to fill a gap; the minutes were read, and the tens digit has two possible
+    values rather than ten.
+
+    Which one is settled by the column, not chosen for plausibility. A train runs
+    forwards, so the reading has to sit between the published time above it and the one
+    below. If both candidates fit, or neither does, nothing is written and the cell stays
+    flagged - the whole point of the checks is that an unproven time is worse than none.
+
+    This is what was holding whole tables back. One cell read as "7:11" in a column that
+    had reached 17:09 held 304 verified times off the site, and "5:27:00" under 15:18
+    held another 30.
+    """
+    for problem in [p for p in grid.problems if p.kind == "order"]:
+        ri, ci = problem.row, problem.column
+        if ri < 0 or ri >= len(grid.times) or ci >= len(grid.times[ri]):
+            continue
+        cell = grid.times[ri][ci]
+        m = TIME.match(cell or "")
+        if not m or len(m.group(1)) != 1:
+            continue          # a padded hour is what the sheet prints; nothing was lost
+
+        before, after = _column_bounds(grid, ri, ci)
+        fits = []
+        for tens in ("0", "1"):
+            candidate = tens + cell
+            cm = TIME.match(candidate)
+            if not cm:
+                continue
+            mins = _minutes(cm)
+            if before is not None and mins < before:
+                continue
+            if after is not None and mins > after:
+                continue
+            fits.append(candidate)
+
+        if len(fits) == 1:
+            grid.times[ri][ci] = fits[0]
+
+    if any(p.kind == "order" for p in grid.problems):
+        grid.problems.clear()
+        _check(grid)
+
+
+def _minutes(m: re.Match) -> float:
+    """A matched time as minutes past midnight, seconds included."""
+    total = int(m.group(1)) * 60 + int(m.group(2))
+    return total + int(m.group(3)) / 60 if m.group(3) else total
+
 
 def _check(grid: Grid) -> None:
     """Everything we can prove about the numbers without a second source."""
@@ -529,9 +617,7 @@ def _check(grid: Grid) -> None:
             m = TIME.match(row[ci] or "")
             if not m:
                 continue
-            minutes = int(m.group(1)) * 60 + int(m.group(2))
-            if m.group(3):
-                minutes += int(m.group(3)) / 60
+            minutes = _minutes(m)
             if latest is not None and minutes < latest - 60:
                 grid.problems.append(Problem(
                     "order",
