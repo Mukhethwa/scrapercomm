@@ -78,3 +78,15 @@ def test_slice_path_handles_degenerate_input():
     assert slice_path([], 0.2, 0.8) == []
     assert slice_path([[1, 2]], 0.2, 0.8) == [[1, 2]]
     assert slice_path([[0, 0], [0, 0.01]], 0.8, 0.2) == []  # inverted window
+
+
+def test_a_train_station_is_searched_for_as_a_station():
+    from gabs_scraper.geocode import variants
+    got = variants("FISH HOEK", "train")
+    assert got[0] == "FISH HOEK railway station"
+    assert "FISH HOEK" in got          # still falls back to the bare name
+
+
+def test_a_bus_stop_is_not_searched_for_as_a_station():
+    from gabs_scraper.geocode import variants
+    assert not any("station" in v for v in variants("FISH HOEK", "bus"))

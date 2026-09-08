@@ -25,18 +25,31 @@ def _to_time(s: str | None) -> time | None:
     return time(int(hh), int(mm))
 
 
+OPERATOR_CODE = "gabs"
+
+
+def operator_id(cur, code: str = OPERATOR_CODE) -> int:
+    """The id of the operator these timetables belong to."""
+    cur.execute("SELECT id FROM operator WHERE code = %s", (code,))
+    row = cur.fetchone()
+    if not row:
+        raise RuntimeError(f"operator {code!r} is missing; apply sql/operators.sql")
+    return row[0]
+
+
 def _upsert_route(cur, entry: ManifestEntry) -> int:
     cur.execute(
         """
-        INSERT INTO route (name, origin, destination, letter_group)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO route (name, origin, destination, letter_group, operator_id)
+        VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (name) DO UPDATE SET
             origin = EXCLUDED.origin,
             destination = EXCLUDED.destination,
             letter_group = EXCLUDED.letter_group
         RETURNING id
         """,
-        (entry.route_name, entry.origin, entry.destination, entry.letter_group),
+        (entry.route_name, entry.origin, entry.destination, entry.letter_group,
+         operator_id(cur)),
     )
     return cur.fetchone()[0]
 
@@ -44,10 +57,13 @@ def _upsert_route(cur, entry: ManifestEntry) -> int:
 def _get_or_create_stop(cur, cache: dict[str, int], name: str) -> int:
     if name in cache:
         return cache[name]
+    # Scoped to the operator: a stop is unique per operator now, because a train station
+    # and a bus stop can share a name and are not the same place. Conflicting on (name)
+    # alone would hand Metrorail this operator's stop ids.
     cur.execute(
-        "INSERT INTO stop (name) VALUES (%s) "
-        "ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
-        (name,),
+        "INSERT INTO stop (name, operator_id) VALUES (%s, %s) "
+        "ON CONFLICT (name, operator_id) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+        (name, operator_id(cur)),
     )
     sid = cur.fetchone()[0]
     cache[name] = sid

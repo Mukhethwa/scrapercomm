@@ -73,7 +73,7 @@ def expand(name: str) -> str:
     return " ".join(out)
 
 
-def variants(name: str) -> list[str]:
+def variants(name: str, kind: str | None = None) -> list[str]:
     """
     The name, then progressively looser readings of it.
 
@@ -94,6 +94,14 @@ def variants(name: str) -> list[str]:
         candidate = " ".join(candidate.split()).strip(" ,-/")
         if candidate and candidate not in seen:
             seen.append(candidate)
+
+    # A railway station and the suburb it is named after are not the same point, and the
+    # suburb is what a plain search returns. Asking for the station first puts the pin on
+    # the platform rather than somewhere in the neighbourhood around it.
+    if kind == "train":
+        add(f"{name} railway station")
+        add(f"{expand(name)} railway station")
+        add(f"{name} station")
 
     add(name)
     add(expand(name))
@@ -162,13 +170,18 @@ def run(force: bool = False, retry_failed: bool = False) -> dict:
     ensure_columns(conn)
     cur = conn.cursor()
     if force:
-        cur.execute("SELECT id, name FROM stop ORDER BY name")
+        cur.execute("""SELECT s.id, s.name, o.kind FROM stop s
+                       LEFT JOIN operator o ON o.id = s.operator_id ORDER BY s.name""")
     elif retry_failed:
         # Everything still unplaced, including stops already marked "notfound" - the point
         # of a retry is that the readings tried have changed.
-        cur.execute("SELECT id, name FROM stop WHERE lat IS NULL ORDER BY name")
+        cur.execute("""SELECT s.id, s.name, o.kind FROM stop s
+                       LEFT JOIN operator o ON o.id = s.operator_id
+                       WHERE s.lat IS NULL ORDER BY s.name""")
     else:
-        cur.execute("SELECT id, name FROM stop WHERE geocoded_at IS NULL ORDER BY name")
+        cur.execute("""SELECT s.id, s.name, o.kind FROM stop s
+                       LEFT JOIN operator o ON o.id = s.operator_id
+                       WHERE s.geocoded_at IS NULL ORDER BY s.name""")
     rows = cur.fetchall()
 
     g = requests.Session(); g.headers.update({"User-Agent": USER_AGENT})
@@ -178,12 +191,12 @@ def run(force: bool = False, retry_failed: bool = False) -> dict:
     print(f"geocoding {len(rows)} stops; primary={'google' if google_enabled else 'nominatim'}",
           flush=True)
 
-    for i, (sid, name) in enumerate(rows, 1):
+    for i, (sid, name, kind) in enumerate(rows, 1):
         coords, source, matched = None, None, None
 
         # Each reading of the name in turn, stopping at the first that lands. The exact
         # name is always tried first, so a looser reading is only ever a last resort.
-        for candidate in variants(name):
+        for candidate in variants(name, kind):
             if google_enabled:
                 try:
                     coords = geocode_google(g, candidate, key)
