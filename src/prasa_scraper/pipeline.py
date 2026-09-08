@@ -46,6 +46,9 @@ def main() -> None:
     ap.add_argument("--page", type=int, help="just this page number")
     ap.add_argument("--dry-run", action="store_true", help="read and check, write nothing")
     ap.add_argument("--force", action="store_true", help="load tables that failed their checks")
+    ap.add_argument("--fresh", action="store_true",
+                    help="delete every Metrorail route first, so a page read differently "
+                         "than last time leaves nothing of the old reading behind")
     ap.add_argument("--allow-unverified", type=float, default=0.0, metavar="PCT",
                     help="load a table if at most PCT%% of its cells are unverified; "
                          "those cells are still not written. 3 is the measured line "
@@ -56,6 +59,11 @@ def main() -> None:
              else sorted(glob.glob(os.path.join(args.dir, "*.pdf"))))
 
     conn = None if args.dry_run else db.connect()
+    if conn and args.fresh:
+        from .load import forget_everything
+        gone = forget_everything(conn)
+        print(f"cleared {gone['routes']} existing Metrorail routes")
+        print(flush=True)
     loaded = held = skipped = 0
     try:
         for path in paths:

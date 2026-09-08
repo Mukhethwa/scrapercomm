@@ -133,6 +133,32 @@ def _end(grid: Grid, index: int) -> str | None:
     return canonical(stations[index]) if stations else None
 
 
+def forget_everything(conn) -> dict:
+    """
+    Delete every Metrorail route and the timetables under it.
+
+    For when the reading itself has changed shape rather than improved. A load replaces a
+    table keyed by its page, so a page that used to be read as three tables and is now
+    read as one leaves the other two behind - and they are not harmless leftovers, they
+    are the fragments the merge exists to abolish, still offering a rider a route from
+    Kraaifontein that stops at Stikland.
+
+    Routes cascade to timetables, schedules, trips and times. Stops are left alone: they
+    are shared, they carry coordinates that took a geocoding run to get, and a stop with
+    nothing calling at it is reported by prasa_scraper.coverage rather than silently
+    dropped here.
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM operator WHERE code = %s", (OPERATOR_CODE,))
+        row = cur.fetchone()
+        if not row:
+            return {"routes": 0}
+        cur.execute("DELETE FROM route WHERE operator_id = %s", (row[0],))
+        deleted = cur.rowcount
+    conn.commit()
+    return {"routes": deleted}
+
+
 def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
               day_type: str | None = None) -> dict:
     """Load one page. Returns what it wrote, so a caller can report on it."""
