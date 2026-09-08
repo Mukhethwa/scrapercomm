@@ -5,31 +5,34 @@ export type MapTheme = 'light' | 'dark'
 const STORAGE_KEY = 'commuttr:map-theme'
 const CHANGED = 'commuttr:map-theme-changed'
 
+/** The stored choice, or the system's if none has been made. */
+function read(): MapTheme {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved === 'dark' || saved === 'light') return saved
+  } catch {
+    // A private window can refuse to read; fall through to the system preference.
+  }
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
 /**
- * Light or dark basemap, chosen by the rider rather than by their operating system.
+ * Light or dark basemap.
  *
- * mapcn falls back to the system preference, which meant somebody whose laptop is in
- * dark mode got a near-black map under an otherwise light app - and a route drawn in
- * orange over it is far harder to follow than the same line over a pale street map.
- * Light is the default here for that reason; the choice is remembered.
+ * This used to default to light whatever the system said, because a dark map under a
+ * light app was jarring and an orange route over near-black is harder to follow than the
+ * same line over a pale street map. The first half of that reasoning has since inverted:
+ * the app has a real dark theme, so on a dark phone the light map is now the thing that
+ * does not belong.
+ *
+ * So the default follows the system, and a rider who prefers the pale street map still
+ * has the toggle - and their choice, once made, outranks the system.
  */
 export function useMapTheme() {
-  const [theme, setTheme] = useState<MapTheme>(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light'
-    } catch {
-      return 'light'
-    }
-  })
+  const [theme, setTheme] = useState<MapTheme>(() => read())
 
   useEffect(() => {
-    const sync = () => {
-      try {
-        setTheme(localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light')
-      } catch {
-        // A private window can refuse to read; the current choice still stands.
-      }
-    }
+    const sync = () => setTheme(read())
     window.addEventListener(CHANGED, sync)
     window.addEventListener('storage', sync)
     return () => {

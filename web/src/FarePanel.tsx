@@ -131,7 +131,7 @@ export default function FarePanel(
               : 'These are Golden Arrow Gold Card prices'}
             {' '}and do not change with the time of day. A cash fare does: it is higher at
             peak times and lower off-peak. Golden Arrow does not publish cash fares per
-            journey, so this app cannot show you one — ask the driver.
+            journey, so this app cannot show you one. Ask the driver.
           </p>
         </div>
       )}

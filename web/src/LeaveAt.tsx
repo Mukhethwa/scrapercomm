@@ -1,16 +1,16 @@
 /**
  * When the rider wants to leave.
  *
- * This filters nothing away. It reorders: departures at or after the chosen time come
- * first, the rest follow behind. A rider who picks 17:00 and is shown an empty card
- * cannot tell whether the buses have stopped for the day or the app has hidden them,
- * and the second is a far more common reason for an empty screen than the first.
+ * Departures that could no longer be caught are dropped, not pushed behind the rest. An
+ * earlier version reordered instead, on the reasoning that an empty card is ambiguous -
+ * but it offered 05:25 to somebody searching at five in the afternoon, which is worse.
+ * The ambiguity is answered in words: the card says "nothing leaves after 17:00 today".
  *
  * The time is the rider's own clock, not the server's. Timetables are published in local
  * time and the app is used in the city it describes, so "now" is the browser's now.
  */
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { CaretDown } from '@phosphor-icons/react'
 
 /** Minutes past midnight, as the timetable counts them. */
 export function nowMinutes(): number {
@@ -53,26 +53,26 @@ export default function LeaveAt({ value, onChange }:
       <span className="text-[13px] font-medium text-sub">Leave At</span>
       <div className="relative">
         <button
-          className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-accent-soft px-3.5 py-1.5 text-[13px] font-semibold text-accent"
+          className="inline-flex cursor-pointer items-center gap-1 bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-accent-fill"
           onClick={() => setOpen(!open)}
           aria-expanded={open}
           aria-haspopup="listbox"
         >
           {label}
-          <ChevronDown size={14} aria-hidden="true"
+          <CaretDown size={14} weight="bold" aria-hidden="true"
             className={`transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
         {open && (
           <div
-            className="absolute right-0 z-40 mt-2 max-h-72 w-44 overflow-y-auto rounded-xl border border-line bg-panel py-1 shadow-lg"
+            className="absolute right-0 z-40 mt-2 max-h-72 w-44 overflow-y-auto border border-line bg-panel py-1 shadow-lg"
             role="listbox"
           >
             <button
               role="option"
               aria-selected={value == null}
               className={`w-full cursor-pointer px-4 py-2 text-left text-[13px] font-semibold ${
-                value == null ? 'text-accent' : 'text-ink hover:bg-black/5'}`}
+                value == null ? 'text-accent-deep' : 'text-ink hover:bg-line/50'}`}
               onClick={() => { onChange(null); setOpen(false) }}
             >
               Any time
@@ -80,7 +80,7 @@ export default function LeaveAt({ value, onChange }:
             <button
               role="option"
               aria-selected={false}
-              className="w-full cursor-pointer px-4 py-2 text-left text-[13px] font-semibold text-ink hover:bg-black/5"
+              className="w-full cursor-pointer px-4 py-2 text-left text-[13px] font-semibold text-ink hover:bg-line/50"
               onClick={() => { onChange(nowMinutes()); setOpen(false) }}
             >
               Leave now
@@ -92,7 +92,7 @@ export default function LeaveAt({ value, onChange }:
                 role="option"
                 aria-selected={value === m}
                 className={`w-full cursor-pointer px-4 py-2 text-left text-[13px] ${
-                  value === m ? 'font-bold text-accent' : 'text-ink hover:bg-black/5'}`}
+                  value === m ? 'font-bold text-accent-deep' : 'text-ink hover:bg-line/50'}`}
                 onClick={() => { onChange(m); setOpen(false) }}
               >
                 {hhmm(m)}

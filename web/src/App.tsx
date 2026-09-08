@@ -5,6 +5,7 @@ import PlannerView from './PlannerView'
 import RouteBrowser from './RouteBrowser'
 import { usePlanner } from './planner'
 import NewApp from './NewApp'
+import { usePinnedTheme } from './theme'
 
 /**
  * Which layout to run.
@@ -43,6 +44,16 @@ function Badge({ n }: { n: number }) {
 
 export default function App() {
   const [shell, setShell] = useState<'classic' | 'grouped'>(readShell)
+  /**
+   * The classic layout is held at light whatever the rider chose.
+   *
+   * Its stylesheet was written when there was one theme and carries 84 hard-coded whites,
+   * so under the dark tokens it renders white cards with white text on them - not merely
+   * off-brand, unreadable. Rewriting a stylesheet that is due to be deleted is the wrong
+   * work; pinning the view is honest and costs nothing, and the pin lifts the moment the
+   * new layout is showing.
+   */
+  usePinnedTheme(shell === 'classic' ? 'light' : null)
   const [tab, setTab] = useState<Tab>('plan')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBox = useRef<HTMLDivElement>(null)
@@ -185,7 +196,7 @@ export default function App() {
       {/*
         * PlanView stays mounted and is hidden with CSS rather than unmounted. The whole
         * point of the planner is to bounce between searching and reviewing, and
-        * unmounting threw away the search — the stops, the results, the map — every
+        * unmounting threw away the search - the stops, the results, the map - every
         * time. The other two views are cheap to rebuild and read their state fresh.
         */}
       <div className={tab === 'plan' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>

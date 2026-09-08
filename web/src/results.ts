@@ -28,6 +28,14 @@ export interface DepartureBlock {
   timetableNumber: string
   /** Belongs to the route, not the departure: no published fare varies by time of day. */
   fare: Fare | null
+  /**
+   * WEEKDAY, SATURDAY or SUNDAY.
+   *
+   * A plan comes back covering every day the route runs, and flattening them into one
+   * time-ordered row put a Saturday bus beside a Tuesday one with nothing to tell them
+   * apart. The day has to travel with the departure.
+   */
+  dayType: string
   /** Minutes past midnight, or null where the timetable publishes no boarding time. */
   boardMinutes: number | null
 }
@@ -83,6 +91,7 @@ export function flatten(options: PlanOption[]): DepartureBlock[] {
         routeLabel: option.route_label,
         timetableNumber: option.timetable_number,
         fare: option.fare,
+        dayType: option.day_type,
         boardMinutes: departure.board_minutes,
       })
     })
@@ -123,10 +132,15 @@ export function travelRange(blocks: DepartureBlock[]): TravelRange | null {
   return { min: Math.min(...spans), max: Math.max(...spans) }
 }
 
-/** "12 min", "20-28 min". Null where no departure publishes both ends. */
+/**
+ * "12 min", "20 to 28 min". Null where no departure publishes both ends.
+ *
+ * Spelt "to" rather than hyphenated. Inter draws a hyphen with wide sidebearings, so
+ * "20-28" reads as "20 - 28" and looks like a subtraction rather than a range.
+ */
 export function travelLabel(range: TravelRange | null): string | null {
   if (!range) return null
-  return range.min === range.max ? `${range.min} min` : `${range.min}-${range.max} min`
+  return range.min === range.max ? `${range.min} min` : `${range.min} to ${range.max} min`
 }
 
 /**
@@ -212,7 +226,7 @@ export function fromTime(blocks: DepartureBlock[], minutes: number | null): Depa
 
 /** The day types a timetable is published for, in a rider's words. */
 export const DAY_LABEL: Record<string, string> = {
-  WEEKDAY: 'Mon-Fri', SATURDAY: 'Saturday', SUNDAY: 'Sunday',
+  WEEKDAY: 'Weekdays', SATURDAY: 'Saturday', SUNDAY: 'Sunday',
   PUBLIC_HOLIDAY: 'Public Holiday', OTHER: 'Other',
 }
 
@@ -265,6 +279,45 @@ export function blockDuration(b: DepartureBlock): number | null {
   if (board_minutes == null || arrive_minutes == null) return null
   const span = arrive_minutes - board_minutes
   return span > 0 ? span : null
+}
+
+/** How long a ride takes, and whether the timetable is certain about it. */
+export interface Span { minutes: number; approx: boolean }
+
+/**
+ * How long the journey takes, said as plainly as the timetable allows.
+ *
+ * blockDuration above refuses to answer unless both ends are published, which is right
+ * for the operator-wide range - an uncertain number would widen it silently. On a single
+ * departure the calculation is worth making anyway: a rider comparing tiles wants to know
+ * that one bus takes an hour and another takes two and a quarter, and a blank helps
+ * nobody.
+ *
+ * Where either end is a "via" floor the answer is marked approximate and carries the
+ * tilde the times themselves already use, so it is never mistaken for a published figure.
+ */
+export function journeySpan(b: DepartureBlock): Span | null {
+  const { board_minutes, arrive_minutes, board_approx, arrive_approx } = b.departure
+  if (board_minutes == null || arrive_minutes == null) return null
+  const minutes = arrive_minutes - board_minutes
+  if (minutes <= 0) return null
+  return { minutes, approx: board_approx || arrive_approx }
+}
+
+/**
+ * "45 min", "1h", "2h 15m".
+ *
+ * Hours once past sixty minutes: "135 min" is arithmetic a rider should not have to do
+ * while deciding which bus to run for.
+ */
+export function spanLabel(span: Span | null): string | null {
+  if (!span) return null
+  const { minutes, approx } = span
+  const tilde = approx ? '~' : ''
+  if (minutes < 60) return `${tilde}${minutes} min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m === 0 ? `${tilde}${h}h` : `${tilde}${h}h ${m}m`
 }
 
 /** How many of these leave at or after the chosen time, for "nothing left today". */

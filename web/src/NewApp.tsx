@@ -10,22 +10,31 @@
  * forgets everything the moment the browser does. It arrives with sign-in.
  */
 import { useEffect, useRef, useState } from 'react'
-import { CalendarDays, MapPin, User } from 'lucide-react'
+import { CalendarBlank, Desktop, MapPin, Moon, Sun, UserCircle } from '@phosphor-icons/react'
 import PlanScreen from './PlanScreen'
 import PlannerView from './PlannerView'
 import RouteBrowser from './RouteBrowser'
 import ModePicker from './ModePicker'
 import { usePlanner } from './planner'
+import { useTheme, type Theme } from './theme'
 
 type Tab = 'plan' | 'planner'
 type Panel = 'browse' | 'settings' | null
 
 const TABS: { id: Tab; label: string; icon: typeof MapPin }[] = [
   { id: 'plan', label: 'Plan Trip', icon: MapPin },
-  { id: 'planner', label: 'Planner', icon: CalendarDays },
+  { id: 'planner', label: 'Planner', icon: CalendarBlank },
+]
+
+/** The three states of the appearance control, in the order they are offered. */
+const THEMES: { id: Theme; label: string; icon: typeof Sun }[] = [
+  { id: 'system', label: 'System', icon: Desktop },
+  { id: 'light', label: 'Light', icon: Sun },
+  { id: 'dark', label: 'Dark', icon: Moon },
 ]
 
 export default function NewApp({ onLeave }: { onLeave: () => void }) {
+  const { theme, setTheme } = useTheme()
   const [tab, setTab] = useState<Tab>('plan')
   const [menu, setMenu] = useState(false)
   const [panel, setPanel] = useState<Panel>(null)
@@ -48,7 +57,7 @@ export default function NewApp({ onLeave }: { onLeave: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-bg">
-      <header className="flex items-center justify-between bg-black px-4 py-3 text-white">
+      <header className="flex items-center justify-between border-b border-line bg-black px-4 py-3 text-white">
         <button
           className="group inline-flex cursor-pointer items-baseline text-[20px] leading-none font-bold tracking-[-0.02em] text-white"
           onClick={() => setTab('plan')}
@@ -66,25 +75,52 @@ export default function NewApp({ onLeave }: { onLeave: () => void }) {
             aria-haspopup="menu"
             aria-label="Menu"
           >
-            <User size={18} aria-hidden="true" />
+            <UserCircle size={20} weight="regular" aria-hidden="true" />
           </button>
           {menu && (
-            <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-line bg-panel shadow-lg"
+            <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden border border-line bg-panel shadow-lg"
               role="menu">
               <button role="menuitem"
-                className="w-full cursor-pointer px-4 py-3 text-left text-[13px] font-semibold text-ink hover:bg-black/5"
+                className="w-full cursor-pointer px-4 py-3 text-left text-[13px] font-semibold text-ink hover:bg-line/50"
                 onClick={() => { setPanel('browse'); setMenu(false) }}>
                 Browse routes
               </button>
               <button role="menuitem"
-                className="w-full cursor-pointer px-4 py-3 text-left text-[13px] font-semibold text-ink hover:bg-black/5"
+                className="w-full cursor-pointer px-4 py-3 text-left text-[13px] font-semibold text-ink hover:bg-line/50"
                 onClick={() => { setPanel('settings'); setMenu(false) }}>
                 Transport settings
               </button>
+              {/* Appearance. A segmented control rather than a switch, because the
+                  useful default is neither light nor dark but "whatever the phone says",
+                  and a two-state switch has nowhere to put that. */}
+              <div className="border-t border-line" />
+              <div className="px-4 pt-3 pb-1 text-[11px] font-bold tracking-[.06em] text-sub uppercase">
+                Appearance
+              </div>
+              <div className="flex gap-1 px-3 pb-3">
+                {THEMES.map((t) => {
+                  const Icon = t.icon
+                  const on = theme === t.id
+                  return (
+                    <button
+                      key={t.id}
+                      role="menuitemradio"
+                      aria-checked={on}
+                      className={`flex flex-1 cursor-pointer flex-col items-center gap-1 border px-2 py-2 text-[11px] font-semibold ${
+                        on ? 'border-ink bg-ink text-onink' : 'border-line text-ink hover:border-accent'
+                      }`}
+                      onClick={() => setTheme(t.id)}
+                    >
+                      <Icon size={16} weight={on ? 'fill' : 'regular'} aria-hidden="true" />
+                      {t.label}
+                    </button>
+                  )
+                })}
+              </div>
               <div className="border-t border-line" />
               {/* The way back to the original layout, while both exist. */}
               <button role="menuitem"
-                className="w-full cursor-pointer px-4 py-3 text-left text-[13px] font-semibold text-sub hover:bg-black/5"
+                className="w-full cursor-pointer px-4 py-3 text-left text-[13px] font-semibold text-sub hover:bg-line/50"
                 onClick={() => { onLeave(); setMenu(false) }}>
                 Switch to classic view
               </button>
@@ -105,13 +141,13 @@ export default function NewApp({ onLeave }: { onLeave: () => void }) {
       {panel && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
           onClick={() => setPanel(null)} role="dialog" aria-modal="true">
-          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-panel p-4"
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto bg-panel p-4"
             onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div className="text-[15px] font-bold text-ink">
                 {panel === 'browse' ? 'Browse routes' : 'Transport settings'}
               </div>
-              <button className="cursor-pointer text-[13px] font-semibold text-accent"
+              <button className="cursor-pointer text-[13px] font-semibold text-accent-deep"
                 onClick={() => setPanel(null)}>Done</button>
             </div>
             {panel === 'browse' ? <RouteBrowser /> : <ModePicker />}
@@ -127,12 +163,12 @@ export default function NewApp({ onLeave }: { onLeave: () => void }) {
             <button
               key={t.id}
               className={`flex flex-1 cursor-pointer flex-col items-center gap-0.5 py-2.5 text-[11px] font-semibold ${
-                on ? 'text-accent' : 'text-sub'}`}
+                on ? 'text-accent-deep' : 'text-sub'}`}
               onClick={() => setTab(t.id)}
               aria-current={on ? 'page' : undefined}
             >
               <span className="relative">
-                <Icon size={19} aria-hidden="true" />
+                <Icon size={22} weight={on ? 'fill' : 'regular'} aria-hidden="true" />
                 {t.id === 'planner' && journeys.length > 0 && (
                   <span className="absolute -top-1.5 -right-2 min-w-[16px] rounded-full bg-accent px-1 text-[10px] leading-4 font-bold text-white">
                     {journeys.length}

@@ -10,21 +10,45 @@
  */
 @import "tailwindcss";
 
+/* Times and fares stack in columns down the departure carousel, and proportional digits
+   make a column of them ripple. Inter ships tabular figures; switching them on app-wide
+   costs nothing in prose, because the two sets differ only in digit width. */
+:root {
+  font-variant-numeric: tabular-nums;
+}
+
 @theme {
   --color-bg: #f5f6f7;
   --color-panel: #ffffff;
   --color-ink: #111111;
   --color-black: #000000;
   --color-muted: #111111;
-  --color-line: #e4e7eb;
+  --color-line: #d3d9e0;
+  /* Surfaces, named for their job rather than their colour, because in dark mode they
+     stop being shades of grey and start being black separated by 1px strokes.
+       field  the fill behind a text input
+       block  a departure block inside a card
+       onink  text sitting on an ink-coloured fill, which inverts with the theme */
+  --color-field: #ffffff;
+  --color-block: #f5f6f7;
+  --color-onink: #ffffff;
+  /* A state pill is a solid fill carrying white, in both themes. A tinted ground with
+     saturated text on it was tried and reads as a glow on a black page. */
+  --color-good-soft: #2f6b4f;
+  --color-good-strong: #ffffff;
   /* Secondary text on the operator-grouped screen only.
      --muted above is deliberately near-black, because on the original layout grey text
-     hid a boarding time. That screen earns its hierarchy from size and weight; this one
-     earns it from a card structure that already separates heading from detail, so a
-     genuine grey is safe here and is what the design asks for. Contrast against
-     --color-panel is 4.7:1, above the 4.5 floor for body text. */
-  --color-sub: #6b7280;
+     hid a boarding time. This screen earns its hierarchy from a card structure that
+     already separates heading from detail, so a real grey is safe - but only a dark one.
+     The first attempt used #6b7280: 4.64:1 on white and 4.28:1 on the grey page, so below
+     the 4.5 floor on the surface it appears on most, and it read as washed out rather
+     than quiet. This is 7.1:1 on white and 6.6:1 on the page. */
+  --color-sub: #4b5563;
   --color-accent: #ff4500;
+  /* #ff4500 is 3.40:1 on white: right as a fill behind white text, and fine for a large
+     heading, but below AA at the 13px used for prices and links. Accent TEXT therefore
+     uses accent-deep (5.03:1) while accent FILLS keep the brand orange, so the brand
+     reads the same and the words are actually legible. */
   --color-accent-soft: #fff1eb;
   --color-accent-deep: #cc3700;
   --color-accent-fill: #cc3700;
@@ -34,7 +58,8 @@
   --color-warn: #ff4500;
   --color-bad: #b3261e;
   --color-good-fill: #2f6b4f;
-  --font-sans: 'Arimo', Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
 }
 
 /* The tokens shadcn and mapcn compile against, pointed at the same palette so a shadcn
@@ -56,13 +81,18 @@
 }
 
 :root {
+  /* Said unconditionally, not just inside the dark media query. This is the signal that
+     turns a browser's forced darkening off; stated only under prefers-color-scheme it
+     arrives too late, and the browser inverts the theme we just declared. */
+  color-scheme: light dark;
+
   /* Commuttr brand palette: black (primary), white (secondary), #ff4500 (identifier) */
   --bg: #f5f6f7;
   --panel: #ffffff;
   --ink: #111111;         /* near-black body text */
   --black: #000000;       /* brand primary, used for the header and solid pills */
   --muted: #111111;       /* secondary text stays black; hierarchy comes from size and weight */
-  --line: #e4e7eb;
+  --line: #d3d9e0;
   --accent: #ff4500;      /* brand identifier, the "destination" orange */
   --accent-soft: #fff1eb; /* retained only where a solid fill would shout */
   --good: #2f6b4f;        /* solid green - a state, not a wash */
@@ -73,8 +103,142 @@
      and legible at 5.04:1. #ff4500 stays the brand colour for text, borders and icons
      on light backgrounds, where it is doing no such work. */
   --accent-fill: #cc3700;
-  font-family: 'Arimo', Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
 }
+
+
+/*
+ * Dark mode, in the "lights out" style rather than the usual dark grey.
+ *
+ * The app had no dark theme at all, which did not mean it had no dark appearance: phone
+ * browsers force-invert a light page, and an algorithm guessing at greys is exactly what
+ * produced the muddy, cheap look. Declaring the theme takes the guess away.
+ *
+ * The idea is the one X uses. Depth comes from 1px strokes on pure black, not from
+ * stacking progressively lighter greys - mid-grey panels are what make a dark UI look
+ * flat and cheap. So the page, the cards and the departure blocks are all #000, and what
+ * separates them is a #2F3336 line. Only text inputs get a real fill, because a field
+ * has to look like somewhere you can type.
+ *
+ * Contrast, all against #000: secondary text 4.84:1, brand orange 6.18:1, the green pill
+ * 6.15:1 against its own ground. Every one clears AA, which pure-black themes often fail
+ * by reaching for dim greys.
+ */
+/*
+ * The dark palette, written once.
+ *
+ * The values live here as --dk-* and are mapped onto the real tokens twice below: once
+ * for a phone in dark mode, once for somebody who chose dark explicitly. Two selectors
+ * are unavoidable - CSS has no way to share a rule between a media query and an
+ * attribute - but the colours themselves should still only exist in one place.
+ */
+:root {
+  --dk-bg: #000000;
+  --dk-panel: #000000;
+  --dk-block: #000000;
+  --dk-field: #16181c;
+  --dk-ink: #ffffff;
+  /* Near-white, not mid-grey. #71767b is what X uses, and on X it is fine, because there
+     it labels one line under a paragraph of white. Here almost everything on a departure
+     block is secondary - the arrival, the destination, the stop count - so a mid-grey
+     turned the whole block grey, and that is what read as cheap. 9.4:1 on black. */
+  --dk-sub: #a7aeb5;
+  /* A visible stroke, not a suggestion of one. Structure is the only thing separating
+     regions on a black page, so it has to survive a phone screen in daylight. */
+  --dk-line: #383e45;
+  --dk-onink: #000000;
+  /* Solid fills carrying white, the way the light theme does it. Saturated text on pure
+     black haloes - the "glow" - because the eye has no midtone to settle against, so the
+     colour moves into the fill and the text on it stays white. */
+  --dk-accent: #ff4500;
+  --dk-accent-deep: #ff7a52;
+  --dk-accent-fill: #cc3700;
+  --dk-accent-soft: #1f242b;
+  --dk-good: #1a7f4f;
+  --dk-good-strong: #ffffff;
+  --dk-bad: #c8322b;
+  --dk-warn: #cc3700;
+  --dk-wash: #16181c;
+  --dk-legacy-panel: #16181c;
+  --dk-legacy-muted: #e7e9ea;
+}
+
+/*
+ * Dark, either because the device asks for it or because the rider did.
+ *
+ * The media rule excludes an explicit light choice, so "system" needs no attribute at all
+ * and the absence of one is the signal.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: var(--dk-bg);
+    --color-panel: var(--dk-panel);
+    --color-block: var(--dk-block);
+    --color-field: var(--dk-field);
+    --color-ink: var(--dk-ink);
+    --color-muted: var(--dk-ink);
+    --color-sub: var(--dk-sub);
+    --color-line: var(--dk-line);
+    --color-onink: var(--dk-onink);
+    --color-accent: var(--dk-accent);
+    --color-accent-deep: var(--dk-accent-deep);
+    --color-accent-fill: var(--dk-accent-fill);
+    --color-accent-soft: var(--dk-accent-soft);
+    --color-good: var(--dk-good);
+    --color-good-fill: var(--dk-good);
+    --color-good-soft: var(--dk-good);
+    --color-good-strong: var(--dk-good-strong);
+    --color-bad: var(--dk-bad);
+    --color-warn: var(--dk-warn);
+    --bg: var(--dk-bg);
+    --panel: var(--dk-legacy-panel);
+    --ink: var(--dk-ink);
+    --muted: var(--dk-legacy-muted);
+    --line: var(--dk-line);
+    --wash: var(--dk-wash);
+    --accent-soft: var(--dk-accent-soft);
+    --good: var(--dk-good);
+    --bad: var(--dk-bad);
+    --accent-fill: var(--dk-accent-fill);
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: var(--dk-bg);
+  --color-panel: var(--dk-panel);
+  --color-block: var(--dk-block);
+  --color-field: var(--dk-field);
+  --color-ink: var(--dk-ink);
+  --color-muted: var(--dk-ink);
+  --color-sub: var(--dk-sub);
+  --color-line: var(--dk-line);
+  --color-onink: var(--dk-onink);
+  --color-accent: var(--dk-accent);
+  --color-accent-deep: var(--dk-accent-deep);
+  --color-accent-fill: var(--dk-accent-fill);
+  --color-accent-soft: var(--dk-accent-soft);
+  --color-good: var(--dk-good);
+  --color-good-fill: var(--dk-good);
+  --color-good-soft: var(--dk-good);
+  --color-good-strong: var(--dk-good-strong);
+  --color-bad: var(--dk-bad);
+  --color-warn: var(--dk-warn);
+  --bg: var(--dk-bg);
+  --panel: var(--dk-legacy-panel);
+  --ink: var(--dk-ink);
+  --muted: var(--dk-legacy-muted);
+  --line: var(--dk-line);
+  --wash: var(--dk-wash);
+  --accent-soft: var(--dk-accent-soft);
+  --good: var(--dk-good);
+  --bad: var(--dk-bad);
+  --accent-fill: var(--dk-accent-fill);
+}
+
+/* An explicit light choice also tells the browser, so its own controls follow. */
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -152,7 +316,7 @@ body { background: var(--bg); color: var(--ink); }
 .c.none { color: #cbd2d9; }
 
 .notes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-.notechip { font-size: 12px; color: var(--muted); background: var(--bg); border-radius: 6px; padding: 4px 8px; }
+.notechip { font-size: 12px; color: var(--muted); background: var(--bg); padding: 4px 8px; }
 .notechip b { color: var(--accent); }
 
 .mappane { position: sticky; top: 8px; }
@@ -195,6 +359,13 @@ body { background: var(--bg); color: var(--ink); }
 .planright { border-left: 1px solid var(--line); display: flex; }
 .planright .map-wrap { flex: 1; display: flex; flex-direction: column; border: none; border-radius: 0; }
 .planright .map { flex: 1; height: auto; }
+.mappanel { display: flex; flex-direction: column; min-height: 0; }
+/* A free-standing map is 520px tall. In the new layout it is given a box - a 288px strip
+   on a phone, the full right-hand column on a wide screen - and 520px inside either one
+   crops the map rather than fitting it, which moves the route off centre. */
+.mappanel .map-wrap { flex: 1; display: flex; flex-direction: column; border: none; border-radius: 0; min-height: 0; }
+.mappanel .map { flex: 1; height: auto; min-height: 0; }
+
 .mapempty { margin: auto; color: var(--muted); font-size: 14px; padding: 24px; text-align: center; }
 
 .reachhead { font-size: 14px; color: var(--ink); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -344,7 +515,7 @@ body { background: var(--bg); color: var(--ink); }
 .optheadtop { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .optroute { font-weight: 700; font-size: 14px; }
 .optmeta { display: flex; gap: 6px; flex-shrink: 0; }
-.daypill { font-size: 11px; background: var(--ink); color: #fff; border-radius: 6px; padding: 2px 8px; }
+.daypill { font-size: 11px; background: var(--ink); color: #fff; padding: 2px 8px; }
 .numpill { font-size: 11px; background: var(--bg); color: var(--muted); border-radius: 6px; padding: 2px 8px; }
 .deps { display: flex; flex-wrap: wrap; gap: 6px; }
 .dep {
@@ -507,7 +678,7 @@ body { background: var(--bg); color: var(--ink); }
 .plannersub { margin: 0; font-size: 13px; color: var(--muted); max-width: 60ch; }
 .plannerhead .link.danger {
   flex: none; white-space: nowrap; padding: 8px 12px; border: 1px solid var(--line);
-  border-radius: 8px; background: var(--panel);
+  background: var(--panel);
 }
 .plannerhead .link.danger:hover { border-color: var(--accent); }
 .link.danger { color: var(--ink); }
@@ -520,7 +691,7 @@ body { background: var(--bg); color: var(--ink); }
 .primary:hover { background: #e03d00; }
 
 .plannerlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.plannercard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.plannercard { background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
 .plannercard.dragging { box-shadow: 0 10px 28px rgba(0,0,0,.16); }
 .plannercard.clash { border-color: var(--accent); }
 
@@ -548,7 +719,7 @@ body { background: var(--bg); color: var(--ink); }
 
 .plannerside { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .movebtns { display: flex; gap: 3px; }
-.movebtn { width: 26px; height: 24px; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; cursor: pointer; font-size: 12px; line-height: 1; }
+.movebtn { width: 26px; height: 24px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-size: 12px; line-height: 1; }
 .movebtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .movebtn:disabled { opacity: .35; cursor: default; }
 

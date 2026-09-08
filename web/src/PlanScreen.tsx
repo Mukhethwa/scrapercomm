@@ -8,19 +8,29 @@
  */
 import { useMemo, useState } from 'react'
 import {
-  ArrowUpDown, ChevronDown, CircleX, Info, Lightbulb, Map as MapIcon, TriangleAlert, X,
-} from 'lucide-react'
+  ArrowsDownUp, CaretDown, XCircle, Info, Lightbulb, MapTrifold, Warning, X,
+} from '@phosphor-icons/react'
 import { usePlanSearch, type Hit } from './usePlanSearch'
+import type { Connection } from './api'
+import type { Pt } from './PlanMap'
 import { MODES } from './modes'
 import {
   groupByOperator, fromTime, alightOrNone, DAY_LABEL, type DepartureBlock,
 } from './results'
+import { stopLabel } from './stops'
 import OperatorCard from './OperatorCard'
 import LeaveAt, { hhmm, nowMinutes } from './LeaveAt'
 import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
+import FarePanel from './FarePanel'
 import ConnectionsCard, { connectionsFrom } from './ConnectionsCard'
 import { PinIcon } from './icons'
+
+/** The name on the front of the bus: the last place its route label names. */
+function busTerminus(routeLabel: string): string {
+  const parts = routeLabel.split(' - ').map((x) => x.trim()).filter(Boolean)
+  return parts[parts.length - 1] ?? routeLabel
+}
 
 /** "996 m", "3.6 km" - whichever a rider would actually say for that distance. */
 function away(km: number): string {
@@ -39,7 +49,7 @@ function Banner({ tone, icon: Icon, children }: {
     bad: 'bg-bad text-white',
   }[tone]
   return (
-    <div className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-[13px] ${skin}`}>
+    <div className={`flex items-start gap-2 px-3 py-2.5 text-[13px] ${skin}`}>
       <Icon size={16} aria-hidden="true" className="mt-px shrink-0" />
       <span>{children}</span>
     </div>
@@ -64,16 +74,16 @@ function NearbyBox({ title, tone, stops, onPick }: {
   onPick: (s: NearStop) => void
 }) {
   return (
-    <div className={`rounded-2xl p-4 ${tone === 'suggest' ? 'bg-accent text-white' : 'bg-panel shadow-sm'}`}>
+    <div className={`p-4 ${tone === 'suggest' ? 'bg-accent text-white' : 'bg-panel shadow-sm'}`}>
       <div className="mb-3 flex items-start gap-2 text-[13px]">
-        {tone === 'suggest' && <Lightbulb size={15} aria-hidden="true" className="mt-px shrink-0" />}
+        {tone === 'suggest' && <Lightbulb size={16} weight="fill" aria-hidden="true" className="mt-px shrink-0" />}
         <span>{title}</span>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {stops.map((r) => (
           <button
             key={r.id}
-            className="flex cursor-pointer flex-col items-start gap-0.5 rounded-xl bg-panel px-3 py-2.5 text-left hover:ring-1 hover:ring-accent"
+            className="flex cursor-pointer flex-col items-start gap-0.5 bg-panel px-3 py-2.5 text-left hover:ring-1 hover:ring-accent"
             onClick={() => onPick(r)}
           >
             <span className="text-[13px] font-bold text-ink">{r.name}</span>
@@ -104,7 +114,7 @@ function Field({ label, value, onChange, onFocus, onBlur, hits, open, onPick, on
 }) {
   return (
     <div className="relative flex-1">
-      <div className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5">
+      <div className="flex items-center gap-2 border border-line bg-field px-3 py-2.5">
         <span className="shrink-0"><PinIcon size={15} /></span>
         <input
           className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-sub disabled:cursor-not-allowed"
@@ -118,10 +128,10 @@ function Field({ label, value, onChange, onFocus, onBlur, hits, open, onPick, on
           aria-label={label}
         />
         {value && !disabled && (
-          <button className="shrink-0 cursor-pointer rounded p-0.5 text-sub hover:text-ink"
+          <button className="shrink-0 cursor-pointer p-0.5 text-sub hover:text-ink"
             onMouseDown={(e) => { e.preventDefault(); onClear() }}
             aria-label={`Clear ${label}`}>
-            <X size={15} aria-hidden="true" />
+            <X size={15} weight="bold" aria-hidden="true" />
           </button>
         )}
       </div>
@@ -134,17 +144,17 @@ function Field({ label, value, onChange, onFocus, onBlur, hits, open, onPick, on
           happens on click, so Enter and Space work too. Picking on mousedown instead
           left the list dead to anyone not using a mouse. */}
       {open && hits.length > 0 && (
-        <div className="absolute top-full right-0 left-0 z-40 mt-1 max-h-64 overflow-y-auto rounded-xl border border-line bg-panel py-1 shadow-lg">
+        <div className="absolute top-full right-0 left-0 z-40 mt-1 max-h-64 overflow-y-auto border border-line bg-panel py-1 shadow-lg">
           {hits.map((h, i) => (
             <button
               key={`${h.kind}-${h.id ?? h.name}-${i}`}
-              className="flex w-full cursor-pointer flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-black/5"
+              className="flex w-full cursor-pointer flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-line/50"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onPick(h)}
               aria-label={h.sub ? `${h.name}, ${h.sub}` : h.name}
             >
               <span className="flex items-center gap-1.5">
-                <span className="rounded bg-ink px-1 text-[9px] font-bold tracking-wide text-white uppercase">
+                <span className="bg-ink px-1 text-[9px] font-bold tracking-wide text-onink uppercase">
                   {h.kind}
                 </span>
                 <span className="text-[13px] font-semibold text-ink">{h.name}</span>
@@ -171,6 +181,8 @@ export default function PlanScreen() {
   const [only, setOnly] = useState<string | null>(null)
 
   const groups = useMemo(() => groupByOperator(s.plan ?? []), [s.plan])
+  /** The journey-with-changes the map should draw, when there is no direct one. */
+  const [chosenConn, setChosenConn] = useState<Connection | null>(null)
   /** Connections whose first bus could still be caught at the chosen time. */
   const liveConns = useMemo(
     () => (s.conns ? connectionsFrom(s.conns, leaveAt) : null),
@@ -178,6 +190,7 @@ export default function PlanScreen() {
   )
   const shownGroups = only ? groups.filter((g) => g.id === only) : groups
   const openKey = s.openDep ? `${s.openDep.oi}-${s.openDep.di}` : null
+  const openOption = s.openDep ? s.plan?.[s.openDep.oi] : undefined
   const openDeparture = s.openDep ? s.plan?.[s.openDep.oi]?.departures[s.openDep.di] : undefined
 
   function isPlanned(b: DepartureBlock) {
@@ -193,23 +206,68 @@ export default function PlanScreen() {
     if (option) s.togglePlanned(option, b.departure)
   }
 
+  /**
+   * Where you get on, where you change, and where you get off.
+   *
+   * A connection has no road geometry, so the map cannot draw the route it takes. It can
+   * still draw the places, which is the question a rider actually has about a journey
+   * with changes: where am I changing, and how far apart are those points.
+   */
+  const connSegment: Pt[] | undefined = useMemo(() => {
+    if (!chosenConn || (s.plan && s.plan.length > 0)) return undefined
+    const pts: Pt[] = chosenConn.legs.map((l, i) => ({
+      name: l.from_name, lat: l.from_lat, lon: l.from_lon, stop_sequence: i + 1,
+    }))
+    const last = chosenConn.legs[chosenConn.legs.length - 1]
+    if (last) {
+      pts.push({
+        name: last.to_name, lat: last.to_lat, lon: last.to_lon,
+        stop_sequence: chosenConn.legs.length + 1,
+      })
+    }
+    return pts.filter((p) => p.lat != null && p.lon != null)
+  }, [chosenConn, s.plan])
+
   /** Tapping a time asks "which bus is this, where do I get off" - not "show me a map". */
   function open(b: DepartureBlock) {
     s.selectDep(b.optionIndex, b.departureIndex, b.departure)
   }
 
+  /**
+   * The map, declared once because two layouts show it.
+   *
+   * A phone folds it away behind a toggle, since the screen has room for one thing at a
+   * time. A wide screen has room for both and gets it as a standing panel: a 512px column
+   * of cards marooned in the middle of a monitor is not a layout, it is a phone screenshot.
+   */
+  const mapEl = (
+    <PlanMap
+      from={s.from} to={s.to}
+      segment={connSegment ?? s.segment}
+      roadPath={connSegment ? undefined : s.roadPath}
+      ride={connSegment ? undefined : s.ride}
+      onMapClick={s.onMapClick}
+    />
+  )
+  const hasRoute = (s.plan && s.plan.length > 0) || (liveConns && liveConns.length > 0)
+
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-4 p-3">
+      <div className="mx-auto min-h-0 w-full max-w-lg min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto lg:mx-0 lg:max-w-none">
+      {/* Block layout with margins, not a column flex box. As a flex container this
+          squashed its own children: flex items shrink by default, so the moment results
+          overflowed, the operator chips were crushed to a sliver peeking out under the
+          Leave At row instead of keeping their height and scrolling away like the rest. */}
       {/* Search. The swap sits outside the two fields, against their shared left edge,
           because it acts on both of them and belongs to neither. */}
       <div className="flex items-center gap-2">
         <button
-          className="shrink-0 cursor-pointer rounded-lg p-2 text-ink hover:bg-black/5 disabled:opacity-35"
+          className="shrink-0 cursor-pointer p-2 text-ink hover:bg-line/50 disabled:opacity-35"
           onClick={s.swapEnds}
           disabled={!s.from || !s.to}
           aria-label="Swap starting point and destination"
         >
-          <ArrowUpDown size={18} aria-hidden="true" />
+          <ArrowsDownUp size={20} weight="bold" aria-hidden="true" />
         </button>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <Field
@@ -240,13 +298,18 @@ export default function PlanScreen() {
 
       <LeaveAt value={leaveAt} onChange={setLeaveAt} />
 
-      {/* Operator filter. The ones with no data behind them stay listed and disabled -
+      {/* Operator filter. It scrolls inside the column rather than bleeding past it: the
+          page padding moved to the outer wrapper when the desktop layout arrived, so the
+          negative margin this used to carry had nothing left to bleed into and simply
+          overhung the column, clipping the first chip and the Leave At label.
+
+          The ones with no data behind them stay listed and disabled -
           a rider looking for a train should learn the app has none yet, rather than
           assume they searched wrongly. Same reasoning as the old ModePicker. */}
-      <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         <button
-          className={`shrink-0 cursor-pointer rounded-full border px-4 py-1.5 text-[13px] font-semibold ${
-            only === null ? 'border-ink bg-ink text-white' : 'border-line bg-panel text-ink'
+          className={`shrink-0 cursor-pointer border px-4 py-1.5 text-[13px] font-semibold ${
+            only === null ? 'border-ink bg-ink text-onink' : 'border-line bg-panel text-ink'
           }`}
           onClick={() => setOnly(null)}
           aria-pressed={only === null}
@@ -256,8 +319,8 @@ export default function PlanScreen() {
         {MODES.filter((m) => m.available || m.id === 'myciti' || m.id === 'metrorail').map((m) => (
           <button
             key={m.id}
-            className={`shrink-0 rounded-full border px-4 py-1.5 text-[13px] font-semibold ${
-              only === m.id ? 'border-ink bg-ink text-white' : 'border-line bg-panel text-ink'
+            className={`shrink-0 border px-4 py-1.5 text-[13px] font-semibold ${
+              only === m.id ? 'border-ink bg-ink text-onink' : 'border-line bg-panel text-ink'
             } ${m.available ? 'cursor-pointer' : 'cursor-not-allowed opacity-45'}`}
             onClick={() => m.available && setOnly(m.id)}
             disabled={!m.available}
@@ -270,7 +333,7 @@ export default function PlanScreen() {
       </div>
 
       {s.pickError && (
-        <div className="rounded-xl bg-accent-soft px-3 py-2 text-[13px] text-ink">{s.pickError}</div>
+        <div className="bg-accent-soft px-3 py-2 text-[13px] text-ink">{s.pickError}</div>
       )}
 
       {s.loading && <div className="py-8 text-center text-[13px] text-sub">Finding buses…</div>}
@@ -289,7 +352,7 @@ export default function PlanScreen() {
         * this take me", which is how somebody who does not know the network starts.
         */}
       {s.stage === 'reachable' && (
-        <div className="rounded-2xl bg-panel p-4 shadow-sm">
+        <div className="border border-line bg-panel p-4">
           <div className="mb-1 text-[14px] font-bold text-ink">
             {s.reachable == null
               ? 'Finding destinations…'
@@ -301,13 +364,16 @@ export default function PlanScreen() {
           </div>
           <div className="flex flex-col gap-1">
             {s.filteredReach.slice(0, 40).map((r) => (
+              /* No trip count. It was the number of scheduled journeys that call at the
+                 stop, which sounds informative and is not: a rider choosing where to go
+                 cannot act on "144" versus "120", and it made every row look like a
+                 statistic rather than a destination. */
               <button
                 key={r.id}
-                className="flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2.5 text-left hover:bg-accent-soft"
+                className="flex cursor-pointer items-center gap-2 border border-line bg-block px-3 py-2.5 text-left hover:border-accent"
                 onClick={() => s.pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}
               >
                 <span className="truncate text-[13px] font-semibold text-ink">{r.name}</span>
-                <span className="shrink-0 text-[11px] text-sub">{r.trip_count} trips</span>
               </button>
             ))}
             {s.reachable != null && s.filteredReach.length === 0 && (
@@ -341,11 +407,11 @@ export default function PlanScreen() {
           journey is worth making at all. */}
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && liveConns && liveConns.length > 0 && (
         <>
-          <Banner tone="warn" icon={TriangleAlert}>
+          <Banner tone="warn" icon={Warning}>
             <b>No direct bus</b> from {s.from!.name} to {s.to!.name}. You can still get there by taking{' '}
             <b>{s.connLegs} buses</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
           </Banner>
-          <ConnectionsCard connections={liveConns} legsRequired={s.connLegs} />
+          <ConnectionsCard connections={liveConns} onChoose={setChosenConn} />
         </>
       )}
 
@@ -353,7 +419,7 @@ export default function PlanScreen() {
           screen and a journey whose first bus finished this morning. */}
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading
         && s.conns && s.conns.length > 0 && liveConns && liveConns.length === 0 && (
-        <Banner tone="warn" icon={TriangleAlert}>
+        <Banner tone="warn" icon={Warning}>
           <b>No direct bus</b> from {s.from!.name} to {s.to!.name}, and the {s.connLegs}-bus
           journey through <b>{s.conns[0].change_at.join(' then ')}</b> has finished for today.
           Choose an earlier time, or “Any time”, to see how it runs.
@@ -361,7 +427,7 @@ export default function PlanScreen() {
       )}
 
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns && s.conns.length === 0 && (
-        <Banner tone="bad" icon={CircleX}>
+        <Banner tone="bad" icon={XCircle}>
           <b>No way to get there by bus.</b> There is no direct service from {s.from!.name} to{' '}
           {s.to!.name}, and no combination of up to three buses connects them either.
         </Banner>
@@ -380,7 +446,7 @@ export default function PlanScreen() {
       {/* A dropped pin has no stop id, and the connections engine can only join named
           stops - so this is a limit of the question, not of the network. */}
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns === null && (
-        <Banner tone="bad" icon={CircleX}>
+        <Banner tone="bad" icon={XCircle}>
           <b>No direct bus.</b> Journeys with a change can only be worked out between named
           bus stops, not dropped pins.
         </Banner>
@@ -404,6 +470,47 @@ export default function PlanScreen() {
               isPlanned={isPlanned}
               onAdd={add}
               onOpen={open}
+              detail={s.openDep && openOption && (
+                <>
+                  {/* What the block in the carousel had no room for.
+                      A 136px tile can carry a time, a price and a stop count; the route
+                      the bus actually runs, the timetable it comes from, and the cheaper
+                      multi-ride tickets all have to live somewhere, and this is where a
+                      rider has asked for more. */}
+                  <div className="mb-3 border border-line bg-block p-3">
+                    <div className="text-[11px] font-bold tracking-[.06em] text-sub uppercase">
+                      Look for the bus to
+                    </div>
+                    <div className="text-[15px] font-bold text-ink">
+                      {busTerminus(openOption.route_label)}
+                    </div>
+                    <div className="mt-1 text-[12px] text-sub">
+                      Route {openOption.route_label}, timetable #{openOption.timetable_number}
+                    </div>
+                    <div className="mt-1 text-[12px] text-sub">
+                      {DAY_LABEL[openOption.day_type] ?? openOption.day_type}
+                      {openDeparture && <> · {openDeparture.board_raw} to {openDeparture.arrive_raw}</>}
+                      {openDeparture && stopLabel(openDeparture.stop_count)
+                        && <> · {stopLabel(openDeparture.stop_count)}</>}
+                    </div>
+                  </div>
+                  <FarePanel fare={openOption.fare} />
+                  <TripStrip
+                    stops={s.tripStops}
+                    loading={s.loadingTrip}
+                    notes={s.tripNotes}
+                    riderFromSeq={openDeparture?.from_seq ?? 0}
+                    riderToSeq={openDeparture?.to_seq ?? 9999}
+                    boardPin={s.from?.kind === 'pin'
+                      ? { name: s.from.name, time: openDeparture?.board_raw } : null}
+                    alightPin={s.to?.kind === 'pin'
+                      ? { name: s.to.name, time: openDeparture?.arrive_raw } : null}
+                    boardTime={alightOrNone(openDeparture, 'board')}
+                    alightTime={alightOrNone(openDeparture, 'alight')}
+                    onClose={() => s.setOpenDep(null)}
+                  />
+                </>
+              )}
             />
           </div>
         )
@@ -412,7 +519,7 @@ export default function PlanScreen() {
       {/* Nothing runs today, but something runs on Saturday - or from a stop up the road.
           Worth saying: the alternative is a rider concluding the journey is impossible. */}
       {s.plan && !s.loading && s.altDays.length > 0 && (
-        <div className="rounded-2xl bg-panel p-4 shadow-sm">
+        <div className="border border-line bg-panel p-4">
           <div className="mb-3 text-[13px] font-bold text-ink">
             {s.plan.length
               ? 'On other days, the nearest stop with a direct bus:'
@@ -427,7 +534,7 @@ export default function PlanScreen() {
                 {s.dayAlts[d].map((o) => (
                   <button
                     key={o.id}
-                    className="flex cursor-pointer flex-col items-start gap-0.5 rounded-xl bg-bg px-3 py-2.5 text-left hover:bg-accent-soft"
+                    className="flex cursor-pointer flex-col items-start gap-0.5 border border-line bg-block px-3 py-2.5 text-left hover:border-accent"
                     onClick={() => s.useAlt(o)}
                   >
                     <span className="text-[13px] font-semibold text-ink">{o.name}</span>
@@ -449,51 +556,44 @@ export default function PlanScreen() {
         </div>
       )}
 
-      {/* The trip breakdown: the whole bus run, the rider's own part picked out. */}
-      {s.openDep && (
-        <div className="rounded-2xl bg-panel p-3 shadow-sm">
-          <TripStrip
-            stops={s.tripStops}
-            loading={s.loadingTrip}
-            notes={s.tripNotes}
-            riderFromSeq={openDeparture?.from_seq ?? 0}
-            riderToSeq={openDeparture?.to_seq ?? 9999}
-            boardPin={s.from?.kind === 'pin'
-              ? { name: s.from.name, time: openDeparture?.board_raw } : null}
-            alightPin={s.to?.kind === 'pin'
-              ? { name: s.to.name, time: openDeparture?.arrive_raw } : null}
-            boardTime={alightOrNone(openDeparture, 'board')}
-            alightTime={alightOrNone(openDeparture, 'alight')}
-            onClose={() => s.setOpenDep(null)}
-          />
-        </div>
-      )}
+      {/* On a phone the map is something a rider asks for, not something that takes half
+          the screen. It matters when deciding where to stand, which is after the bus is
+          chosen. On a wide screen it stands permanently in the panel to the right, so
+          this whole card is hidden there.
 
-      {/* The map is something a rider asks for, not something that takes half the screen.
-          It matters when deciding where to stand, which is after the bus is chosen. */}
-      {s.plan && s.plan.length > 0 && (
-        <div className="rounded-2xl bg-panel p-3 shadow-sm">
+          It is drawn for journeys with a change too. Those carry no road geometry - the
+          API sends that only for a direct plan - but the legs do carry the coordinates of
+          every place you get on and off, which is the part a rider needs: where the
+          changes actually are. */}
+      {hasRoute && (
+        <div className="border border-line bg-panel p-3 lg:hidden">
           <button
             className="flex w-full cursor-pointer items-center justify-between text-[13px] font-semibold text-ink"
             onClick={() => setShowMap(!showMap)}
             aria-expanded={showMap}
           >
             <span className="flex items-center gap-2">
-              <MapIcon size={16} aria-hidden="true" className="text-accent" />
+              <MapTrifold size={18} weight="fill" aria-hidden="true" className="text-accent" />
               {showMap ? 'Hide map' : 'Show map'}
             </span>
-            <ChevronDown size={16} aria-hidden="true"
+            <CaretDown size={16} weight="bold" aria-hidden="true"
               className={`transition-transform ${showMap ? 'rotate-180' : ''}`} />
           </button>
           {showMap && (
-            <div className="mt-3 h-72 overflow-hidden rounded-xl">
-              <PlanMap
-                from={s.from} to={s.to} segment={s.segment} roadPath={s.roadPath}
-                ride={s.ride} onMapClick={s.onMapClick}
-              />
-            </div>
+            <div className="mappanel mt-3 h-72 overflow-hidden">{mapEl}</div>
           )}
         </div>
+      )}
+      </div>
+
+      {/* The standing map panel. Only from lg up, and only once there is a route to draw:
+          an empty map beside an empty search is decoration. */}
+      {hasRoute && (
+        <aside className="hidden min-h-0 min-w-0 flex-1 lg:block">
+          <div className="mappanel h-full overflow-hidden border border-line">
+            {mapEl}
+          </div>
+        </aside>
       )}
     </div>
   )

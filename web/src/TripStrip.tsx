@@ -126,7 +126,7 @@ export default function TripStrip(
  * Worth reading once and then never again, so it sits behind an info button rather than
  * taking up room under every trip a commuter opens.
  *
- * The letters are not fixed across the network — each timetable defines its own — so the
+ * The letters are not fixed across the network, because each timetable defines its own, so the
  * meanings come from the trip's own footnotes rather than being hardcoded.
  */
 function TripNotes({ notes }: { notes?: TripNote[] }) {
@@ -145,7 +145,7 @@ function TripNotes({ notes }: { notes?: TripNote[] }) {
             are the bus's official schedule.
           </p>
           <p>
-            <b>~05:30</b> means the bus cannot get there before 05:30 — be there by then and
+            <b>~05:30</b> means the bus cannot get there before 05:30, so be there by then and
             allow extra, because the timetable does not say how much later it arrives.
           </p>
           <p>
@@ -161,7 +161,7 @@ function TripNotes({ notes }: { notes?: TripNote[] }) {
               <ul className="notelist">
                 {notes.map((n) => (
                   <li key={n.code}>
-                    <b>{n.code}</b> — {n.description}
+                    <b>{n.code}</b>: {n.description}
                   </li>
                 ))}
               </ul>

@@ -12,14 +12,12 @@
  * a button without splitting them would only have hidden the wall, not removed it.
  */
 import { useState } from 'react'
-import { ArrowUpRight, Bus, TrainFront, X } from 'lucide-react'
+import { ArrowUpRight, Check, X } from '@phosphor-icons/react'
+import OperatorLogo from './OperatorLogo'
 import type { DepartureBlock, OperatorGroup } from './results'
-import { bucketByTimeOfDay, blockDuration, travelLabel } from './results'
+import { bucketByTimeOfDay, journeySpan, spanLabel, travelLabel, DAY_LABEL } from './results'
 import { shortTime, boundIsUseful } from './times'
-import { stopLabel } from './stops'
 import { rands } from './money'
-
-const ICON = { bus: Bus, train: TrainFront }
 
 /**
  * What a rider looks for on the front of the bus.
@@ -29,6 +27,19 @@ const ICON = { bus: Bus, train: TrainFront }
  * an internal reference no commuter has ever seen on a vehicle. The destination is both
  * true and the thing actually painted on the bus.
  */
+/**
+ * How many stops the rider sits through, excluding their own two ends.
+ *
+ * "Direct" rather than the shared helper's "non-stop": Inter's hyphen carries enough
+ * space that "non-stop" reads as "non - stop" at 11px. The classic view keeps its own
+ * wording, which suits the font it was set in.
+ */
+function stopsLabel(n: number | null | undefined): string | null {
+  if (n == null) return null
+  if (n === 0) return 'Direct'
+  return n === 1 ? '1 stop' : `${n} stops`
+}
+
 function busTo(routeLabel: string): string {
   const parts = routeLabel.split(' - ').map((s) => s.trim()).filter(Boolean)
   const terminus = parts[parts.length - 1] ?? routeLabel
@@ -51,43 +62,59 @@ function Block({ block, planned, onAdd, onOpen, open }: {
   )
   const arriveUseful = boundIsUseful(d.arrive_minutes, d.arrive_approx, d.board_minutes)
   const fare = rands(block.fare?.per_ride_cents)
-  const stops = stopLabel(d.stop_count)
+  const stops = stopsLabel(d.stop_count)
   /**
-   * How long this one bus takes. Shown per departure rather than per operator: routes to
-   * the same place take very different roads - some to Bellville go round by Durbanville
-   * - so an operator-wide "15-115 min" is true and useless, while a duration against one
-   * departure is what lets a rider pick the fast one.
+   * How long this one bus takes, in brackets beside the arrival.
+   *
+   * Per departure rather than per operator: routes to the same place take very different
+   * roads - some to Bellville go round by Durbanville - so an operator-wide "15 to 115
+   * min" is true and useless, while a duration against one departure is what lets a rider
+   * pick the fast one. Beside the arrival because that is the moment the question occurs:
+   * "07:30" means nothing until you know it is two and a quarter hours away.
    */
-  const mins = blockDuration(block)
+  const span = spanLabel(journeySpan(block))
 
   return (
-    <div className={`flex w-[136px] shrink-0 flex-col gap-1 rounded-xl p-3 ${
-      open ? 'bg-accent-soft ring-1 ring-accent ring-inset' : 'bg-bg'}`}>
+    /*
+     * A solid orange block with white on it, square-cornered, the way the brand's own
+     * tiles are drawn. Everything inside is therefore white: the price cannot stay orange
+     * on orange, and a corner would make it a card rather than a tile.
+     *
+     * The open one deepens rather than lightens, and takes a white ring: on a row of
+     * identical orange blocks a border colour alone does not register.
+     */
+    <div className={`flex w-[150px] shrink-0 flex-col gap-1 p-3 text-white ${
+      open ? 'bg-accent-fill ring-2 ring-white ring-inset' : 'bg-accent'}`}>
       <button className="cursor-pointer text-left" onClick={onOpen}
         title="See the whole trip, and where you get on and off">
+        {/* A plan covers every day the route runs, so the row holds Saturday buses beside
+            Tuesday ones. Without this they are indistinguishable, and a rider plans around
+            a bus that does not run on the day they are travelling. */}
+        <div className="text-[10px] font-bold tracking-[.06em] text-white/90 uppercase">
+          {DAY_LABEL[block.dayType] ?? block.dayType}
+        </div>
         <div className={`text-[22px] leading-tight font-bold tracking-tight ${
-          board.approx ? 'text-sub' : 'text-ink'}`}>
+          board.approx ? 'text-white/90' : 'text-white'}`}>
           {board.text}
         </div>
-        <div className="text-[11px] text-sub">
+        <div className="text-[11px] text-white/90">
           {arriveUseful ? `arrives ${arrive.text}` : 'no set arrival'}
+          {arriveUseful && span && <span className="font-semibold"> ({span})</span>}
         </div>
       </button>
-      {fare && <div className="text-[13px] font-bold text-accent">{fare}</div>}
-      <div className="truncate text-[11px] text-sub" title={block.routeLabel}>
+      {fare && <div className="text-[13px] font-bold text-white">{fare}</div>}
+      <div className="truncate text-[11px] text-white/90" title={block.routeLabel}>
         {busTo(block.routeLabel)}
       </div>
       {/* The two things that separate one bus from another at the same minute. */}
-      <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-sub">
-        {stops && <span className={d.stop_count === 0 ? 'font-semibold text-ink' : ''}>{stops}</span>}
-        {stops && mins != null && <span aria-hidden="true">·</span>}
-        {mins != null && <span>{mins} min</span>}
+      <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-white/90">
+        {stops && <span className={d.stop_count === 0 ? 'font-semibold text-white' : ''}>{stops}</span>}
       </div>
       <button
-        className={`mt-1 cursor-pointer rounded-lg border px-2 py-1.5 text-[11px] font-semibold ${
+        className={`mt-1 cursor-pointer border px-2 py-1.5 text-[11px] font-semibold ${
           planned
-            ? 'border-accent bg-accent-soft text-accent'
-            : 'border-line bg-panel text-ink hover:border-accent'
+            ? 'border-white bg-white text-accent-fill'
+            : 'border-white/60 text-white hover:bg-white/15'
         }`}
         onClick={onAdd}
         aria-pressed={planned}
@@ -113,7 +140,7 @@ function FullDay({ group, shown, onClose, isPlanned, onAdd, onOpen, openKey }: {
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
       onClick={onClose} role="dialog" aria-modal="true" aria-label={`${group.name}, full day`}>
       <div
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-panel p-4 sm:mb-8 sm:rounded-2xl"
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto bg-panel p-4 sm:mb-8 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -121,9 +148,9 @@ function FullDay({ group, shown, onClose, isPlanned, onAdd, onOpen, openKey }: {
             <div className="text-[15px] font-bold text-ink">{group.name}</div>
             <div className="text-[12px] text-sub">{shown.length} departures</div>
           </div>
-          <button className="cursor-pointer rounded-lg p-2 text-ink hover:bg-black/5"
+          <button className="cursor-pointer p-2 text-ink hover:bg-line/50"
             onClick={onClose} aria-label="Close">
-            <X size={18} aria-hidden="true" />
+            <X size={18} weight="bold" aria-hidden="true" />
           </button>
         </div>
 
@@ -157,7 +184,7 @@ function FullDay({ group, shown, onClose, isPlanned, onAdd, onOpen, openKey }: {
   )
 }
 
-export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOpen, openKey }: {
+export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOpen, openKey, detail }: {
   group: OperatorGroup
   /** The departures in the carousel: still to come, capped. */
   shown: DepartureBlock[]
@@ -167,9 +194,15 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
   onAdd: (b: DepartureBlock) => void
   onOpen: (b: DepartureBlock) => void
   openKey: string | null
+  /**
+   * The opened departure's stop-by-stop breakdown, drawn immediately under the row it
+   * came from. It used to render below every card and every suggestion, so tapping a
+   * time appeared to do nothing until the rider scrolled - which is indistinguishable
+   * from a dead button.
+   */
+  detail?: React.ReactNode
 }) {
   const [fullDay, setFullDay] = useState(false)
-  const Icon = ICON[group.kind]
   /**
    * The spread across every route this operator runs between these two stops. Kept as a
    * range and never averaged: the wide ones are wide because the routes genuinely differ,
@@ -178,19 +211,26 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
   const travel = travelLabel(group.travel)
 
   return (
-    <div className="rounded-2xl bg-panel p-4 shadow-sm">
+    <div className="border border-line bg-panel p-4">
       <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
-          <Icon size={17} aria-hidden="true" />
-        </span>
+        <OperatorLogo id={group.id} name={group.name} kind={group.kind} size={36} />
         <div className="min-w-0">
-          <div className="truncate text-[15px] font-bold text-ink">{group.name}</div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="truncate text-[15px] font-bold text-ink">{group.name}</span>
+            {/* The original view said this as a full-width green banner. It is worth
+                keeping and not worth a banner: no change of bus is the best answer on
+                the board, and it should read like one without taking a row to do it. */}
+            <span className="inline-flex shrink-0 items-center gap-1 bg-good-soft px-2 py-0.5 text-[10px] font-bold tracking-[.04em] text-good-strong uppercase">
+              <Check size={11} weight="bold" aria-hidden="true" />
+              Direct bus
+            </span>
+          </div>
           {travel && <div className="text-[12px] text-sub">{travel} depending on route</div>}
         </div>
       </div>
 
       {/* The row scrolls inside the card's padding rather than bleeding past it. A
-          negative margin put the peek right on the rounded corner, and on a phone the
+          negative margin put the peek right on the corner, and on a phone the
           corner sliced through the block - it read as broken rather than as "more this
           way". Clipping at the padding edge keeps the half-visible block and keeps it
           square. */}
@@ -211,13 +251,15 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
         )}
       </div>
 
+      {detail && <div className="mt-3">{detail}</div>}
+
       <div className="mt-2 text-right">
         <button
-          className="inline-flex cursor-pointer items-center gap-1 text-[13px] font-semibold text-accent hover:underline"
+          className="inline-flex cursor-pointer items-center gap-1 text-[13px] font-semibold text-accent-deep hover:underline"
           onClick={() => setFullDay(true)}
         >
           View Full Day
-          <ArrowUpRight size={14} aria-hidden="true" />
+          <ArrowUpRight size={14} weight="bold" aria-hidden="true" />
         </button>
       </div>
 
