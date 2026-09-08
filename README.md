@@ -639,8 +639,21 @@ earlier than an earlier one. A table with anything unresolved is printed as `HOL
 
 ```
   load  southern-line-weekday.pdf p2.1: RETREAT - CAPE TOWN - 16 stops, 42 trips, 672 times
+  part  cape-flats-line-weekday.pdf p2.1: 1 of 316 times unverified (0.32%) - loading the rest
+  note  cape-flats-line-weekday.pdf p4.1: train numbers not read (1 rows)
+  skip  southern-line-weekday.pdf p4.1: nothing timetable-shaped here
   HOLD  central-line-kapteinsklip-weekday.pdf p3.1: 9 unresolved of 148 times
+  FAIL  central-line-kapteinsklip-weekday.pdf p2.1: grid: only 0 column rules found
 ```
+
+| | |
+|---|---|
+| `load` | went into the database |
+| `part` | went in, minus the cells the checks could not vouch for (see below) |
+| `note` | went in, but its `TRAIN NO.` strip was split off, so the trips are unlabelled |
+| `skip` | not a table — a title bar, a footer |
+| `HOLD` | readable, but something in it is unproven, so none of it loaded |
+| `FAIL` | no grid found at all; this is the one that means a service is missing |
 
 **A cell the checks flagged is never written** — not by `--force`, not by anything. So a
 hold is not the difference between right and wrong times in the database; it is the

@@ -63,6 +63,24 @@ CREATE TABLE IF NOT EXISTS stop_interchange (
     CHECK (a_stop_id < b_stop_id)
 );
 
+-- A route belongs to an operator too.
+--
+-- Stops were made unique per operator above, and routes were left globally unique, which
+-- is an inconsistency with teeth: the loader upserts a route by name, so the day a train
+-- line and a bus route are called the same thing, the bus route is silently reassigned to
+-- the train operator and 793 becomes 792. Nothing collides today - Golden Arrow writes
+-- "AIRPORT IND-BELLVILLE" and Metrorail writes "RETREAT - CAPE TOWN" - but "nothing
+-- collides today" is not a constraint, and MyCiTi is the next operator to arrive.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'route_name_key') THEN
+        ALTER TABLE route DROP CONSTRAINT route_name_key;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'route_name_operator_key') THEN
+        ALTER TABLE route ADD CONSTRAINT route_name_operator_key UNIQUE (name, operator_id);
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS stop_operator_idx ON stop (operator_id);
 CREATE INDEX IF NOT EXISTS route_operator_idx ON route (operator_id);
 

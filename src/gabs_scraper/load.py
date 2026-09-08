@@ -42,7 +42,7 @@ def _upsert_route(cur, entry: ManifestEntry) -> int:
         """
         INSERT INTO route (name, origin, destination, letter_group, operator_id)
         VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (name) DO UPDATE SET
+        ON CONFLICT (name, operator_id) DO UPDATE SET
             origin = EXCLUDED.origin,
             destination = EXCLUDED.destination,
             letter_group = EXCLUDED.letter_group

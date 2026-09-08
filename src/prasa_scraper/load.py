@@ -150,7 +150,7 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
         """
         INSERT INTO route (name, origin, destination, operator_id)
         VALUES (%s, %s, %s, %s)
-        ON CONFLICT (name) DO UPDATE SET operator_id = EXCLUDED.operator_id
+        ON CONFLICT (name, operator_id) DO UPDATE SET name = EXCLUDED.name
         RETURNING id
         """,
         # Canonical, like the name they are taken from. Storing the raw reading here left
