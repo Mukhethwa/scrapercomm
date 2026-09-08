@@ -127,6 +127,12 @@ def _marker_column(grid: Grid) -> int | None:
     return None
 
 
+def _end(grid: Grid, index: int) -> str | None:
+    """The canonical name of a route's first or last station."""
+    stations = [s for s in grid.stations if s]
+    return canonical(stations[index]) if stations else None
+
+
 def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
               day_type: str | None = None) -> dict:
     """Load one page. Returns what it wrote, so a caller can report on it."""
@@ -147,7 +153,9 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
         ON CONFLICT (name) DO UPDATE SET operator_id = EXCLUDED.operator_id
         RETURNING id
         """,
-        (name, (grid.stations or [None])[0], (grid.stations or [None])[-1], op),
+        # Canonical, like the name they are taken from. Storing the raw reading here left
+        # a route called KALK BAY - WOODSTOCK whose origin column said KALKBAAI.
+        (name, _end(grid, 0), _end(grid, -1), op),
     )
     route_id = cur.fetchone()[0]
 
@@ -196,7 +204,7 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
             continue
         # Find it however it was spelled last time, before adding it again under a new
         # spelling. Two rows for one station is two halves of a line that never meet.
-        name = canonical(station)
+        station_name = canonical(station)
         cur.execute(
             """
             SELECT id FROM stop
@@ -204,7 +212,7 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
               AND upper(regexp_replace(name, '[^A-Za-z0-9]', '', 'g')) = %s
             LIMIT 1
             """,
-            (op, key(name)),
+            (op, key(station_name)),
         )
         found = cur.fetchone()
         if found:
@@ -214,7 +222,7 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
                 "INSERT INTO stop (name, operator_id) VALUES (%s, %s) "
                 "ON CONFLICT (name, operator_id) DO UPDATE SET name = EXCLUDED.name "
                 "RETURNING id",
-                (name, op),
+                (station_name, op),
             )
             sid = cur.fetchone()[0]
         cur.execute(
