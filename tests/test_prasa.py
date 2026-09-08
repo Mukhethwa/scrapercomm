@@ -374,3 +374,22 @@ def test_a_tall_band_with_no_grid_is_still_reported():
     gray = Image.fromarray(np.full((900, PAGE_WIDTH), 255, dtype=np.uint8))
     grid = _read_block(gray, page, 0, 0, 0, 800, "")
     assert any(p.kind == "grid" for p in grid.problems)
+
+
+# ------------------------------------------- catching the next VISHOEK automatically
+
+def test_the_similarity_threshold_separates_variants_from_neighbours():
+    from prasa_scraper.duplicates import SIMILAR, _similar
+    from prasa_scraper.stations import key
+
+    # VISHOEK shipped undetected until somebody looked at a page image, which is not a
+    # process. These are the two clusters the threshold has to sit between.
+    variants = [("VISHOEK", "FISH HOEK"), ("KALKBAAI", "KALK BAY"),
+                ("DIEPRIVER", "DIEPRIVIER")]
+    different = [("STEENBERG", "MUIZENBERG"), ("WYNBERG", "STEENBERG"),
+                 ("RETREAT", "ROSEBANK"), ("NEWLANDS", "LANSDOWNE")]
+
+    for a, b in variants:
+        assert _similar(key(a), key(b)) >= SIMILAR, (a, b)
+    for a, b in different:
+        assert _similar(key(a), key(b)) < SIMILAR, (a, b)
