@@ -57,6 +57,9 @@ public class StopService {
     }
 
     static StopDto toDto(StopRow row) {
-        return new StopDto(row.getId(), row.getName(), row.getLat(), row.getLon());
+        // Everything loaded before operators existed is Golden Arrow.
+        return new StopDto(row.getId(), row.getName(), row.getLat(), row.getLon(),
+                           row.getOperatorCode() == null ? "gabs" : row.getOperatorCode(),
+                           row.getOperatorKind() == null ? "bus" : row.getOperatorKind());
     }
 }

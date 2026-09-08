@@ -63,6 +63,15 @@ public final class Projections {
         String getName();
         Double getLat();
         Double getLon();
+        /**
+         * Who serves it: 'gabs', 'metrorail'.
+         *
+         * Stops are unique per operator now, so RETREAT the station and RETREAT the bus
+         * stop are two rows with one name. Without this the search offers a rider two
+         * identical lines and no way to tell which is which.
+         */
+        String getOperatorCode();
+        String getOperatorKind();
     }
 
     /** GET /api/stops/{id}/reachable row. */
@@ -163,6 +172,11 @@ public final class Projections {
         String getDayType();
         String getDayLabel();
         String getTimetableNumber();
+        /** Who runs it: 'gabs', 'metrorail'. Matches the web app's mode ids. */
+        String getOperatorCode();
+        String getOperatorName();
+        /** 'bus' or 'train', which is all the UI needs to pick an icon. */
+        String getOperatorKind();
     }
 
     /** Distinct downstream stop reachable from an anchor. */

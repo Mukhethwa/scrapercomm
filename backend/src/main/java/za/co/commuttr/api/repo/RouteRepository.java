@@ -49,4 +49,27 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
             ORDER BY e.area
             """, nativeQuery = true)
     List<String> findAreaNames();
+
+    /**
+     * Operators with something behind them, and how much.
+     *
+     * Counted rather than listed, because the question the UI is asking is whether
+     * pressing this chip will show a rider anything.
+     */
+    @Query(value = """
+            SELECT o.code            AS "code",
+                   o.name            AS "name",
+                   o.kind            AS "kind",
+                   count(DISTINCT r.id)  AS "routes",
+                   count(st.id)          AS "departures"
+            FROM operator o
+            LEFT JOIN route r      ON r.operator_id = o.id
+            LEFT JOIN timetable t  ON t.route_id = r.id
+            LEFT JOIN schedule sc  ON sc.timetable_id = t.id
+            LEFT JOIN trip tr      ON tr.schedule_id = sc.id
+            LEFT JOIN stop_time st ON st.trip_id = tr.id
+            GROUP BY o.code, o.name, o.kind
+            ORDER BY o.name
+            """, nativeQuery = true)
+    List<Object[]> operatorTotals();
 }

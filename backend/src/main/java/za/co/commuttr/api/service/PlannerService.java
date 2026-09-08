@@ -399,6 +399,9 @@ public class PlannerService {
     private static final class PlanGroup {
         String timetableNumber;
         String routeLabel;
+        String operatorCode;
+        String operatorName;
+        String operatorKind;
         String dayType;
         String dayLabel;
         List<PlanSegmentStopDto> segmentStops;
@@ -499,7 +502,8 @@ public class PlannerService {
             if (m == null) {
                 continue;
             }
-            GroupKey gkey = new GroupKey(m.getTimetableNumber(), m.getDirectionLabel(), m.getDayType());
+            GroupKey gkey = new GroupKey(m.getTimetableNumber(), m.getDirectionLabel(),
+                                        m.getDayType() + "|" + m.getOperatorCode());
             PlanGroup g = groups.get(gkey);
             if (g == null) {
                 List<PlanSegmentStopDto> seg = segmentCache.computeIfAbsent(
@@ -508,6 +512,12 @@ public class PlannerService {
                 g = new PlanGroup();
                 g.timetableNumber = m.getTimetableNumber();
                 g.routeLabel = m.getDirectionLabel();
+                // Everything loaded before operators existed is Golden Arrow; the column
+                // is backfilled, but a left join still has to answer for a route that
+                // somehow has none.
+                g.operatorCode = m.getOperatorCode() == null ? "gabs" : m.getOperatorCode();
+                g.operatorName = m.getOperatorName() == null ? "Golden Arrow Buses" : m.getOperatorName();
+                g.operatorKind = m.getOperatorKind() == null ? "bus" : m.getOperatorKind();
                 g.dayType = m.getDayType();
                 g.dayLabel = m.getDayLabel();
                 g.segmentStops = seg;
@@ -543,7 +553,9 @@ public class PlannerService {
                                               fareEndpoint(toEp, g.segmentStops, false));
             FareDto fare = fareCache.computeIfAbsent(key, k -> fareFor(k.get(0), k.get(1)));
             options.add(new PlanOptionDto(
-                    g.timetableNumber, g.routeLabel, g.dayType, g.dayLabel,
+                    g.timetableNumber, g.routeLabel,
+                    g.operatorCode, g.operatorName, g.operatorKind,
+                    g.dayType, g.dayLabel,
                     g.segmentStops, g.roadPath, List.copyOf(g.departures),
                     g.boardApprox, g.alightApprox, g.boardLabel, g.alightLabel, fare));
         }

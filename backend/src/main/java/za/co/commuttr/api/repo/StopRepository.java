@@ -15,14 +15,16 @@ import java.util.Optional;
 public interface StopRepository extends JpaRepository<Stop, Integer> {
 
     @Query(value = """
-            SELECT id AS "id", name AS "name", lat AS "lat", lon AS "lon"
-            FROM stop WHERE id = :stopId
+            SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
+                   o.code AS "operatorCode", o.kind AS "operatorKind"
+            FROM stop s LEFT JOIN operator o ON o.id = s.operator_id WHERE s.id = :stopId
             """, nativeQuery = true)
     Optional<StopRow> findRowById(@Param("stopId") Integer stopId);
 
     @Query(value = """
-            SELECT id AS "id", name AS "name", lat AS "lat", lon AS "lon"
-            FROM stop WHERE id IN (:stopIds)
+            SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
+                   o.code AS "operatorCode", o.kind AS "operatorKind"
+            FROM stop s LEFT JOIN operator o ON o.id = s.operator_id WHERE s.id IN (:stopIds)
             """, nativeQuery = true)
     List<StopRow> findRowsByIds(@Param("stopIds") Collection<Integer> stopIds);
 
@@ -36,10 +38,12 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
      * for a stop that plainly exists.
      */
     @Query(value = """
-            SELECT id AS "id", name AS "name", lat AS "lat", lon AS "lon"
-            FROM stop
-            WHERE name ILIKE :contains OR replace(name, ' ', '') ILIKE :squashed
-            ORDER BY (name ILIKE :prefix) DESC, name
+            SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
+                   o.code AS "operatorCode", o.kind AS "operatorKind"
+            FROM stop s
+            LEFT JOIN operator o ON o.id = s.operator_id
+            WHERE s.name ILIKE :contains OR replace(s.name, ' ', '') ILIKE :squashed
+            ORDER BY (s.name ILIKE :prefix) DESC, s.name
             LIMIT :maxRows
             """, nativeQuery = true)
     List<StopRow> searchByName(@Param("contains") String contains,
@@ -48,16 +52,20 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
                                @Param("maxRows") int maxRows);
 
     @Query(value = """
-            SELECT id AS "id", name AS "name", lat AS "lat", lon AS "lon"
-            FROM stop ORDER BY name LIMIT :maxRows
+            SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
+                   o.code AS "operatorCode", o.kind AS "operatorKind"
+            FROM stop s LEFT JOIN operator o ON o.id = s.operator_id
+            ORDER BY s.name LIMIT :maxRows
             """, nativeQuery = true)
     List<StopRow> listAll(@Param("maxRows") int maxRows);
 
     /** Bounding-box pre-filter for GET /api/nearby_origins (refined by haversine). */
     @Query(value = """
-            SELECT id AS "id", name AS "name", lat AS "lat", lon AS "lon"
-            FROM stop
-            WHERE lat IS NOT NULL
+            SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
+                   o.code AS "operatorCode", o.kind AS "operatorKind"
+            FROM stop s
+            LEFT JOIN operator o ON o.id = s.operator_id
+            WHERE s.lat IS NOT NULL
               AND lat BETWEEN :minLat AND :maxLat
               AND lon BETWEEN :minLon AND :maxLon
               AND id <> :toStopId
@@ -72,8 +80,9 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
 
     /** Straight-line fallback when a leg has no cached road geometry. */
     @Query(value = """
-            SELECT id AS "id", name AS "name", lat AS "lat", lon AS "lon"
-            FROM stop WHERE id IN (:a, :b)
+            SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
+                   o.code AS "operatorCode", o.kind AS "operatorKind"
+            FROM stop s LEFT JOIN operator o ON o.id = s.operator_id WHERE s.id IN (:a, :b)
             """, nativeQuery = true)
     List<StopRow> findPair(@Param("a") Integer a, @Param("b") Integer b);
 

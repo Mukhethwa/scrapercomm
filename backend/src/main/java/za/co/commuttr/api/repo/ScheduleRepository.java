@@ -37,9 +37,14 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Integer> {
                    sc.direction_label AS "directionLabel",
                    sc.day_type        AS "dayType",
                    sc.day_label       AS "dayLabel",
-                   t.timetable_number AS "timetableNumber"
+                   t.timetable_number AS "timetableNumber",
+                   o.code             AS "operatorCode",
+                   o.name             AS "operatorName",
+                   o.kind             AS "operatorKind"
             FROM schedule sc
             JOIN timetable t ON t.id = sc.timetable_id
+            JOIN route r     ON r.id = t.route_id
+            LEFT JOIN operator o ON o.id = r.operator_id
             WHERE sc.id IN (:scheduleIds)
             """, nativeQuery = true)
     List<ScheduleMetaRow> findMeta(@Param("scheduleIds") Collection<Integer> scheduleIds);

@@ -10,6 +10,7 @@ import za.co.commuttr.api.dto.CatalogDtos.RouteDetailResponse;
 import za.co.commuttr.api.dto.CatalogDtos.RoutesResponse;
 import za.co.commuttr.api.dto.CatalogDtos.TimetableDetailResponse;
 import za.co.commuttr.api.dto.StopDtos.AreasResponse;
+import za.co.commuttr.api.dto.StopDtos.OperatorsResponse;
 import za.co.commuttr.api.service.CatalogService;
 
 /** Read-only catalogue endpoints, on the same paths the FastAPI service served. */
@@ -51,5 +52,16 @@ public class CatalogController {
     @GetMapping("/areas")
     public AreasResponse areas() {
         return catalog.areas();
+    }
+
+    /**
+     * Who the app can plan with, and how much of each it holds.
+     *
+     * The web app decides which filter chips are pressable from this rather than from a
+     * hard-coded list, so a chip goes live when its data does and not a moment before.
+     */
+    @GetMapping("/operators")
+    public OperatorsResponse operators() {
+        return catalog.operators();
     }
 }

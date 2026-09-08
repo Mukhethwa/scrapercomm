@@ -92,6 +92,11 @@ public final class PlanDtos {
 
     public record PlanOptionDto(String timetableNumber,
                                 String routeLabel,
+                                /** Who runs this service: 'gabs', 'metrorail'. */
+                                String operatorCode,
+                                String operatorName,
+                                /** 'bus' or 'train'. */
+                                String operatorKind,
                                 String dayType,
                                 String dayLabel,
                                 List<PlanSegmentStopDto> segmentStops,

@@ -91,8 +91,8 @@ class ApiContractTest {
                 List.of(new SegmentStopDto("NYANGA TERM", -33.98, 18.58, 0)),
                 List.of(new JourneyDepartureDto("06:05", "0605", "TIME", null, "06:47", "0647", "TIME")));
         given(journeys.journeys(anyInt(), anyInt())).willReturn(new JourneysResponse(
-                new StopDto(1, "NYANGA TERM", -33.98, 18.58),
-                new StopDto(2, "BELLVILLE", -33.90, 18.62),
+                new StopDto(1, "NYANGA TERM", -33.98, 18.58, "gabs", "bus"),
+                new StopDto(2, "BELLVILLE", -33.90, 18.62, "gabs", "bus"),
                 List.of(option)));
 
         mvc.perform(get("/api/journeys").param("from", "1").param("to", "2"))
@@ -151,8 +151,8 @@ class ApiContractTest {
                 new FareDto("FYDU", 2530, 12650, 23400, 103000, "Zero",
                         "route", "Cape Town", "Durbanville via Freeway", true));
         given(connections.connections(anyInt(), anyInt())).willReturn(new ConnectionsResponse(
-                new StopDto(24696, "MALMESBURY", -33.45, 18.73),
-                new StopDto(3370, "BUH REIN", -33.82, 18.71),
+                new StopDto(24696, "MALMESBURY", -33.45, 18.73, "gabs", "bus"),
+                new StopDto(3370, "BUH REIN", -33.82, 18.71, "gabs", "bus"),
                 2,
                 List.of(new ConnectionDto("WEEKDAY", List.of("CAPE TOWN"),
                         List.of(leg1, leg2), 290, 425,
@@ -187,8 +187,8 @@ class ApiContractTest {
     @DisplayName("nothing reachable answers 200 with legs_required null, not an error")
     void connectionsWhenUnreachable() throws Exception {
         given(connections.connections(anyInt(), anyInt())).willReturn(new ConnectionsResponse(
-                new StopDto(24696, "MALMESBURY", -33.45, 18.73),
-                new StopDto(9099, "KHAYELITSHA", -34.0, 18.65),
+                new StopDto(24696, "MALMESBURY", -33.45, 18.73, "gabs", "bus"),
+                new StopDto(9099, "KHAYELITSHA", -34.0, 18.65, "gabs", "bus"),
                 null, List.of()));
 
         mvc.perform(get("/api/connections").param("from", "24696").param("to", "9099"))
@@ -210,7 +210,9 @@ class ApiContractTest {
     @DisplayName("a pin endpoint renders as {kind: pin}; exact minutes stay integers")
     void planRendersPinsAndNumberShapes() throws Exception {
         PlanOptionDto option = new PlanOptionDto(
-                "004401", "NYANGA - BELLVILLE", "WEEKDAY", "MONDAYS TO FRIDAYS",
+                "004401", "NYANGA - BELLVILLE",
+                "gabs", "Golden Arrow Buses", "bus",
+                "WEEKDAY", "MONDAYS TO FRIDAYS",
                 List.of(new PlanSegmentStopDto(3, "NYANGA TERM", -33.98, 18.58, 0)),
                 List.of(new double[] { -33.98, 18.58 }, new double[] { -33.90, 18.62 }),
                 List.of(new PlanDepartureDto("0605", false, 365, "06:47", true, 407.5, 88, 2, 0, 6, 3)),
@@ -218,7 +220,7 @@ class ApiContractTest {
                 new FareDto("CIBV", 2320, 11600, 21500, 94600, "Zero",
                         "exact", "Cape Town", "Bellville", false));
         given(planner.plan(any(), any())).willReturn(new PlanResponse(
-                new StopDto(3, "NYANGA TERM", -33.98, 18.58), PinDto.of(-33.90, 18.62),
+                new StopDto(3, "NYANGA TERM", -33.98, 18.58, "gabs", "bus"), PinDto.of(-33.90, 18.62),
                 List.of(option)));
 
         mvc.perform(get("/api/plan").param("from", "3").param("to_lat", "-33.90").param("to_lon", "18.62"))

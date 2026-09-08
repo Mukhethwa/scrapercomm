@@ -19,6 +19,8 @@ import za.co.commuttr.api.dto.CatalogDtos.TimetableHeaderDto;
 import za.co.commuttr.api.dto.CatalogDtos.TimetableSummaryDto;
 import za.co.commuttr.api.dto.CatalogDtos.TripDto;
 import za.co.commuttr.api.dto.StopDtos.AreasResponse;
+import za.co.commuttr.api.dto.StopDtos.OperatorDto;
+import za.co.commuttr.api.dto.StopDtos.OperatorsResponse;
 import za.co.commuttr.api.repo.ScheduleRepository;
 import za.co.commuttr.api.repo.ScheduleStopRepository;
 import za.co.commuttr.api.repo.RouteRepository;
@@ -186,5 +188,14 @@ public class CatalogService {
     /** GET /api/areas */
     public AreasResponse areas() {
         return new AreasResponse(routes.findAreaNames());
+    }
+
+    /** Every operator, with enough detail for the UI to know which ones are ready. */
+    public OperatorsResponse operators() {
+        return new OperatorsResponse(routes.operatorTotals().stream()
+                .map(r -> new OperatorDto(
+                        (String) r[0], (String) r[1], (String) r[2],
+                        ((Number) r[3]).intValue(), ((Number) r[4]).longValue()))
+                .toList());
     }
 }

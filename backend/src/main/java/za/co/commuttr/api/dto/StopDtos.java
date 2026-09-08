@@ -8,7 +8,15 @@ public final class StopDtos {
     private StopDtos() { }
 
     /** A named stop as every endpoint exposes it. */
-    public record StopDto(Integer id, String name, Double lat, Double lon) { }
+    /**
+     * A stop, and who serves it.
+     *
+     * The operator is not decoration: stops are unique per operator, so RETREAT the
+     * station and RETREAT the bus stop are two rows with the same name, and a search
+     * that does not say which is which offers a rider a coin toss.
+     */
+    public record StopDto(Integer id, String name, Double lat, Double lon,
+                          String operatorCode, String operatorKind) { }
 
     public record StopsResponse(List<StopDto> stops) { }
 
@@ -52,4 +60,16 @@ public final class StopDtos {
     public record ReachablePointResponse(PinDto origin, List<DownstreamStopDto> reachable) { }
 
     public record AreasResponse(List<String> areas) { }
+
+    /**
+     * An operator the app can actually plan with.
+     *
+     * "Can plan with" means it has timetables loaded, not that it is listed somewhere:
+     * a filter chip a rider can press that returns nothing is worse than one that is
+     * visibly not ready yet.
+     */
+    public record OperatorDto(String code, String name, String kind,
+                              int routes, long departures) { }
+
+    public record OperatorsResponse(List<OperatorDto> operators) { }
 }
