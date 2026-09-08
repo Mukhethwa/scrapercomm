@@ -20,7 +20,9 @@ silently kept, because a missing train is a visible bug and a wrong time is not.
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -28,6 +30,9 @@ from PIL import Image
 
 try:
     import pytesseract
+
+    if os.environ.get("TESSERACT_CMD"):
+        pytesseract.pytesseract.tesseract_cmd = os.environ["TESSERACT_CMD"]
 except ImportError:      # pragma: no cover - the module is importable without OCR present
     pytesseract = None
 
@@ -125,12 +130,49 @@ class Grid:
         }
 
 
+# Where the Windows installer puts Tesseract. It does not add itself to PATH, so a
+# perfectly good installation is invisible to a shell that was not told about it.
+_TESSERACT_PATHS = (
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                 "Programs", "Tesseract-OCR", "tesseract.exe"),
+    "/usr/bin/tesseract",
+    "/usr/local/bin/tesseract",
+    "/opt/homebrew/bin/tesseract",
+)
+
+_checked = False
+
+
 def _tesseract():
+    """
+    The OCR engine, or a refusal to start.
+
+    Checked once, up front, and loudly. Every cell read is wrapped in a broad except so
+    that one failed call costs that cell rather than a three-hour run - which means a
+    missing binary would otherwise return an empty string forty thousand times and the
+    pipeline would report "nothing timetable-shaped here" on page after page of perfectly
+    legible timetables. A missing installation and a blank page would look identical, and
+    the wrong one of those is easy to fix.
+    """
+    global _checked
     if pytesseract is None:
         raise RuntimeError(
             "pytesseract is not installed. pip install pytesseract, and install the "
             "Tesseract binary (winget install UB-Mannheim.TesseractOCR)."
         )
+    if not _checked:
+        if shutil.which(pytesseract.pytesseract.tesseract_cmd) is None:
+            found = next((p for p in _TESSERACT_PATHS if p and os.path.isfile(p)), None)
+            if found is None:
+                raise RuntimeError(
+                    "Tesseract is installed as a Python wrapper but the engine itself "
+                    "cannot be found. Install it (winget install UB-Mannheim.TesseractOCR),"
+                    " or point TESSERACT_CMD at the binary."
+                )
+            pytesseract.pytesseract.tesseract_cmd = found
+        _checked = True
     return pytesseract
 
 

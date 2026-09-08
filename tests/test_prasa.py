@@ -218,3 +218,32 @@ def test_the_marker_column_leaves_more_than_a_bare_letter():
     # "RETREAT I)" turned up where the rule and the A/D marker were read together.
     assert clean_station("RETREAT I)") == "RETREAT"
     assert clean_station("RETREAT (D)") == "RETREAT"
+
+
+# ------------------------------------------------------- finding the OCR engine
+
+def test_a_missing_engine_is_an_error_and_not_an_empty_page():
+    # Every cell read is wrapped in a broad except so one failed call costs that cell
+    # rather than a three-hour run. That means a missing binary returned "" forty thousand
+    # times and the pipeline reported "nothing timetable-shaped here" on page after page
+    # of legible timetables - a missing install and a blank page looked identical.
+    import prasa_scraper.ocr as ocr
+
+    saved_checked, saved_paths = ocr._checked, ocr._TESSERACT_PATHS
+    saved_cmd = ocr.pytesseract.pytesseract.tesseract_cmd
+    try:
+        ocr._checked = False
+        ocr._TESSERACT_PATHS = ("/nowhere/tesseract",)
+        ocr.pytesseract.pytesseract.tesseract_cmd = "definitely-not-a-real-binary"
+        with pytest.raises(RuntimeError, match="cannot be found"):
+            ocr._tesseract()
+    finally:
+        ocr._checked, ocr._TESSERACT_PATHS = saved_checked, saved_paths
+        ocr.pytesseract.pytesseract.tesseract_cmd = saved_cmd
+
+
+def test_the_engine_is_found_where_the_installer_puts_it():
+    import prasa_scraper.ocr as ocr
+    # Nothing to assert about the machine running the tests beyond this: whatever the
+    # lookup settles on, it must be something that actually runs.
+    assert ocr._tesseract().get_tesseract_version()
