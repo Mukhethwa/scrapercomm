@@ -92,6 +92,10 @@ You should see `gabs_pg` and `gabs_pgadmin`, both `Up`.
 The repository ships a snapshot of the fully-loaded database, so you don't have to
 download and parse 1,900 PDFs yourself. **This takes seconds.**
 
+The snapshot carries everything the app needs to be useful: timetables, stop coordinates
+and the fare tables. You do not need to run the scraper, the geocoder or the fare jobs to
+get a working app with prices on it.
+
 ```bash
 docker cp data/gabs_dump.sql.gz gabs_pg:/tmp/dump.sql.gz
 docker exec gabs_pg sh -c "gunzip -f /tmp/dump.sql.gz && psql -U gabs -d gabs -f /tmp/dump.sql"
@@ -103,7 +107,14 @@ Confirm it worked:
 docker exec gabs_pg psql -U gabs -d gabs -c "SELECT count(*) FROM timetable"
 ```
 
-Around **1,878** is right.
+Around **1,878** is right. Check the fares came too, since an app without them shows
+journeys with no prices:
+
+```bash
+docker exec gabs_pg psql -U gabs -d gabs -c "SELECT count(*) FROM journey_fare"
+```
+
+Around **20,400** is right.
 
 > No snapshot in your copy? See [Refreshing the timetables](#refreshing-the-timetables) to
 > build the database from the live site instead. That takes about 90 minutes.
@@ -263,6 +274,25 @@ free alternative for this one.
 
 ```bash
 PYTHONPATH=src python -m gabs_scraper.geometry
+```
+
+### `python -m gabs_scraper.fares`
+
+**Scrapes the published fares.** Reads the operator's multi-journey fare page into the
+`fare` and `fare_zone_stop` tables. Takes about a minute.
+
+```bash
+PYTHONPATH=src python -m gabs_scraper.fares
+```
+
+### `python -m gabs_scraper.pricing`
+
+**Works out the price of every journey**, into `journey_fare`, so both the Java and the
+Python service read one set of numbers instead of each resolving fares themselves. Needs
+`fares` to have run first. Takes about a minute.
+
+```bash
+PYTHONPATH=src python -m gabs_scraper.pricing
 ```
 
 ### `python -m pytest -q`
@@ -487,10 +517,30 @@ PYTHONPATH=src python -m gabs_scraper.geocode
 
 # 3. Work out the roads for any new routes (needs a Google key)
 PYTHONPATH=src python -m gabs_scraper.geometry
+
+# 4. Scrape the published fares (~1 minute)
+PYTHONPATH=src python -m gabs_scraper.fares
+
+# 5. Work out the price of every journey (~1 minute)
+PYTHONPATH=src python -m gabs_scraper.pricing
 ```
 
-Steps 2 and 3 are **not** part of step 1. Skip them and new routes will work for
-stop-to-stop journeys but not for custom-stop planning.
+Steps 2 to 5 are **not** part of step 1. Skip 2 and new routes work for stop-to-stop
+journeys but not for custom-stop planning. Skip 4 and 5 and every journey shows without a
+price, which is the single most obvious thing a rider will notice.
+
+### Rebuilding the snapshot
+
+The snapshot in `data/` is what a fresh clone loads, so after a refresh it is worth
+rebuilding - otherwise the next person to clone gets whatever the database looked like
+last time somebody remembered.
+
+```bash
+docker exec gabs_pg pg_dump -U gabs -d gabs --no-owner --no-privileges   --exclude-table=search_analytics --exclude-table=search_analytics_option   | gzip -9 > data/gabs_dump.sql.gz
+```
+
+The two excluded tables are the search log. It is this installation's own usage data and
+has no business in a public repository.
 
 ### Why a refresh also deletes things
 
