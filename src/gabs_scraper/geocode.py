@@ -45,6 +45,76 @@ def ensure_columns(conn) -> None:
     conn.commit()
 
 
+
+# The operator writes stop names for a timetable column, not for a gazetteer: words are
+# abbreviated to fit and long ones are simply cut off. "LONG STR" is Long Street, one of
+# the best-known roads in Cape Town, and no geocoder recognises "STR".
+ABBREVIATIONS = {
+    # Deliberately no bare "ST": it means Saint at the front of a name and Street at
+    # the end, and guessing wrong sends the stop to another suburb.
+    "STR": "Street", "STRT": "Street",
+    "RD": "Road", "AVE": "Avenue", "AV": "Avenue",
+    "DRV": "Drive", "DR": "Drive", "BLVD": "Boulevard", "BVD": "Boulevard",
+    "CLSE": "Close", "CL": "Close", "CRES": "Crescent", "CRE": "Crescent",
+    "LN": "Lane", "SQ": "Square", "PL": "Place", "TER": "Terrace",
+    "STN": "Station", "TERM": "Terminus", "IND": "Industria",
+    "SCH": "School", "HOSP": "Hospital", "CTR": "Centre", "CNTR": "Centre",
+    "PK": "Park", "GDNS": "Gardens", "HGTS": "Heights", "VILL": "Village",
+    "SNR": "Senior", "JUN": "Junior", "PREP": "Preparatory",
+}
+
+
+def expand(name: str) -> str:
+    """"LONG STR" -> "Long Street". Whole words only, so STRAND is left alone."""
+    out = []
+    for word in name.split():
+        bare = word.strip(".")
+        out.append(ABBREVIATIONS.get(bare.upper(), word))
+    return " ".join(out)
+
+
+def variants(name: str) -> list[str]:
+    """
+    The name, then progressively looser readings of it.
+
+    Tried in order and the first hit wins, so a precise match is never traded for a vague
+    one. The looser forms exist because of how these names reach us:
+
+      "ARTSCAPE (HERTZOG BL"   the PDF column ran out mid-word, so drop the fragment
+      "LONG STR"               an abbreviation no gazetteer knows
+      "TRAMPOLINE-AZ BERMAN"   two landmarks joined; either half may be findable
+      "CNR R300/EISLEBEN RD"   a junction, findable by the road it names
+
+    Nominatim is rate limited to a request a second, so this is deliberately a handful of
+    readings rather than every permutation.
+    """
+    seen: list[str] = []
+
+    def add(candidate: str) -> None:
+        candidate = " ".join(candidate.split()).strip(" ,-/")
+        if candidate and candidate not in seen:
+            seen.append(candidate)
+
+    add(name)
+    add(expand(name))
+
+    # A truncated parenthetical: keep what came before it.
+    if "(" in name:
+        head = name.split("(")[0]
+        add(head)
+        add(expand(head))
+
+    # A junction or a pair of landmarks: try each side on its own.
+    for sep in ("/", " - ", "-"):
+        if sep in name:
+            for part in name.split(sep):
+                if len(part.strip()) >= 4:
+                    add(expand(part))
+            break
+
+    return seen
+
+
 def geocode_google(session, name, key):
     params = {
         "address": f"{name}, Cape Town, South Africa",
@@ -84,7 +154,7 @@ def geocode_nominatim(session, name):
     return None
 
 
-def run(force: bool = False) -> dict:
+def run(force: bool = False, retry_failed: bool = False) -> dict:
     key = os.environ.get("GOOGLE_MAPS_API_KEY") or None
     google_enabled = key is not None
 
@@ -93,6 +163,10 @@ def run(force: bool = False) -> dict:
     cur = conn.cursor()
     if force:
         cur.execute("SELECT id, name FROM stop ORDER BY name")
+    elif retry_failed:
+        # Everything still unplaced, including stops already marked "notfound" - the point
+        # of a retry is that the readings tried have changed.
+        cur.execute("SELECT id, name FROM stop WHERE lat IS NULL ORDER BY name")
     else:
         cur.execute("SELECT id, name FROM stop WHERE geocoded_at IS NULL ORDER BY name")
     rows = cur.fetchall()
@@ -105,28 +179,34 @@ def run(force: bool = False) -> dict:
           flush=True)
 
     for i, (sid, name) in enumerate(rows, 1):
-        coords, source = None, None
+        coords, source, matched = None, None, None
 
-        if google_enabled:
-            try:
-                coords = geocode_google(g, name, key)
-                if coords:
-                    source = "google"
-            except GoogleAuthError as e:
-                print(f"  ! Google unavailable ({e}); falling back to Nominatim for the rest",
-                      flush=True)
-                google_enabled = False
-            except Exception:  # noqa: BLE001 — transient; try fallback
-                coords = None
+        # Each reading of the name in turn, stopping at the first that lands. The exact
+        # name is always tried first, so a looser reading is only ever a last resort.
+        for candidate in variants(name):
+            if google_enabled:
+                try:
+                    coords = geocode_google(g, candidate, key)
+                    if coords:
+                        source, matched = "google", candidate
+                except GoogleAuthError as e:
+                    print(f"  ! Google unavailable ({e}); falling back to Nominatim for the rest",
+                          flush=True)
+                    google_enabled = False
+                except Exception:  # noqa: BLE001 — transient; try fallback
+                    coords = None
 
-        if coords is None:
-            try:
-                coords = geocode_nominatim(n, name)
-                if coords:
-                    source = "nominatim"
-            except Exception:  # noqa: BLE001
-                coords = None
-            time.sleep(1.1)  # honour Nominatim's rate limit (only when we call it)
+            if coords is None:
+                try:
+                    coords = geocode_nominatim(n, candidate)
+                    if coords:
+                        source, matched = "nominatim", candidate
+                except Exception:  # noqa: BLE001
+                    coords = None
+                time.sleep(1.1)  # honour Nominatim's rate limit (only when we call it)
+
+            if coords:
+                break
 
         now = datetime.now(timezone.utc)
         if coords:
@@ -135,7 +215,9 @@ def run(force: bool = False) -> dict:
                 (coords[0], coords[1], now, source, sid),
             )
             stats[source] += 1
-            print(f"[{i}/{len(rows)}] {name}: {source} {coords[0]:.5f},{coords[1]:.5f}", flush=True)
+            via = "" if matched == name else f" (as \"{matched}\")"
+            print(f"[{i}/{len(rows)}] {name}{via}: {source} {coords[0]:.5f},{coords[1]:.5f}",
+                  flush=True)
         else:
             cur.execute(
                 "UPDATE stop SET lat=NULL, lon=NULL, geocoded_at=%s, geocode_source=%s WHERE id=%s",
@@ -154,4 +236,7 @@ def run(force: bool = False) -> dict:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Geocode GABS stops (Google primary, OSM fallback)")
     ap.add_argument("--force", action="store_true", help="re-geocode every stop from scratch")
-    run(force=ap.parse_args().force)
+    ap.add_argument("--retry-failed", action="store_true",
+                    help="re-try every stop that still has no coordinates")
+    args = ap.parse_args()
+    run(force=args.force, retry_failed=args.retry_failed)

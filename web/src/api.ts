@@ -153,8 +153,17 @@ export interface Endpoint {
   kind: 'stop' | 'pin'
   id?: number
   name: string
-  lat: number
-  lon: number
+  /**
+   * Where it is, if we know.
+   *
+   * Nullable because a named stop does not need coordinates to be planned with: epParams
+   * sends a stop as its id alone, and the API resolves the timetables from that. Only the
+   * map and the distance sums need a position, and both can say nothing instead.
+   *
+   * A dropped pin always has both - it is defined by them.
+   */
+  lat: number | null
+  lon: number | null
 }
 
 export interface GeoHit {
@@ -279,7 +288,7 @@ export const connectingFor = (ep: Endpoint) =>
 export const reachableFor = (ep: Endpoint) =>
   ep.kind === 'stop'
     ? getReachable(ep.id!).then((r) => r.reachable)
-    : getReachablePoint(ep.lat, ep.lon).then((r) => r.reachable)
+    : getReachablePoint(ep.lat!, ep.lon!).then((r) => r.reachable)
 
 // ---- connections: journeys that need a change of bus ----
 

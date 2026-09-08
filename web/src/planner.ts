@@ -8,7 +8,7 @@ import type { Endpoint, PlanDeparture, PlanOption } from './api'
  * refresh would be worse than the storage cost.
  *
  * What is stored is deliberately lean. A PlanOption carries `road_path`, which for a
- * cross-city trip is several thousand coordinate pairs — a handful of those would blow
+ * cross-city trip is several thousand coordinate pairs, and a handful of those would blow
  * the ~5 MB localStorage budget. Everything needed to redraw a journey's detail is
  * re-fetched from /api/trip_stops on demand, exactly as the search page does, so only
  * the identifying fields are kept here.
@@ -20,8 +20,9 @@ export interface SavedEndpoint {
   kind: 'stop' | 'pin'
   id?: number
   name: string
-  lat: number
-  lon: number
+  /** Null for a stop the operator names but nobody has placed on a map yet. */
+  lat: number | null
+  lon: number | null
 }
 
 export interface SavedJourney {

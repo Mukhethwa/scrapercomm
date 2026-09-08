@@ -21,7 +21,7 @@ import { useModes } from './modes'
 import { buildJourney, usePlanner } from './planner'
 
 /** A suggestion in either endpoint field: a real stop, a geocoded place, or an area. */
-export interface Hit { kind: 'stop' | 'place' | 'area'; id?: number; name: string; lat: number; lon: number; sub?: string }
+export interface Hit { kind: 'stop' | 'place' | 'area'; id?: number; name: string; lat: number | null; lon: number | null; sub?: string }
 
 /** The three day types every journey is published for. */
 export const CORE_DAYS = ['WEEKDAY', 'SATURDAY', 'SUNDAY']
@@ -44,9 +44,18 @@ export async function mergedSearch(q: string, areas: string[]): Promise<Hit[]> {
   const ql = q.trim().toLowerCase()
   const areaHits: Hit[] = areas.filter((a) => a.toLowerCase().includes(ql)).slice(0, 3)
     .map((a) => ({ kind: 'area', name: a, lat: 0, lon: 0, sub: 'area with bus service' }))
+  /*
+   * Every stop the API returned, whether or not it has been geocoded.
+   *
+   * This used to drop any stop with no coordinates, which quietly hid 247 of the 527
+   * stops in the network - Steenberg among them - from the search box. The stops were
+   * never the problem: a plan is requested by stop id, so STEENBERG to CAPE TOWN
+   * resolves six routes and twenty-three departures whether or not we know where
+   * Steenberg is. Only the map needs a position, and a missing pin is a far smaller
+   * failure than an unreachable destination.
+   */
   const stops: Hit[] = s.stops.slice(0, 6)
-    .filter((x) => x.lat != null && x.lon != null)
-    .map((x) => ({ kind: 'stop', id: x.id, name: x.name, lat: x.lat as number, lon: x.lon as number }))
+    .map((x) => ({ kind: 'stop', id: x.id, name: x.name, lat: x.lat, lon: x.lon }))
   const places: Hit[] = g.results.slice(0, 3)
     .map((x) => ({ kind: 'place', name: x.name, lat: x.lat, lon: x.lon, sub: x.full }))
   return [...areaHits, ...stops, ...places]
@@ -88,9 +97,11 @@ export function usePlanSearch() {
     const words = h.name.split(/\s+/).filter(Boolean)
     for (let n = words.length; n > 0; n--) {
       const r = await getStops(words.slice(0, n).join(' ')).catch(() => ({ stops: [] as StopHit[] }))
-      const hit = r.stops.find((x) => x.lat != null && x.lon != null)
+      // A located stop is preferable - it can be drawn - but an unlocated one still
+      // plans, so it beats falling through to a geocoded guess at the area's name.
+      const hit = r.stops.find((x) => x.lat != null && x.lon != null) ?? r.stops[0]
       if (hit) {
-        return { kind: 'stop', id: hit.id, name: hit.name, lat: hit.lat as number, lon: hit.lon as number }
+        return { kind: 'stop', id: hit.id, name: hit.name, lat: hit.lat, lon: hit.lon }
       }
     }
     const r = await getGeocode(h.name).catch(() => ({ results: [] as GeoHit[] }))
@@ -192,10 +203,14 @@ export function usePlanSearch() {
             .catch(() => { setConns([]); setConnLegs(null) })
             .finally(() => setConnLoading(false))
         }
-        if (t.kind === 'stop') {
+        // The "on other days" suggestions are distance-based, so they need a located
+        // origin. Without one the plan still stands; only this extra is skipped.
+        if (t.kind === 'stop' && f.lat != null && f.lon != null) {
+          const fromLat = f.lat
+          const fromLon = f.lon
           const present = new Set(r.options.map((o) => o.day_type))
           CORE_DAYS.filter((d) => !present.has(d)).forEach((day) => {
-            getNearbyOrigins(f.lat, f.lon, t.id!, {
+            getNearbyOrigins(fromLat, fromLon, t.id!, {
               exclude: f.kind === 'stop' ? f.id : undefined, dayType: day, radius: 8000,
             })
               .then((n) => { if (n.origins.length) setDayAlts((p) => ({ ...p, [day]: n.origins.slice(0, 3) })) })
