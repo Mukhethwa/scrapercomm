@@ -353,7 +353,8 @@ export default function PlanView() {
                       by taking <b>{connLegs} {vehicles}</b>, changing at <b>{conns[0].change_at.join(' then ')}</b>.
                     </span>
                   </div>
-                  <ConnectionsPanel connections={conns} legsRequired={connLegs} />
+                  <ConnectionsPanel connections={conns} legsRequired={connLegs}
+                    mode={vehicle} />
                 </>
               )}
 
@@ -424,7 +425,8 @@ export default function PlanView() {
                         <div className="signroute">Route: {o.route_label}, timetable #{o.timetable_number}</div>
                       </div>
                     </div>
-                    <FarePanel fare={o.fare} />
+                    <FarePanel fare={o.fare}
+                      mode={o.operator_kind === 'train' ? 'train' : 'bus'} />
                     <div className="depshint">Tap a departure to see where you get on and off.</div>
                     {[...TIME_GROUPS, { key: 'other', label: 'Other times' }].map((g) =>
                       groups[g.key].length > 0 ? (

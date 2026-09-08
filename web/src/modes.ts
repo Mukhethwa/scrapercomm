@@ -124,6 +124,7 @@ export function useModes() {
  */
 export function useLoadedOperators() {
   const [loaded, setLoaded] = useState<Set<string> | null>(null)
+  const [names, setNames] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let live = true
@@ -133,6 +134,7 @@ export function useLoadedOperators() {
         // An operator with routes but no departures has been half-loaded; it cannot
         // answer a search, so it does not count as ready.
         setLoaded(new Set(r.operators.filter((o) => o.departures > 0).map((o) => o.code)))
+        setNames(Object.fromEntries(r.operators.map((o) => [o.code, o.name])))
       })
       .catch(() => { /* an older API has no such endpoint; the static flags stand */ })
     return () => { live = false }
@@ -144,6 +146,15 @@ export function useLoadedOperators() {
       if (loaded === null) return MODES.find((m) => m.id === id)?.available ?? false
       return loaded.has(id)
     },
+    /**
+     * What to call an operator on screen.
+     *
+     * From the API rather than a table in here, so a card headed with an operator's name
+     * is headed with the name that operator is loaded under - and adding MyCiTi is still
+     * a matter of loading its timetables.
+     */
+    nameOf: (id: string | undefined) =>
+      (id && names[id]) || MODES.find((m) => m.id === id)?.name || 'Golden Arrow Buses',
     known: loaded !== null,
   }
 }

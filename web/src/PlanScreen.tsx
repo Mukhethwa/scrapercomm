@@ -448,7 +448,9 @@ export default function PlanScreen() {
             <b>No direct {ride}</b> from {s.from!.name} to {s.to!.name}. You can still get there by taking{' '}
             <b>{s.connLegs} {rides}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
           </Banner>
-          <ConnectionsCard connections={liveConns} onChoose={setChosenConn} kind={ride} />
+          <ConnectionsCard connections={liveConns} onChoose={setChosenConn} kind={ride}
+            operator={s.from?.operator ?? 'gabs'}
+            operatorName={operators.nameOf(s.from?.operator ?? 'gabs')} />
         </>
       )}
 
@@ -524,7 +526,9 @@ export default function PlanScreen() {
                     </div>
                     <div className="mt-1 text-[12px] text-sub">
                       {openOption.operator_kind === 'train' ? 'Service' : 'Route'}{' '}
-                      {openOption.route_label}, timetable #{openOption.timetable_number}
+                      {openOption.route_label}
+                      {openOption.timetable_number
+                        && <>, timetable #{openOption.timetable_number}</>}
                     </div>
                     <div className="mt-1 text-[12px] text-sub">
                       {DAY_LABEL[openOption.day_type] ?? openOption.day_type}
@@ -534,7 +538,10 @@ export default function PlanScreen() {
                         && <> · {stopLabel(openDeparture.stop_count)}</>}
                     </div>
                   </div>
-                  <FarePanel fare={openOption.fare} />
+                  <FarePanel
+                    fare={openOption.fare}
+                    mode={openOption.operator_kind === 'train' ? 'train' : 'bus'}
+                  />
                   <TripStrip
                     stops={s.tripStops}
                     loading={s.loadingTrip}

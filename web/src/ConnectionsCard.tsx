@@ -188,10 +188,15 @@ function OptionBlock({ conn, chosen, planned, onChoose, onAdd, kind }: {
   )
 }
 
-export default function ConnectionsCard({ connections, onChoose, kind = 'bus' }: {
+export default function ConnectionsCard({ connections, onChoose, kind = 'bus',
+                                          operator = 'gabs',
+                                          operatorName = 'Golden Arrow Buses' }: {
   connections: Connection[]
   /** Tells the map which journey to draw. */
   onChoose?: (c: Connection) => void
+  /** Whose logo and name head the card. Taken from the journey's starting point. */
+  operator?: string
+  operatorName?: string
   /**
    * Bus or train, taken from the journey's starting point.
    *
@@ -275,10 +280,10 @@ export default function ConnectionsCard({ connections, onChoose, kind = 'bus' }:
   return (
     <div className="border border-line bg-panel p-4">
       <div className="mb-3 flex items-center gap-2.5">
-        <OperatorLogo id="gabs" name="Golden Arrow Buses" kind="bus" size={36} />
+        <OperatorLogo id={operator} name={operatorName} kind={kind} size={36} />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="truncate text-[15px] font-bold text-ink">Golden Arrow Buses</span>
+            <span className="truncate text-[15px] font-bold text-ink">{operatorName}</span>
             <span className="inline-flex shrink-0 items-center bg-warn px-2 py-0.5 text-[10px] font-bold tracking-[.04em] text-white uppercase">
               Needs a change
             </span>
@@ -369,7 +374,7 @@ export default function ConnectionsCard({ connections, onChoose, kind = 'bus' }:
           ) : legOpen.fare?.per_ride_cents != null ? (
             <div className="mb-2 border border-line bg-block px-3 py-2 text-[12px] text-sub">
               This leg costs <b className="text-ink">{rands(legOpen.fare.per_ride_cents)}</b> a
-              ride on a Golden Arrow Gold Card.
+              ride{kind === 'train' ? '.' : ' on a Golden Arrow Gold Card.'}
             </div>
           ) : null}
           <TripStrip

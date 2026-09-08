@@ -52,8 +52,9 @@ export function legToJourney(leg: ConnectionLeg, dayType: string, dayLabel: stri
  * a leg passes was to put the whole connection on the planner first, which is backwards:
  * the stops are how somebody decides whether to plan it at all.
  */
-function LegDetail({ leg, onClose, throughTicket }:
-  { leg: ConnectionLeg; onClose: () => void; throughTicket: boolean }) {
+function LegDetail({ leg, onClose, throughTicket, mode = 'bus' }:
+  { leg: ConnectionLeg; onClose: () => void; throughTicket: boolean
+    mode?: 'bus' | 'train' }) {
   const [stops, setStops] = useState<TripStop[] | null>(null)
   const [notes, setNotes] = useState<TripNote[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,8 +83,10 @@ function LegDetail({ leg, onClose, throughTicket }:
         </div>
       ) : leg.fare?.per_ride_cents != null ? (
         <div className="connlegfarenote">
-          This leg costs <b>{rands(leg.fare.per_ride_cents)}</b> a ride on a Golden Arrow
-          Gold Card. Cash is higher at peak times, lower off-peak.
+          This leg costs <b>{rands(leg.fare.per_ride_cents)}</b> a ride
+          {mode === 'train' ? '.' : (
+            <> on a Golden Arrow Gold Card. Cash is higher at peak times, lower off-peak.</>
+          )}
         </div>
       ) : null}
       <TripStrip
@@ -103,7 +106,12 @@ function LegDetail({ leg, onClose, throughTicket }:
 }
 
 export default function ConnectionsPanel(
-  { connections, legsRequired }: { connections: Connection[]; legsRequired: number | null },
+  { connections, legsRequired, mode = 'bus' }: {
+    connections: Connection[]
+    legsRequired: number | null
+    /** Bus or train, for the wording around the price. See FarePanel. */
+    mode?: 'bus' | 'train'
+  },
 ) {
   const planner = usePlanner()
   const [open, setOpen] = useState<{ ci: number; li: number } | null>(null)
@@ -191,14 +199,15 @@ export default function ConnectionsPanel(
                     </button>
                     {isOpen && (
                       <LegDetail leg={l} onClose={() => setOpen(null)}
-                        throughTicket={c.fare?.kind === 'through'} />
+                        throughTicket={c.fare?.kind === 'through'} mode={mode} />
                     )}
                   </li>
                 )
               })}
             </ol>
 
-            <FarePanel fare={c.fare} tickets={c.fare?.tickets} kind={c.fare?.kind ?? 'per_leg'} />
+            <FarePanel fare={c.fare} tickets={c.fare?.tickets}
+              kind={c.fare?.kind ?? 'per_leg'} mode={mode} />
 
             <button className={`addbtn wide ${planned ? 'on' : ''}`} onClick={() => addWholeConnection(c)}>
               {planned

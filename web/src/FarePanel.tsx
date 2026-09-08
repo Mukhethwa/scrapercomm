@@ -13,13 +13,20 @@ import { rands, perRide, basisNote, isFlat } from './money'
  * expensive journey of the two.
  */
 export default function FarePanel(
-  { fare, tickets, kind }:
+  { fare, tickets, kind, mode = 'bus' }:
   {
     fare: Fare | ConnectionFare | null
     /** How many tickets the price covers. Absent on a direct journey, which is one. */
     tickets?: number
     /** "through" or "per_leg" on a change-of-bus journey. */
     kind?: string
+    /**
+     * Bus or train. Everything below the price is a fact about Golden Arrow - the Gold
+     * Card, the peak-hour cash difference, asking the driver - and none of it is true of
+     * a train. Naming the wrong operator on a Metrorail journey does not just read badly,
+     * it tells a rider to pay somebody who will not take their money.
+     */
+    mode?: 'bus' | 'train'
   },
 ) {
   const [open, setOpen] = useState(false)
@@ -28,10 +35,17 @@ export default function FarePanel(
     return (
       <div className="farebox none">
         <Info size={13} aria-hidden="true" />
-        <span>
-          Golden Arrow publishes no fare for {kind ? 'part of this journey' : 'this journey'}.
-          Ask the driver.
-        </span>
+        {mode === 'train' ? (
+          /* Not "ask the driver": on Metrorail you buy before you board, and there is no
+             driver to ask. Said as a fact about the timetables rather than about the
+             fare, because what we know is that PRASA does not print prices on them. */
+          <span>Metrorail does not publish fares in its timetables. Buy at the station.</span>
+        ) : (
+          <span>
+            Golden Arrow publishes no fare for{' '}
+            {kind ? 'part of this journey' : 'this journey'}. Ask the driver.
+          </span>
+        )}
       </div>
     )
   }
@@ -58,10 +72,19 @@ export default function FarePanel(
             {tickets === 2 ? 'Pay twice' : `Pay ${tickets} times`}
           </span>
         )}
+        {/* The Gold Card, and the cash-versus-card difference, are Golden Arrow's own
+            products. They are not facts about a fare; they are facts about that operator,
+            and there is no reason to expect the next one to price the same way. Guarded
+            rather than left to be noticed, because a train has no fare today and this
+            would have started lying the day one was loaded. */}
         <span className="farelbl">
-          {perLeg && tickets ? <>for all {tickets} buses. </> : null}
-          <b>Golden Arrow Gold Card</b> price. Cash is <b>higher at peak times</b>, lower
-          off-peak.
+          {perLeg && tickets
+            ? <>for all {tickets} {mode === 'train' ? 'trains' : 'buses'}. </>
+            : null}
+          {mode === 'bus' && (
+            <><b>Golden Arrow Gold Card</b> price. Cash is <b>higher at peak times</b>,
+            lower off-peak.</>
+          )}
         </span>
         {(fare as Fare).zone_approx && (
           <span className="faretag area" title="Published for the surrounding area, not this exact stop">
@@ -125,14 +148,16 @@ export default function FarePanel(
               The fare you are charged may differ.
             </p>
           )}
-          <p className="farefoot">
-            {isFlat(fare.basis)
-              ? 'These are GO Easy prices on a Golden Arrow Gold Card'
-              : 'These are Golden Arrow Gold Card prices'}
-            {' '}and do not change with the time of day. A cash fare does: it is higher at
-            peak times and lower off-peak. Golden Arrow does not publish cash fares per
-            journey, so this app cannot show you one. Ask the driver.
-          </p>
+          {mode === 'bus' && (
+            <p className="farefoot">
+              {isFlat(fare.basis)
+                ? 'These are GO Easy prices on a Golden Arrow Gold Card'
+                : 'These are Golden Arrow Gold Card prices'}
+              {' '}and do not change with the time of day. A cash fare does: it is higher
+              at peak times and lower off-peak. Golden Arrow does not publish cash fares
+              per journey, so this app cannot show you one. Ask the driver.
+            </p>
+          )}
         </div>
       )}
     </div>

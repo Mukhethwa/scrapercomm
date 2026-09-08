@@ -30,6 +30,8 @@ export interface Hit {
   sub?: string
   /** For a stop: 'bus' or 'train'. RETREAT is both, and they are different places. */
   mode?: 'bus' | 'train'
+  /** Which operator serves it, so a card can be headed with their name. */
+  operator?: string
 }
 
 /** The three day types every journey is published for. */
@@ -78,7 +80,7 @@ export async function mergedSearch(q: string, areas: string[],
    */
   const stops: Hit[] = s.stops.slice(0, 6)
     .map((x) => ({ kind: 'stop', id: x.id, name: x.name, lat: x.lat, lon: x.lon,
-                   mode: x.operator_kind }))
+                   mode: x.operator_kind, operator: x.operator_code }))
   const places: Hit[] = g.results.slice(0, 3)
     .map((x) => ({ kind: 'place', name: x.name, lat: x.lat, lon: x.lon, sub: x.full }))
   return [...areaHits, ...stops, ...places]
@@ -121,7 +123,8 @@ export function usePlanSearch() {
    */
   async function resolveHit(h: Hit): Promise<Endpoint | null> {
     if (h.kind === 'stop') {
-      return { kind: 'stop', id: h.id, name: h.name, lat: h.lat, lon: h.lon, mode: h.mode }
+      return { kind: 'stop', id: h.id, name: h.name, lat: h.lat, lon: h.lon,
+               mode: h.mode, operator: h.operator }
     }
     if (h.kind === 'place') return { kind: 'pin', name: h.name, lat: h.lat, lon: h.lon }
 
@@ -132,8 +135,8 @@ export function usePlanSearch() {
       // plans, so it beats falling through to a geocoded guess at the area's name.
       const hit = r.stops.find((x) => x.lat != null && x.lon != null) ?? r.stops[0]
       if (hit) {
-        return { kind: 'stop', id: hit.id, name: hit.name,
-                 lat: hit.lat, lon: hit.lon, mode: hit.operator_kind }
+        return { kind: 'stop', id: hit.id, name: hit.name, lat: hit.lat, lon: hit.lon,
+                 mode: hit.operator_kind, operator: hit.operator_code }
       }
     }
     const r = await getGeocode(h.name).catch(() => ({ results: [] as GeoHit[] }))

@@ -165,6 +165,8 @@ export interface Endpoint {
    * rider about buses whichever network they are on.
    */
   mode?: 'bus' | 'train'
+  /** Which operator serves it, e.g. 'gabs', 'metrorail'. Not sent to the API. */
+  operator?: string
   /**
    * Where it is, if we know.
    *
