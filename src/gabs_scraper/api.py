@@ -490,7 +490,45 @@ def areas():
             ORDER BY e.area
             """
         )
-        return {"areas": [r[0] for r in cur.fetchall()]}
+        areas = [r[0] for r in cur.fetchall()]
+
+        # Which of those have a station in them.
+        #
+        # An area is by definition a name no stop carries, so no area is ever a train
+        # terminus and no name match can answer this - only geography can. A kilometre and
+        # a half is the distance somebody walks to a train rather than waiting for a second
+        # bus. Areas whose stops have no coordinates do not appear: the claim is made only
+        # where it can be shown, because promising a train in Bluedowns sends a rider to
+        # look for a station that is not there.
+        cur.execute(
+            """
+            WITH endpoints AS (
+              SELECT DISTINCT origin AS area FROM route WHERE origin <> ''
+              UNION SELECT DISTINCT destination FROM route WHERE destination <> ''
+            ),
+            areas AS (
+              SELECT e.area FROM endpoints e
+              LEFT JOIN stop s ON s.name = e.area
+              WHERE s.id IS NULL
+            ),
+            here AS (
+              SELECT a.area, s.lat, s.lon
+              FROM areas a
+              JOIN stop s     ON s.lat IS NOT NULL AND s.name ILIKE '%' || a.area || '%'
+              JOIN operator o ON o.id = s.operator_id AND o.kind = 'bus'
+            )
+            SELECT DISTINCT h.area
+            FROM here h
+            JOIN stop t     ON t.lat IS NOT NULL
+            JOIN operator o ON o.id = t.operator_id AND o.kind = 'train'
+            WHERE 6371 * acos(least(1,
+                    cos(radians(h.lat)) * cos(radians(t.lat))
+                      * cos(radians(t.lon) - radians(h.lon))
+                  + sin(radians(h.lat)) * sin(radians(t.lat)))) <= 1.5
+            ORDER BY h.area
+            """
+        )
+        return {"areas": areas, "railAreas": [r[0] for r in cur.fetchall()]}
     finally:
         conn.close()
 

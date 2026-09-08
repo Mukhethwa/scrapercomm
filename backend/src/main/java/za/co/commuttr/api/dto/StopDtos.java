@@ -59,7 +59,12 @@ public final class StopDtos {
 
     public record ReachablePointResponse(PinDto origin, List<DownstreamStopDto> reachable) { }
 
-    public record AreasResponse(List<String> areas) { }
+    /**
+     * @param areas     every area a rider can search
+     * @param railAreas the subset with a station in them, so the suggestion can say so.
+     *                  Additive rather than a change of shape: an area is still a name.
+     */
+    public record AreasResponse(List<String> areas, List<String> railAreas) { }
 
     /**
      * An operator the app can actually plan with.

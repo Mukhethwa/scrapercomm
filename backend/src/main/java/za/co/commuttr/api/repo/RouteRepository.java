@@ -51,6 +51,47 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
     List<String> findAreaNames();
 
     /**
+     * Which of those areas also have a station in them.
+     *
+     * An area is a name GABS uses for a part of the city, and by construction it is a name
+     * no stop carries - that is the rule that makes it an area rather than a stop. So no
+     * area is ever a train terminus and no name match can answer this. Only geography can:
+     * an area has trains if a Metrorail station stands among the bus stops that make it up.
+     *
+     * A kilometre and a half, which is the distance somebody would walk to a train rather
+     * than wait for a second bus. Areas whose stops have no coordinates simply do not
+     * appear here - the claim is only made where it can be shown, because telling a rider
+     * there is a train in Bluedowns when there is not sends them to look for a station.
+     */
+    @Query(value = """
+            WITH endpoints AS (
+              SELECT DISTINCT origin AS area FROM route WHERE origin <> ''
+              UNION SELECT DISTINCT destination FROM route WHERE destination <> ''
+            ),
+            areas AS (
+              SELECT e.area FROM endpoints e
+              LEFT JOIN stop s ON s.name = e.area
+              WHERE s.id IS NULL
+            ),
+            here AS (
+              SELECT a.area, s.lat, s.lon
+              FROM areas a
+              JOIN stop s   ON s.lat IS NOT NULL AND s.name ILIKE '%' || a.area || '%'
+              JOIN operator o ON o.id = s.operator_id AND o.kind = 'bus'
+            )
+            SELECT DISTINCT h.area
+            FROM here h
+            JOIN stop t     ON t.lat IS NOT NULL
+            JOIN operator o ON o.id = t.operator_id AND o.kind = 'train'
+            WHERE 6371 * acos(least(1,
+                    cos(radians(h.lat)) * cos(radians(t.lat))
+                      * cos(radians(t.lon) - radians(h.lon))
+                  + sin(radians(h.lat)) * sin(radians(t.lat)))) <= 1.5
+            ORDER BY h.area
+            """, nativeQuery = true)
+    List<String> findAreasWithRail();
+
+    /**
      * Operators with something behind them, and how much.
      *
      * Counted rather than listed, because the question the UI is asking is whether

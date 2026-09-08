@@ -279,7 +279,8 @@ export interface PlanOption {
 export const getGeocode = (q: string) =>
   getJSON<{ results: GeoHit[] }>(`${API}/geocode?q=${encodeURIComponent(q)}`)
 
-export const getAreas = () => getJSON<{ areas: string[] }>(`${API}/areas`)
+export const getAreas = () =>
+  getJSON<{ areas: string[]; railAreas?: string[] }>(`${API}/areas`)
 
 /** An operator the API can actually plan with, and how much of it is loaded. */
 export interface OperatorInfo {

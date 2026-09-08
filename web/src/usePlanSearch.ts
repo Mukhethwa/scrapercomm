@@ -45,14 +45,27 @@ export function useDebounced<T>(v: T, ms: number): T {
 }
 
 /** Stops, places and areas for one query, in the order the menu shows them. */
-export async function mergedSearch(q: string, areas: string[]): Promise<Hit[]> {
+export async function mergedSearch(q: string, areas: string[],
+                                   railAreas: Set<string> = new Set()): Promise<Hit[]> {
   const [s, g] = await Promise.all([
     getStops(q).catch(() => ({ stops: [] as StopHit[] })),
     getGeocode(q).catch(() => ({ results: [] as GeoHit[] })),
   ])
   const ql = q.trim().toLowerCase()
+  /*
+   * An area says which networks a rider will actually find in it.
+   *
+   * Only where it can be shown: an area is a name no stop carries, so nothing about the
+   * name says whether there is a station, and the API answers it from geography instead.
+   * Where it cannot be shown the line stays as it was, because "bus service" understates
+   * an area and "bus and train" in one that has no station sends somebody looking for a
+   * platform that is not there.
+   */
   const areaHits: Hit[] = areas.filter((a) => a.toLowerCase().includes(ql)).slice(0, 3)
-    .map((a) => ({ kind: 'area', name: a, lat: 0, lon: 0, sub: 'area with bus service' }))
+    .map((a) => ({
+      kind: 'area', name: a, lat: 0, lon: 0,
+      sub: railAreas.has(a) ? 'area with bus and train service' : 'area with bus service',
+    }))
   /*
    * Every stop the API returned, whether or not it has been geocoded.
    *
@@ -86,8 +99,14 @@ export function usePlanSearch() {
   const [fromOpen, setFromOpen] = useState(false)
   const [toOpen, setToOpen] = useState(false)
   const [areas, setAreas] = useState<string[]>([])
+  const [railAreas, setRailAreas] = useState<Set<string>>(new Set())
 
-  useEffect(() => { getAreas().then((r) => setAreas(r.areas)).catch(() => {}) }, [])
+  useEffect(() => {
+    getAreas().then((r) => {
+      setAreas(r.areas)
+      setRailAreas(new Set(r.railAreas ?? []))
+    }).catch(() => {})
+  }, [])
 
   /**
    * Turn a suggestion into somewhere the planner can actually use.
@@ -170,12 +189,12 @@ export function usePlanSearch() {
 
   useEffect(() => {
     if (!debFrom || (from && from.name === debFrom)) { setFromHits([]); return }
-    mergedSearch(debFrom, areas).then(setFromHits).catch(() => setFromHits([]))
+    mergedSearch(debFrom, areas, railAreas).then(setFromHits).catch(() => setFromHits([]))
   }, [debFrom, areas]) // eslint-disable-line
 
   useEffect(() => {
     if (!from || !debTo || (to && to.name === debTo)) { setToHits([]); return }
-    mergedSearch(debTo, areas).then(setToHits).catch(() => setToHits([]))
+    mergedSearch(debTo, areas, railAreas).then(setToHits).catch(() => setToHits([]))
   }, [debTo, from, areas]) // eslint-disable-line
 
   /** Empty the starting point and everything that depended on it. */

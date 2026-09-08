@@ -187,7 +187,7 @@ public class CatalogService {
 
     /** GET /api/areas */
     public AreasResponse areas() {
-        return new AreasResponse(routes.findAreaNames());
+        return new AreasResponse(routes.findAreaNames(), routes.findAreasWithRail());
     }
 
     /** Every operator, with enough detail for the UI to know which ones are ready. */
