@@ -12,11 +12,18 @@ when the problems have been reviewed and are understood.
 A cell the checks flagged is never written, under --force or otherwise, so the question a
 hold actually decides is whether an imperfect table is worth having at all. All-or-nothing
 answered that badly at the margins: one unreadable cell out of 737 was hiding 24 stations
-and a full day of service. --allow-unverified 1 loads a table whose flagged cells are
-under one per cent of it - those cells still do not load, so the affected stop reads as
-having no published time rather than a wrong one.
+and a full day of service. --allow-unverified loads a table whose flagged cells are under
+some share of it - those cells still do not load, so the affected stop reads as having no
+published time rather than a wrong one.
 
-    PYTHONPATH=src python -m prasa_scraper.pipeline --allow-unverified 1
+Three per cent, measured rather than picked. Across the five PDFs the held tables fall in
+two groups with nothing between them: three at 1.2, 1.9 and 2.8 per cent, then the next at
+5.9 and up through 86. The first group is a table that read cleanly with a few cells of
+noise in it; the second is a table that did not read. One per cent, which is what I chose
+first, cut through the middle of the good group and held the Northern Line page - the one
+with KRAAIFONTEIN on it - over 7 bad cells out of 601.
+
+    PYTHONPATH=src python -m prasa_scraper.pipeline --allow-unverified 3
 """
 from __future__ import annotations
 
@@ -41,7 +48,8 @@ def main() -> None:
     ap.add_argument("--force", action="store_true", help="load tables that failed their checks")
     ap.add_argument("--allow-unverified", type=float, default=0.0, metavar="PCT",
                     help="load a table if at most PCT%% of its cells are unverified; "
-                         "those cells are still not written")
+                         "those cells are still not written. 3 is the measured line "
+                         "between a table that read and one that did not")
     args = ap.parse_args()
 
     paths = ([os.path.join(args.dir, args.pdf)] if args.pdf
@@ -61,6 +69,14 @@ def main() -> None:
                     # Problems first. A table whose grid could not be found has no
                     # stations either, and reporting that as "nothing here" hid real
                     # detection failures behind a message about empty pages.
+                    # An orphaned header strip costs this table its train numbers and
+                    # nothing else. Counting it beside a line that could not be read at
+                    # all made the losses look far worse than they were.
+                    if grid.problems and grid.problems[0].kind == "header":
+                        print(f"  note  {label}: {grid.problems[0].detail}", flush=True)
+                        skipped += 1
+                        continue
+
                     if grid.problems and not (grid.stations and counts["times"]):
                         print(f"  FAIL  {label}: {grid.problems[0].kind}: "
                               f"{grid.problems[0].detail}", flush=True)

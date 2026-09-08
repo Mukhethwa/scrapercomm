@@ -664,11 +664,18 @@ out of 737 was hiding 24 stations and a full day's service, to avoid one stop re
 published time". `--allow-unverified` names how much of that a run will accept:
 
 ```bash
-# Load a table when under 1% of its cells are unverified. Those cells still do not load.
-PYTHONPATH=src python -m prasa_scraper.pipeline --allow-unverified 1
+# Load a table when under 3% of its cells are unverified. Those cells still do not load.
+PYTHONPATH=src python -m prasa_scraper.pipeline --allow-unverified 3
 ```
 
 It defaults to none, so a plain run holds anything imperfect.
+
+**Three is measured, not chosen.** Across the five PDFs the held tables fall into two
+groups with nothing between them — three at 1.2%, 1.9% and 2.8%, then the next at 5.9%
+and up through 86%. The first group is a table that read cleanly with a few cells of noise
+in it; the second is a table that did not read. Picking 1% instead cut through the middle
+of the good group and held back the Northern Line page — the one with Kraaifontein on it —
+over 7 bad cells out of 601.
 
 Roughly 97% of cells read cleanly, and a common failure repairs itself. PRASA pads its
 hours — the sheets print `05:25`, never `5:25` — so a cell read as `7:11` has lost its
