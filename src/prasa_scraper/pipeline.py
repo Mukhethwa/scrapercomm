@@ -51,39 +51,39 @@ def main() -> None:
                     # detection failures behind a message about empty pages.
                     if grid.problems and not (grid.stations and counts["times"]):
                         print(f"  FAIL  {label}: {grid.problems[0].kind}: "
-                              f"{grid.problems[0].detail}")
+                              f"{grid.problems[0].detail}", flush=True)
                         held += 1
                         continue
 
                     if not grid.stations or not counts["times"]:
-                        print(f"  skip  {label}: nothing timetable-shaped here")
+                        print(f"  skip  {label}: nothing timetable-shaped here", flush=True)
                         skipped += 1
                         continue
 
                     if grid.problems and not args.force:
                         print(f"  HOLD  {label}: {len(grid.problems)} unresolved "
-                              f"of {counts['times']} times")
+                              f"of {counts['times']} times", flush=True)
                         for problem in grid.problems[:4]:
-                            print(f"          {problem.kind}: {problem.detail}")
+                            print(f"          {problem.kind}: {problem.detail}", flush=True)
                         held += 1
                         continue
 
                     if args.dry_run:
                         print(f"  ok    {label}: {counts['stations']} stations, "
-                              f"{counts['trains']} trains, {counts['times']} times")
+                              f"{counts['trains']} trains, {counts['times']} times", flush=True)
                         loaded += 1
                         continue
 
                     wrote = load_page(conn, grid, pdf_path=path,
                                       page_number=page.page_number * 100 + index)
                     print(f"  load  {label}: {wrote['route']} - {wrote['stops']} stops, "
-                          f"{wrote['trips']} trips, {wrote['times']} times")
+                          f"{wrote['trips']} trips, {wrote['times']} times", flush=True)
                     loaded += 1
     finally:
         if conn:
             conn.close()
 
-    print(f"\ntables loaded {loaded}, held {held}, skipped {skipped}")
+    print(f"\ntables loaded {loaded}, held {held}, skipped {skipped}", flush=True)
 
 
 if __name__ == "__main__":
