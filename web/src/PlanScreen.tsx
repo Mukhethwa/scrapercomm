@@ -18,6 +18,7 @@ import {
   groupByOperator, fromTime, alightOrNone, DAY_LABEL, type DepartureBlock,
 } from './results'
 import { stopLabel } from './stops'
+import { clockFace } from './times'
 import OperatorCard from './OperatorCard'
 import LeaveAt, { hhmm, nowMinutes } from './LeaveAt'
 import PlanMap from './PlanMap'
@@ -26,8 +27,18 @@ import FarePanel from './FarePanel'
 import ConnectionsCard, { connectionsFrom } from './ConnectionsCard'
 import { PinIcon } from './icons'
 
-/** The name on the front of the bus: the last place its route label names. */
-function busTerminus(routeLabel: string): string {
+/**
+ * What a rider is looking for as the vehicle arrives.
+ *
+ * On a bus that is the destination on the front, which is the last place its route names.
+ * A train is not signed that way - PRASA labels a service by its line and direction, and
+ * the platform indicator shows the line - so the line is what to look for.
+ */
+function vehicleSign(routeLabel: string, kind?: string): string {
+  if (kind === 'train') {
+    const line = routeLabel.replace(/\b(INBOUND|OUTBOUND)\b/i, '').trim()
+    return line ? line.replace(/\s+/g, ' ') : routeLabel
+  }
   const parts = routeLabel.split(' - ').map((x) => x.trim()).filter(Boolean)
   return parts[parts.length - 1] ?? routeLabel
 }
@@ -437,7 +448,7 @@ export default function PlanScreen() {
             <b>No direct {ride}</b> from {s.from!.name} to {s.to!.name}. You can still get there by taking{' '}
             <b>{s.connLegs} {rides}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
           </Banner>
-          <ConnectionsCard connections={liveConns} onChoose={setChosenConn} />
+          <ConnectionsCard connections={liveConns} onChoose={setChosenConn} kind={ride} />
         </>
       )}
 
@@ -505,17 +516,20 @@ export default function PlanScreen() {
                       rider has asked for more. */}
                   <div className="mb-3 border border-line bg-block p-3">
                     <div className="text-[11px] font-bold tracking-[.06em] text-sub uppercase">
-                      Look for the bus to
+                      {openOption.operator_kind === 'train'
+                        ? 'Look for the train on' : 'Look for the bus to'}
                     </div>
                     <div className="text-[15px] font-bold text-ink">
-                      {busTerminus(openOption.route_label)}
+                      {vehicleSign(openOption.route_label, openOption.operator_kind)}
                     </div>
                     <div className="mt-1 text-[12px] text-sub">
-                      Route {openOption.route_label}, timetable #{openOption.timetable_number}
+                      {openOption.operator_kind === 'train' ? 'Service' : 'Route'}{' '}
+                      {openOption.route_label}, timetable #{openOption.timetable_number}
                     </div>
                     <div className="mt-1 text-[12px] text-sub">
                       {DAY_LABEL[openOption.day_type] ?? openOption.day_type}
-                      {openDeparture && <> · {openDeparture.board_raw} to {openDeparture.arrive_raw}</>}
+                      {openDeparture && <> · {clockFace(openDeparture.board_raw)} to{' '}
+                        {clockFace(openDeparture.arrive_raw)}</>}
                       {openDeparture && stopLabel(openDeparture.stop_count)
                         && <> · {stopLabel(openDeparture.stop_count)}</>}
                     </div>
@@ -533,6 +547,7 @@ export default function PlanScreen() {
                       ? { name: s.to.name, time: openDeparture?.arrive_raw } : null}
                     boardTime={alightOrNone(openDeparture, 'board')}
                     alightTime={alightOrNone(openDeparture, 'alight')}
+                    kind={openOption.operator_kind === 'train' ? 'train' : 'bus'}
                     onClose={() => s.setOpenDep(null)}
                   />
                 </>

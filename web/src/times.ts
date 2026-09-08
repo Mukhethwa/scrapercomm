@@ -28,6 +28,22 @@ function clockIn(raw: string): string | null {
 }
 
 /**
+ * A published time, as a rider reads a clock.
+ *
+ * PRASA times its weekend trains to the half minute and prints it, so the sheets say
+ * 05:32:30 and that is what the database keeps - the train really does pass at thirty
+ * seconds past, and rounding it away in the scraper would be discarding source data.
+ *
+ * Nobody catches a train to the second. Shown in full it is noise in the largest type on
+ * the card, and it reads like a stopwatch rather than a timetable, so the seconds are
+ * dropped here at the point of display and nowhere earlier. A footnote letter survives,
+ * because 16:45b and 16:45 are different departures.
+ */
+export function clockFace(raw: string): string {
+  return clockIn(raw) ?? raw
+}
+
+/**
  * The short form, for a departure button where there is room for a few characters.
  *
  * A tilde is the shortest thing a reader already understands as "about". It is paired
@@ -35,7 +51,7 @@ function clockIn(raw: string): string | null {
  * explanation.
  */
 export function shortTime(raw: string, approx: boolean): ShownTime {
-  if (!approx) return { text: raw, approx: false }
+  if (!approx) return { text: clockFace(raw), approx: false }
   const clock = clockIn(raw)
   return clock ? { text: `~${clock}`, approx: true } : { text: NO_TIME, approx: true }
 }
@@ -47,7 +63,7 @@ export function shortTime(raw: string, approx: boolean): ShownTime {
  * cannot be mistaken for a published departure.
  */
 export function longTime(raw: string, approx: boolean): ShownTime {
-  if (!approx) return { text: raw, approx: false }
+  if (!approx) return { text: clockFace(raw), approx: false }
   const clock = clockIn(raw)
   // No clock in it means the caller already chose the words - "via" for a stop the bus
   // merely passes, NO_TIME for one whose bound said nothing. Both are left alone.

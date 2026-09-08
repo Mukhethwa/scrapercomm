@@ -355,14 +355,28 @@ def _blocks(ink: np.ndarray) -> list[tuple[int, int]]:
     """
     The y ranges of the separate tables stacked on one page.
 
-    A page is not one grid. The Southern Line inbound page carries three - the Simon's
-    Town workings, the Fish Hoek workings, and the Retreat workings - drawn one under
-    another and separated by a ruled line. They look like one table and are not: they have
-    54, 50 and 46 columns respectively, because each runs a different set of trains.
+    A page is not always one grid. The Southern Line inbound page carries three - the
+    Simon's Town workings, the Fish Hoek workings, and the Retreat workings - drawn one
+    under another and separated by a ruled line. They look like one table and are not:
+    they have 54, 50 and 46 columns respectively, because each runs a different set of
+    trains. Reading that page as a single grid put the third table's cells at the first
+    table's column positions, silently mixing times between neighbouring trains, and
+    produced departure times that looked entirely reasonable and were wrong.
 
-    Reading the page as a single grid put the third table's cells at the first table's
-    column positions, which silently mixed times between neighbouring trains. It produced
-    departure times that looked entirely reasonable and were wrong.
+    But a ruled line is not what makes two tables. The Northern Line page is divided by
+    five rules into groups of stations - the Wellington branch, the Kraaifontein branch,
+    the Stellenbosch branch, the Strand branch, and then everything from Bellville into
+    town - and all five have the same 41 columns, because it is one timetable and those
+    are the same 41 trains. Train 2500 leaves KRAAIFONTEIN at 04:30 and reaches CAPE TOWN
+    at 05:45, crossing four of those rules on the way.
+
+    Split there, it stopped being a journey. It became a route from Kraaifontein to
+    Stikland and an unrelated one from Bellville to Cape Town, and a rider asking to go
+    from Kraaifontein into the city was told no train does it. That is what sent Mukhethwa
+    looking for a station he catches trains from.
+
+    So the rule is the column layout, which is what actually distinguishes one table from
+    another, and not the ink between the rows.
     """
     profile = ink.mean(axis=1)
     gap = max(5, int(8 * _scale(ink.shape[1])))
@@ -390,7 +404,42 @@ def _blocks(ink: np.ndarray) -> list[tuple[int, int]]:
             continue
         out.append((carry if carry is not None else a, b))
         carry = None
-    return out
+
+    return _merge_shared_columns(ink, out)
+
+
+def _same_columns(a: list[int], b: list[int], tol: int) -> bool:
+    """
+    Do two bands stand on the same column rules?
+
+    Same count and every edge within a few pixels. Not exact equality: the rules are found
+    from a threshold over each band's own ink, so a band with sparser text can place an
+    edge a pixel or two off its neighbour's while both are reading the same drawn line.
+    """
+    if len(a) != len(b) or not a:
+        return False
+    return all(abs(x - y) <= tol for x, y in zip(a, b))
+
+
+def _merge_shared_columns(ink: np.ndarray, bands: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Join neighbouring bands that are the same table, divided only by a rule."""
+    if len(bands) < 2:
+        return bands
+    tol = max(3, int(6 * _scale(ink.shape[1])))
+    edges = [_column_edges(ink[a:b]) for a, b in bands]
+
+    merged: list[tuple[int, int]] = []
+    current, current_edges = bands[0], edges[0]
+    for band, cols in zip(bands[1:], edges[1:]):
+        if _same_columns(current_edges, cols, tol):
+            current = (current[0], band[1])
+            # Keep the layout of the run's first band. Re-measuring the joined band would
+            # be the same rules read again; what matters is that the next one matches.
+        else:
+            merged.append(current)
+            current, current_edges = band, cols
+    merged.append(current)
+    return merged
 
 
 def clean_station(raw: str) -> str:
@@ -436,6 +485,29 @@ def _read_title(gray: Image.Image, panel_top: int) -> str:
         return ""
 
 
+# What a platform number looks like: one or two digits, and never a clock.
+_PLATFORM_NO = re.compile(r"^\d{1,2}$")
+
+
+def _is_platform_row(label: str, cells: list[str]) -> bool:
+    """
+    Is this the PLATFORM NO row rather than a station?
+
+    Both halves have to agree, because either alone is too eager. A label read as
+    "PLATFORM NO" is the clear case, but OCR mangles it as readily as anything else - and
+    a row of bare digits where a row of times belongs is the same fact stated by the data.
+    Requiring the label to look like a platform heading OR the row to be entirely small
+    integers, with at least a few of them, keeps a station whose times were badly read
+    from being silently discarded as furniture.
+    """
+    if "PLATFORM" in (label or "").upper():
+        return True
+    filled = [c for c in cells if c]
+    if len(filled) < 3:
+        return False
+    return all(_PLATFORM_NO.match(c) for c in filled)
+
+
 def _read_block(gray, panel_ink, left, top, y0, y1, heading) -> Grid:
     """One table. Its columns are measured within itself, never inherited."""
     ink = panel_ink[y0:y1]
@@ -458,7 +530,15 @@ def _read_block(gray, panel_ink, left, top, y0, y1, heading) -> Grid:
 
     rows = _row_bands(ink, cols[1] if len(cols) > 1 else 60)
     if len(rows) < 2:
-        grid.problems.append(Problem("grid", f"only {len(rows)} text rows found"))
+        # A single row of text under a full set of column rules is the "TRAIN NO." strip
+        # that _blocks failed to fold into the table beneath it. That is not a table which
+        # could not be read - it is a table's header that ended up on its own - and
+        # calling it a failure mixed a small, specific loss in with the serious ones.
+        #
+        # The loss is real though: the numbers in that strip are what a platform indicator
+        # shows, and without the strip the trips below it load unlabelled. Its own kind,
+        # so the run log can say which of those two things happened.
+        grid.problems.append(Problem("header", f"train numbers not read ({len(rows)} rows)"))
         return grid
     top = top + y0
 
@@ -492,8 +572,22 @@ def _read_block(gray, panel_ink, left, top, y0, y1, heading) -> Grid:
     grid.train_numbers = header_cells
 
     for ri, r in enumerate(rows[header_index + 1:], start=header_index + 1):
-        grid.stations.append(clean_station(_read(gray, box(r, cols[0], cols[1]), LABEL_CONFIG)))
-        grid.times.append(read_row(r))
+        label = clean_station(_read(gray, box(r, cols[0], cols[1]), LABEL_CONFIG))
+        cells = read_row(r)
+
+        # Not every row of a timetable is a station.
+        #
+        # The Northern Line prints a PLATFORM NO row in the middle of the page, where
+        # Bellville's arrivals become its departures. Its cells hold "5", "10", "3" - real
+        # information, and not times. Once neighbouring bands are joined into the one
+        # table they belong to, that row lands in the body, and every cell in it was
+        # reported as a cell that should have been a time and was not. Forty complaints
+        # about a row that is doing exactly what it is printed to do.
+        if _is_platform_row(label, cells):
+            continue
+
+        grid.stations.append(label)
+        grid.times.append(cells)
         grid.boxes.append([box(r, cols[i], cols[i + 1]) for i in range(1, len(cols) - 1)])
 
     _check(grid)

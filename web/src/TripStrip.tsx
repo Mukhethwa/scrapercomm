@@ -6,7 +6,7 @@ import { longTime } from './times'
 export interface PinEnd { name: string; time?: string }
 
 /**
- * Shows the whole trip the bus makes (its official first stop to terminus), with the
+ * Shows the whole trip the vehicle makes (its official first stop to terminus), with the
  * real published times and "via" markers straight from the timetable, and your own
  * boarding and alighting points highlighted. Times before you board and after you
  * alight are the bus's official schedule; your unofficial-stop time is approximate.
@@ -21,7 +21,7 @@ function TripTime({ time, approx }: { time: string; approx: boolean }) {
 
 export default function TripStrip(
   { stops, loading, boardPin, alightPin, riderFromSeq, riderToSeq, notes,
-    boardTime, alightTime, onClose }:
+    boardTime, alightTime, kind = 'bus', onClose }:
   {
     stops: TripStop[] | null; loading: boolean
     boardPin: PinEnd | null; alightPin: PinEnd | null
@@ -35,6 +35,14 @@ export default function TripStrip(
      * departure's own wording wins on those two rows.
      */
     boardTime?: string; alightTime?: string
+    /**
+     * Bus or train, for the words around the list.
+     *
+     * The list itself is the same either way - stops, times, where you get on - but
+     * "the whole bus trip" over a Metrorail schedule, and "bus starts" against RETREAT
+     * on the Southern Line, tell a rider the app has not understood what they asked.
+     */
+    kind?: 'bus' | 'train'
     /**
      * Collapses the breakdown. Tapping the same departure again already closed it, but
      * that means aiming at the chip you came from after scrolling past a long list of
@@ -86,7 +94,9 @@ export default function TripStrip(
   return (
     <div className="tripstrip">
       <div className="tsthead">
-        <span className="tsttitle">The whole bus trip. You ride the highlighted part.</span>
+        <span className="tsttitle">
+          The whole {kind === 'train' ? 'train' : 'bus'} trip. You ride the highlighted part.
+        </span>
         {onClose && (
           <button className="tsclose" onClick={onClose} aria-label="Hide the trip breakdown">
             <X size={13} aria-hidden="true" />
@@ -108,7 +118,9 @@ export default function TripStrip(
                 {r.pin && <span className="yourstop"> (your stop)</span>}
                 {r.role === 'board' && <span className="tstag on">get on here</span>}
                 {r.role === 'alight' && <span className="tstag off">get off here</span>}
-                {isFirst && before && <span className="tstag ctx">bus starts</span>}
+                {isFirst && before && (
+                  <span className="tstag ctx">{kind === 'train' ? 'train' : 'bus'} starts</span>
+                )}
                 {isLast && after && <span className="tstag ctx">terminus</span>}
               </span>
               <TripTime time={r.time} approx={r.approx} />

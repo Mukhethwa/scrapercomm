@@ -22,6 +22,7 @@ const FALLBACK = { bus: Bus, train: Train }
  */
 const LOGOS: Record<string, string> = {
   gabs: '/operators/gabs.png',
+  metrorail: '/operators/metrorail.png',
 }
 
 export default function OperatorLogo({ id, name, kind, size = 36 }: {

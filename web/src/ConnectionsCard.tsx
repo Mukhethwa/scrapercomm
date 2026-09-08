@@ -110,12 +110,13 @@ function knownBy(conn: Connection, index: number): string | null {
 }
 
 /** One whole itinerary, carrying everything that used to separate one card from another. */
-function OptionBlock({ conn, chosen, planned, onChoose, onAdd }: {
+function OptionBlock({ conn, chosen, planned, onChoose, onAdd, kind }: {
   conn: Connection
   chosen: boolean
   planned: boolean
   onChoose: () => void
   onAdd: () => void
+  kind: 'bus' | 'train'
 }) {
   const first = conn.legs[0]
   const last = conn.legs[conn.legs.length - 1]
@@ -140,12 +141,12 @@ function OptionBlock({ conn, chosen, planned, onChoose, onAdd }: {
     <div className={`flex h-full w-[172px] shrink-0 flex-col gap-1 p-3 text-white ${
       chosen ? 'bg-accent-fill ring-2 ring-white ring-inset' : 'bg-accent'}`}>
       <button className="flex cursor-pointer flex-col items-start gap-1 text-left" onClick={onChoose}
-        title="See the buses on this journey">
+        title={`See the ${kind === 'train' ? 'trains' : 'buses'} on this journey`}>
         {/* How many buses, which day, and where you change. These used to be the card
             heading; they belong to the individual journey, not to a group of them. */}
         <span className="flex flex-wrap items-center gap-1">
           <span className="bg-white px-1.5 py-px text-[10px] font-bold text-accent-fill">
-            {conn.legs.length} buses
+            {conn.legs.length} {kind === 'train' ? 'trains' : 'buses'}
           </span>
           <span className="text-[10px] font-bold tracking-[.05em] text-white/90 uppercase">
             {DAY_LABEL[conn.day_type] ?? conn.day_type}
@@ -187,10 +188,20 @@ function OptionBlock({ conn, chosen, planned, onChoose, onAdd }: {
   )
 }
 
-export default function ConnectionsCard({ connections, onChoose }: {
+export default function ConnectionsCard({ connections, onChoose, kind = 'bus' }: {
   connections: Connection[]
   /** Tells the map which journey to draw. */
   onChoose?: (c: Connection) => void
+  /**
+   * Bus or train, taken from the journey's starting point.
+   *
+   * Exact rather than assumed, as the schema stands: stops belong to one operator, the
+   * connections engine joins legs on shared stop ids, so every leg of a chain is
+   * necessarily the same operator as the stop it starts from. That stops being true the
+   * day stop_interchange is wired up and a rider can step off a bus onto a train - at
+   * which point the leg has to carry its own operator and this prop should go.
+   */
+  kind?: 'bus' | 'train'
 }) {
   const planner = usePlanner()
   const [pick, setPick] = useState(0)
@@ -292,6 +303,7 @@ export default function ConnectionsCard({ connections, onChoose }: {
                 setOpenLeg(null)
               }}
               onAdd={() => toggle(c)}
+              kind={kind}
             />
           </div>
         ))}
@@ -300,7 +312,7 @@ export default function ConnectionsCard({ connections, onChoose }: {
       {options.length > 1 && (
         <div className="mt-1 text-[11px] text-sub">
           Ordered by least waiting. They differ in where you change and how long you wait.
-          {!expanded && ' Tap one to see its buses.'}
+          {!expanded && ` Tap one to see its ${kind === 'train' ? 'trains' : 'buses'}.`}
         </div>
       )}
 
@@ -370,6 +382,7 @@ export default function ConnectionsCard({ connections, onChoose }: {
             alightPin={null}
             boardTime={legOpen.board_raw}
             alightTime={legOpen.arrive_raw}
+            kind={kind}
             onClose={() => setOpenLeg(null)}
           />
         </div>
@@ -383,8 +396,9 @@ export default function ConnectionsCard({ connections, onChoose }: {
             {conn.fare.kind === 'through' ? 'One ticket' : `Pay ${conn.fare.tickets} times`}
           </span>
           <span className="w-full text-[11px] text-sub">
-            for all {conn.legs.length} buses. Golden Arrow Gold Card price. Cash is higher at
-            peak times, lower off-peak.
+            for all {conn.legs.length} {kind === 'train' ? 'trains' : 'buses'}.
+            {kind === 'train' ? '' : ' Golden Arrow Gold Card price. Cash is higher at'
+              + ' peak times, lower off-peak.'}
           </span>
         </div>
       )}
