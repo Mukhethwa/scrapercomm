@@ -328,6 +328,63 @@ PYTHONPATH=src python -m prasa_scraper.pipeline --page 2 --dry-run
 
 # Load a held table anyway, once its problems have been reviewed
 PYTHONPATH=src python -m prasa_scraper.pipeline --pdf northern-line-weekday.pdf --force
+
+# Clear the operator's routes first, when the shape of the reading has changed
+PYTHONPATH=src python -m prasa_scraper.pipeline --fresh --allow-unverified 3
+```
+
+Use `--fresh` after changing how the pages are read, not routinely. A load replaces a table
+keyed by its page, which is right when a page is read the same way twice and only better —
+and wrong when the shape changes. The Northern Line page used to be read as four tables and
+is now read as one, so three of the four had nothing to replace them and simply stayed,
+still offering a route out of Kraaifontein that gave up at Stikland.
+
+### `python -m prasa_scraper.coverage`
+
+**Checks the loaded stations against the printed ones.** Every other check in the scraper
+is internal — is this cell shaped like a time, does this column run forwards — and a table
+that failed its checks answers all of them by saying nothing, so a page whose grid was
+never found looks exactly like a page with nothing on it. That is how Kraaifontein went
+missing until somebody searched for it by name.
+
+This reads the PDFs and asks the question directly. It reports three things:
+
+| | |
+|---|---|
+| `MISSING` | printed on a sheet, not in the database — a station nobody can plan with |
+| `UNPRINTED` | in the database, on no sheet — a name read badly enough to become its own station |
+| `NO SERVICE` | loaded and searchable with not one departure |
+
+```bash
+PYTHONPATH=src python -m prasa_scraper.coverage
+```
+
+### `python -m prasa_scraper.positions`
+
+**Finds stations that are on the map in the wrong place.** A station with no coordinates
+draws no pin and plans perfectly well — journeys go by stop id. A station with the *wrong*
+coordinates draws a line across the peninsula and puts itself into "nearest stops" for
+places it is nowhere near, and every one of those answers looks as confident as a right
+one.
+
+```bash
+PYTHONPATH=src python -m prasa_scraper.positions        # report
+PYTHONPATH=src python -m prasa_scraper.positions --fix  # clear the ones that are wrong
+```
+
+`--fix` acts only on stations far from a Golden Arrow stop of the same name, which is an
+authoritative comparison. The second check — a station far from its own line — only ever
+reports, because it cannot tell which side of a disagreement is wrong. The first time it
+ran it flagged the one correctly-placed station on a line where everything else had moved.
+
+### `python -m prasa_scraper.duplicates`
+
+**Reports stations that look like one place stored twice**, and stations that share a name
+with a bus stop. It never merges anything: deciding that two spellings are one place is a
+claim about Cape Town and belongs in the alias table where it can be read.
+
+```bash
+PYTHONPATH=src python -m prasa_scraper.duplicates
 ```
 
 ### `python -m pytest -q`
@@ -549,6 +606,9 @@ PYTHONPATH=src python -m gabs_scraper.pipeline --all
 
 # 2. Put any new stops on the map (~5 minutes)
 PYTHONPATH=src python -m gabs_scraper.geocode
+
+#    ...or just one operator's, when only theirs were placed by a weaker provider
+PYTHONPATH=src python -m gabs_scraper.geocode --force --operator metrorail
 
 # 3. Work out the roads for any new routes (needs a Google key)
 PYTHONPATH=src python -m gabs_scraper.geometry
