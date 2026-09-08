@@ -16,9 +16,12 @@ complained, because a coordinate cannot be self-inconsistent the way a timetable
 
 Two checks, because neither covers the other:
 
-    against its namesake  Where a Golden Arrow stop shares the station's name, it was
-                          geocoded through Google and is reliable. Far apart means one of
-                          them is wrong, and it is not the one Google placed.
+    against its namesake  Where a Golden Arrow stop shares the station's name and Google
+                          placed it, far apart means the station is wrong - that is what
+                          --fix acts on. Where the stop came from Nominatim, or where both
+                          came from Google, it is a disagreement with no known winner and
+                          it only reports. AVONDALE is the first case and SOMERSET WEST
+                          the second.
 
     against its line      A station sits among its neighbours on the line. This one only
                           reports, and never clears anything, because it cannot tell which
@@ -29,13 +32,15 @@ Two checks, because neither covers the other:
                           Clearing the odd one out would have deleted the only good
                           coordinate on the line.
 
-Between them they catch four. PAARL and HUGUENOT are wrong too - both sit in the northern
-suburbs, thirty-odd kilometres from Paarl - and neither check finds them: no Golden Arrow
-namesake, and they have each other for company, so the line looks consistent around them.
+Between them they caught four of the six. PAARL and HUGUENOT were wrong too and neither
+check found them: no Golden Arrow namesake, and they sat near each other so the line looked
+consistent around them.
 
-The real fix is a Google key. Every bus stop in this database was placed by Google and not
-one of them is wrong like this; the stations were done on Nominatim alone because no key
-was set, and this module cleans up after that rather than replacing it.
+All six are right now, and not because this module found them. Re-geocoding the stations
+through Google placed every one of the eighty-two correctly, PAARL and HUGUENOT included -
+the two nothing here could see. That is the real lesson: a check that finds four of six is
+worth having, and a better source is worth more. This exists for the next time the source
+is not the good one, and to say out loud when it cannot tell.
 """
 from __future__ import annotations
 
@@ -65,11 +70,27 @@ def km(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 6371.0 * math.acos(max(-1.0, min(1.0, inner)))
 
 
-def _namesake_suspects(cur) -> dict[int, str]:
-    """Stations far from the Golden Arrow stop of the same name."""
+def _namesake_suspects(cur) -> tuple[dict[int, str], dict[int, str]]:
+    """
+    Stations far from the Golden Arrow stop of the same name.
+
+    Returns (fixable, worth_a_look). The split is about which of the two readings can be
+    trusted over the other, and only a difference in source settles that.
+
+    A station placed by Nominatim against a stop placed by Google is a disagreement with a
+    known winner, and that is what --fix acts on. Two Google readings that disagree is just
+    a disagreement: SOMERSET WEST station sits nine kilometres from the Somerset West bus
+    stop and both were placed by Google, one from the town's name and one from the
+    station's, and nothing here can say which is the platform. Deleting on that would be
+    throwing away a good coordinate on the strength of a different good coordinate.
+
+    AVONDALE is the case that made this necessary. The station is Google-placed and right;
+    the bus stop it was being judged against came from Nominatim. The check was blaming
+    the reliable reading for disagreeing with the unreliable one.
+    """
     cur.execute(
         """
-        SELECT t.id, t.name, t.lat, t.lon, b.lat, b.lon
+        SELECT t.id, t.name, t.lat, t.lon, t.geocode_source, b.lat, b.lon, b.geocode_source
         FROM stop t
         JOIN operator ot ON ot.id = t.operator_id AND ot.kind = 'train'
         JOIN stop b      ON upper(regexp_replace(b.name, '[^A-Za-z0-9]', '', 'g'))
@@ -78,12 +99,18 @@ def _namesake_suspects(cur) -> dict[int, str]:
         WHERE t.lat IS NOT NULL AND b.lat IS NOT NULL
         """
     )
-    out: dict[int, str] = {}
-    for sid, name, tlat, tlon, blat, blon in cur.fetchall():
+    fixable: dict[int, str] = {}
+    look: dict[int, str] = {}
+    for sid, name, tlat, tlon, tsrc, blat, blon, bsrc in cur.fetchall():
         d = km((tlat, tlon), (blat, blon))
-        if d > NAMESAKE_KM:
-            out[sid] = f"{name}: {d:.0f} km from the bus stop of the same name"
-    return out
+        if d <= NAMESAKE_KM:
+            continue
+        why = f"{name}: {d:.0f} km from the bus stop of the same name"
+        if bsrc == "google" and tsrc != "google":
+            fixable[sid] = why + f" (station from {tsrc}, stop from google)"
+        else:
+            look[sid] = why + f" (station from {tsrc}, stop from {bsrc})"
+    return fixable, look
 
 
 def _line_suspects(cur) -> dict[int, str]:
@@ -136,9 +163,11 @@ def main() -> None:
     conn = db.connect()
     try:
         with conn.cursor() as cur:
-            wrong = _namesake_suspects(cur)
-            odd = {sid: why for sid, why in _line_suspects(cur).items()
-                   if sid not in wrong}
+            wrong, unsure = _namesake_suspects(cur)
+            odd = dict(unsure)
+            for sid, why in _line_suspects(cur).items():
+                if sid not in wrong:
+                    odd.setdefault(sid, why)
 
             if not wrong and not odd:
                 print("every located station is where it should be")
@@ -150,8 +179,8 @@ def main() -> None:
                     print(f"  {why}")
             if odd:
                 print()
-                print(f"{len(odd)} sit oddly on their line. Look before believing "
-                      f"it - the odd one out is sometimes the only right one:")
+                print(f"{len(odd)} worth a look, none of them provably wrong. The odd "
+                      f"one out is sometimes the only right one:")
                 for why in sorted(odd.values()):
                     print(f"  {why}")
 
