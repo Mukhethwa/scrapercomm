@@ -197,8 +197,20 @@ public class PlannerService {
      * offered the train and no bus, while a real Golden Arrow service runs it from a stop
      * 1,220m from the pin. The asymmetry was invisible in the answer and looked like the
      * bus network simply not going there.
+     *
+     * Two and a half kilometres, not one and a half. The bus network is 527 stops and
+     * something is always close; the rail network is 102 stations across the whole metro,
+     * and the distance between a place and its station is a fact about the network rather
+     * than about how far anyone wants to walk. Kraaifontein High School is 1,834m from
+     * Kraaifontein station - a normal walk to a train there, and outside the old radius,
+     * so the search offered buses and said nothing about the line running past it.
+     *
+     * Which is why the boarding stop is shown. A journey that starts 1.8km from where a
+     * rider searched is worth having and worth saying out loud, and the two go together:
+     * widening this without naming where they board would be answering a question they
+     * did not ask.
      */
-    private static final double WALK_M = 1500.0;
+    private static final double WALK_M = 2500.0;
 
     /** {@code planner._pin_anchors} */
     private Map<AnchorKey, List<Anchor>> pinAnchors(double lat, double lon, double thresholdM) {

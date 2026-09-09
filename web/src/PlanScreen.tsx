@@ -545,6 +545,19 @@ export default function PlanScreen() {
                     <div className="text-[15px] font-bold text-ink">
                       {vehicleSign(openOption.route_label, openOption.operator_kind)}
                     </div>
+                    {/* Where the ride actually starts.
+                        The API has always sent this and nothing ever showed it. It only
+                        matters when the rider searched a place rather than a stop - then
+                        the journey begins at a stop they did not name, up to a couple of
+                        kilometres from where they are, and a departure time means nothing
+                        without knowing which platform it leaves. */}
+                    {openOption.board_label
+                      && s.from?.kind === 'pin'
+                      && openOption.board_label !== s.from?.name && (
+                      <div className="mt-1 text-[12px] font-semibold text-ink">
+                        Board at {openOption.board_label}
+                      </div>
+                    )}
                     <div className="mt-1 text-[12px] text-sub">
                       {openOption.operator_kind === 'train' ? 'Service' : 'Route'}{' '}
                       {openOption.route_label}
