@@ -259,7 +259,12 @@ public class PlannerService {
                         ((Number) r[P_TRIP_INDEX]).intValue());
                 anchors.computeIfAbsent(key, k -> new ArrayList<>())
                         .add(new Anchor(((Number) r[P_STOP_SEQUENCE]).intValue() + f, minutes, raw,
-                                true, "near " + r[P_NAME_A] + "–" + r[P_NAME_B],
+                                // "between A and B", not "near A-B". A rider does not
+                                // board near a pair of stops; the bus passes this point
+                                // after leaving one and before reaching the other, and
+                                // that is the instruction - where to stand and which way
+                                // to look. Rendered as "Board between A and B".
+                                true, "between " + r[P_NAME_A] + " and " + r[P_NAME_B],
                                 leg.distanceM()));
             }
         }

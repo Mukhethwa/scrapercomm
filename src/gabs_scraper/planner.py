@@ -172,7 +172,10 @@ def _pin_anchors(conn, lat, lon, threshold_m):
                 "minutes": minutes,
                 "raw": _mmss(minutes) or "via",
                 "approx": True,
-                "label": f"near {nameA}–{nameB}",
+                # "between A and B", not "near A-B": the bus passes this point after
+                # leaving one stop and before reaching the next, which is what a rider
+                # standing there needs to know. Kept identical to the Java service.
+                "label": f"between {nameA} and {nameB}",
                 "distance_m": leg["distance_m"],
             })
     return anchors

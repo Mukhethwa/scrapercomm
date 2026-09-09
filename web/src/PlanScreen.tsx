@@ -555,7 +555,12 @@ export default function PlanScreen() {
                       && s.from?.kind === 'pin'
                       && openOption.board_label !== s.from?.name && (
                       <div className="mt-1 text-[12px] font-semibold text-ink">
-                        Board at {openOption.board_label}
+                        {/* A station is a place you board AT; a point on a bus route is
+                            one you board BETWEEN two stops, and the label already says
+                            which. "Board at near X-Y" was both wordings at once. */}
+                        Board {openOption.board_label.startsWith('between')
+                          ? openOption.board_label
+                          : `at ${openOption.board_label}`}
                       </div>
                     )}
                     <div className="mt-1 text-[12px] text-sub">
