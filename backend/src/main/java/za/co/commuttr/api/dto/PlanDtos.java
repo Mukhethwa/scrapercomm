@@ -106,6 +106,18 @@ public final class PlanDtos {
                                 Boolean alightApprox,
                                 String boardLabel,
                                 String alightLabel,
+                                /**
+                                 * How far the rider walks to the boarding point, in
+                                 * metres, or null where they are already on it.
+                                 *
+                                 * "Board at KRAAIFONTEIN" is an instruction only if it
+                                 * says how far away Kraaifontein station is. It is 1,834m
+                                 * from the high school somebody might have searched, which
+                                 * is a normal walk to a train and a thing worth being told
+                                 * before you set out rather than after.
+                                 */
+                                Long boardAwayM,
+                                Long alightAwayM,
                                 FareDto fare) { }
 
     /** from/to is a StopDto for a named stop, or a PinDto for a lat/lon pin. */

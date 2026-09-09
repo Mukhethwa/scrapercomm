@@ -275,6 +275,9 @@ export interface PlanOption {
   alight_approx: boolean
   board_label: string
   alight_label: string
+  /** Metres from the searched place to the boarding point, or null if you are on it. */
+  board_away_m: number | null
+  alight_away_m: number | null
   fare: Fare | null
 }
 
@@ -388,3 +391,14 @@ export interface ConnectionsResponse {
 export const getConnections = (from: Endpoint, to: Endpoint) =>
   getJSON<ConnectionsResponse>(
     `${API}/connections?${epParams('from', from)}&${epParams('to', to)}`)
+
+/** Whose timetables these are, and when they were last read. */
+export interface AboutResponse {
+  operators: { code: string; name: string; kind: string; routes: number; timetables: number }[]
+  last_scraped: string | null
+  oldest_timetable: string | null
+  newest_timetable: string | null
+  stops: number
+}
+
+export const getAbout = () => getJSON<AboutResponse>(`${API}/about`)

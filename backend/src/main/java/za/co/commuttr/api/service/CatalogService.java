@@ -1,12 +1,16 @@
 package za.co.commuttr.api.service;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.commuttr.api.domain.Route;
 import za.co.commuttr.api.domain.Schedule;
 import za.co.commuttr.api.domain.Trip;
 import za.co.commuttr.api.dto.CatalogDtos.CellDto;
+import za.co.commuttr.api.dto.CatalogDtos.AboutResponse;
 import za.co.commuttr.api.dto.CatalogDtos.HealthResponse;
+import za.co.commuttr.api.dto.CatalogDtos.OperatorSummaryDto;
 import za.co.commuttr.api.dto.CatalogDtos.NoteDto;
 import za.co.commuttr.api.dto.CatalogDtos.RouteDetailResponse;
 import za.co.commuttr.api.dto.CatalogDtos.RouteDto;
@@ -46,6 +50,10 @@ import java.util.Map;
 @Transactional(readOnly = true)
 public class CatalogService {
 
+    /** For the two aggregate queries behind /api/about, which no repository owns. */
+    @PersistenceContext
+    private EntityManager em;
+
     private final RouteRepository routes;
     private final TimetableRepository timetables;
     private final TimetableNoteRepository notes;
@@ -73,6 +81,43 @@ public class CatalogService {
     /** GET /api/health */
     public HealthResponse health() {
         return new HealthResponse("ok", timetables.count());
+    }
+
+    /**
+     * GET /api/about - whose timetables these are and when they were last read.
+     *
+     * A journey planner is only as true as the paper behind it, and that paper has a date
+     * on it. Answered from the data rather than written into the page, so it cannot quietly
+     * become a lie: some of what is loaded took effect in 2021, and a rider deciding
+     * whether to trust a departure time is entitled to know that.
+     */
+    @SuppressWarnings("unchecked")
+    public AboutResponse about() {
+        List<Object[]> rows = (List<Object[]>) em.createNativeQuery("""
+                SELECT o.code, o.name, o.kind,
+                       count(DISTINCT r.id), count(DISTINCT t.id)
+                FROM operator o
+                LEFT JOIN route r     ON r.operator_id = o.id
+                LEFT JOIN timetable t ON t.route_id = r.id
+                GROUP BY o.code, o.name, o.kind
+                ORDER BY count(DISTINCT r.id) DESC
+                """).getResultList();
+
+        List<OperatorSummaryDto> operators = rows.stream()
+                .map(r -> new OperatorSummaryDto((String) r[0], (String) r[1], (String) r[2],
+                        ((Number) r[3]).longValue(), ((Number) r[4]).longValue()))
+                .toList();
+
+        Object[] dates = (Object[]) em.createNativeQuery("""
+                SELECT CAST(max(scraped_at) AS text),
+                       CAST(min(effective_from) AS text),
+                       CAST(max(effective_from) AS text),
+                       (SELECT count(*) FROM stop)
+                FROM timetable
+                """).getSingleResult();
+
+        return new AboutResponse(operators, (String) dates[0], (String) dates[1],
+                (String) dates[2], ((Number) dates[3]).longValue());
     }
 
     /** GET /api/routes */

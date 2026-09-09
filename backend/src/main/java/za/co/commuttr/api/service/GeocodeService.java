@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import za.co.commuttr.api.dto.PlanDtos.GeocodeResponse;
+import za.co.commuttr.api.repo.AreaRepository;
 import za.co.commuttr.api.dto.PlanDtos.GeoHitDto;
 
 import java.net.URI;
@@ -24,7 +25,22 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * GET /api/geocode - the areas a rider can name, via OpenStreetMap Nominatim (no API key).
+ * GET /api/geocode - the areas a rider can name.
+ *
+ * <p><b>Answered locally.</b> The 728 named places of the metro were fetched once from
+ * OpenStreetMap and live in the {@code area} table; see {@code gabs_scraper.areas}. This
+ * asked Nominatim on every pause in typing, which is a request per keystroke per user
+ * against a service whose usage policy is one request a second for the whole application.
+ * That is fine for one developer and impossible in public - and a rate-limited Nominatim
+ * does not announce itself, it simply returns nothing, which the app can only report as
+ * "no such place". WOODSTOCK and SALT RIVER disappeared from Commuttr exactly that way.
+ *
+ * <p>It also could not do what a search box most needs. Nominatim matches whole words, so
+ * "woodst" found nothing while the stop list beside it in the same menu completed the name
+ * happily. Locally it is a prefix match, so the two halves of the menu behave alike.
+ *
+ * <p>Nominatim is still the fallback for a query the table cannot answer, which is rare
+ * and no longer on the critical path.
  *
  * <p><b>Areas only.</b> Nominatim will happily return a school, a night shelter, a scout
  * hall and a supermarket for "kraaifontein", and offering those as places to travel from
@@ -113,14 +129,17 @@ public class GeocodeService {
     private final RestClient restClient;
     private final String baseUrl;
     private final PlannerService planner;
+    private final AreaRepository areas;
 
     public GeocodeService(RestClient.Builder builder,
                           PlannerService planner,
+                          AreaRepository areas,
                           @Value("${commuttr.geocode.base-url}") String baseUrl,
                           @Value("${commuttr.geocode.user-agent}") String userAgent,
                           @Value("${commuttr.geocode.timeout-seconds:20}") long timeoutSeconds) {
         this.baseUrl = baseUrl;
         this.planner = planner;
+        this.areas = areas;
 
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(timeoutSeconds));
@@ -149,6 +168,16 @@ public class GeocodeService {
             return new GeocodeResponse(List.of());
         }
         String cacheKey = query.toLowerCase(Locale.ROOT);
+
+        // The table first, and almost always only the table.
+        List<GeoHitDto> local = areas.search("%" + cacheKey + "%", cacheKey + "%",
+                                             cacheKey, KEEP).stream()
+                .map(a -> new GeoHitDto(a.getName(), a.getFullName(), a.getLat(), a.getLon()))
+                .toList();
+        if (!local.isEmpty()) {
+            return new GeocodeResponse(local);
+        }
+
         List<GeoHitDto> cached = cache.get(cacheKey);
         if (cached != null) {
             return new GeocodeResponse(cached);

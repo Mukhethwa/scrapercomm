@@ -113,6 +113,18 @@ function NearbyBox({ title, tone, stops, onPick, vehicle = 'bus' }: {
 /** How many departures the carousel holds before the rest go behind "View full day". */
 const CAROUSEL = 8
 
+/**
+ * A walk, as somebody would say it.
+ *
+ * Rounded to the nearest fifty metres under a kilometre and one decimal above, because a
+ * distance measured straight-line to the nearest metre is precision the number does not
+ * have - the pavement is longer than the crow flies.
+ */
+function walkAway(metres: number): string {
+  if (metres >= 1000) return `${(metres / 1000).toFixed(1)} km walk`
+  return `${Math.round(metres / 50) * 50} m walk`
+}
+
 function Field({ label, value, onChange, onFocus, onBlur, hits, open, onPick, onClear, disabled }: {
   label: string
   value: string
@@ -600,6 +612,15 @@ export default function PlanScreen() {
                         Board {openOption.board_label.startsWith('between')
                           ? openOption.board_label
                           : `at ${openOption.board_label}`}
+                        {/* And how far that is. "Board at KRAAIFONTEIN" is an instruction
+                            only once it says the station is nearly two kilometres away -
+                            which is a normal walk to a train, and a thing to know before
+                            setting out rather than on arriving. */}
+                        {openOption.board_away_m != null && (
+                          <span className="font-normal text-sub">
+                            {' '}· {walkAway(openOption.board_away_m)}
+                          </span>
+                        )}
                       </div>
                     )}
                     <div className="mt-1 text-[12px] text-sub">

@@ -519,6 +519,8 @@ public class PlannerService {
         boolean alightApprox;
         String boardLabel;
         String alightLabel;
+        double boardAwayM;
+        double alightAwayM;
     }
 
     /**
@@ -649,6 +651,8 @@ public class PlannerService {
                 g.alightApprox = c.alight().approx();
                 g.boardLabel = c.board().label();
                 g.alightLabel = c.alight().label();
+                g.boardAwayM = c.board().distanceM();
+                g.alightAwayM = c.alight().distanceM();
                 groups.put(gkey, g);
             }
 
@@ -680,7 +684,13 @@ public class PlannerService {
                     g.operatorCode, g.operatorName, g.operatorKind,
                     g.dayType, g.dayLabel,
                     g.segmentStops, g.roadPath, List.copyOf(g.departures),
-                    g.boardApprox, g.alightApprox, g.boardLabel, g.alightLabel, fare));
+                    g.boardApprox, g.alightApprox, g.boardLabel, g.alightLabel,
+                    // Below about a hundred metres there is nothing to tell somebody: they
+                    // are standing at it. A named stop the rider chose themselves carries
+                    // no walk at all and comes through as zero.
+                    g.boardAwayM >= 100 ? Math.round(g.boardAwayM) : null,
+                    g.alightAwayM >= 100 ? Math.round(g.alightAwayM) : null,
+                    fare));
         }
         options.sort(Comparator
                 .comparingInt((PlanOptionDto o) -> DayTypes.order(o.dayType()))

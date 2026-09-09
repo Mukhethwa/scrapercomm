@@ -15,6 +15,23 @@ public final class CatalogDtos {
     /** GET /api/health */
     public record HealthResponse(String status, long timetables) { }
 
+    /**
+     * GET /api/about - where the timetables came from and how old they are.
+     *
+     * A journey planner is only as true as the paper behind it, and that paper has a date
+     * on it. Commuttr republishes Golden Arrow and PRASA schedules, and a rider deserves
+     * both facts before relying on one: whose timetable this is, and when it was last
+     * read. Some of what is loaded took effect in 2021.
+     */
+    public record OperatorSummaryDto(String code, String name, String kind,
+                                     long routes, long timetables) { }
+
+    public record AboutResponse(List<OperatorSummaryDto> operators,
+                                String lastScraped,
+                                String oldestTimetable,
+                                String newestTimetable,
+                                long stops) { }
+
     /** A row of GET /api/routes (carries the timetable count). */
     public record RouteSummaryDto(Integer id,
                                   String name,

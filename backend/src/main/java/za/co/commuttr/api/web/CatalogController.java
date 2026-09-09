@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import za.co.commuttr.api.dto.CatalogDtos.AboutResponse;
 import za.co.commuttr.api.dto.CatalogDtos.HealthResponse;
 import za.co.commuttr.api.dto.CatalogDtos.RouteDetailResponse;
 import za.co.commuttr.api.dto.CatalogDtos.RoutesResponse;
@@ -27,6 +28,11 @@ public class CatalogController {
     @GetMapping("/health")
     public HealthResponse health() {
         return catalog.health();
+    }
+
+    @GetMapping("/about")
+    public AboutResponse about() {
+        return catalog.about();
     }
 
     @GetMapping("/routes")

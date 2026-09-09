@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CalendarBlank, Desktop, MapPin, Moon, Sun, UserCircle } from '@phosphor-icons/react'
 import PlanScreen from './PlanScreen'
+import AboutPanel from './AboutPanel'
 import PlannerView from './PlannerView'
 import RouteBrowser from './RouteBrowser'
 import ModePicker from './ModePicker'
@@ -19,7 +20,7 @@ import { usePlanner } from './planner'
 import { useTheme, type Theme } from './theme'
 
 type Tab = 'plan' | 'planner'
-type Panel = 'browse' | 'settings' | null
+type Panel = 'browse' | 'settings' | 'about' | null
 
 const TABS: { id: Tab; label: string; icon: typeof MapPin }[] = [
   { id: 'plan', label: 'Plan Trip', icon: MapPin },
@@ -90,6 +91,14 @@ export default function NewApp({ onLeave }: { onLeave: () => void }) {
                 onClick={() => { setPanel('settings'); setMenu(false) }}>
                 Transport settings
               </button>
+              {/* Whose timetables these are and how old they are. Reachable rather than
+                  buried in a policy page nobody opens: a rider deciding whether to trust
+                  a departure time needs it at the moment they are deciding. */}
+              <button role="menuitem"
+                className="w-full cursor-pointer px-4 py-3 text-left text-[13px] font-semibold text-ink hover:bg-line/50"
+                onClick={() => { setPanel('about'); setMenu(false) }}>
+                About the data
+              </button>
               {/* Appearance. A segmented control rather than a switch, because the
                   useful default is neither light nor dark but "whatever the phone says",
                   and a two-state switch has nowhere to put that. */}
@@ -145,12 +154,14 @@ export default function NewApp({ onLeave }: { onLeave: () => void }) {
             onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div className="text-[15px] font-bold text-ink">
-                {panel === 'browse' ? 'Browse routes' : 'Transport settings'}
+                {panel === 'browse' ? 'Browse routes'
+                  : panel === 'about' ? 'About the data' : 'Transport settings'}
               </div>
               <button className="cursor-pointer text-[13px] font-semibold text-accent-deep"
                 onClick={() => setPanel(null)}>Done</button>
             </div>
-            {panel === 'browse' ? <RouteBrowser /> : <ModePicker />}
+            {panel === 'browse' ? <RouteBrowser />
+              : panel === 'about' ? <AboutPanel /> : <ModePicker />}
           </div>
         </div>
       )}

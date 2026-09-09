@@ -216,7 +216,7 @@ class ApiContractTest {
                 List.of(new PlanSegmentStopDto(3, "NYANGA TERM", -33.98, 18.58, 0)),
                 List.of(new double[] { -33.98, 18.58 }, new double[] { -33.90, 18.62 }),
                 List.of(new PlanDepartureDto("0605", false, 365, "06:47", true, 407.5, 88, 2, 0, 6, 3)),
-                false, true, "NYANGA TERM", "near A–B",
+                false, true, "NYANGA TERM", "between A and B", 1834L, null,
                 new FareDto("CIBV", 2320, 11600, 21500, 94600, "Zero",
                         "exact", "Cape Town", "Bellville", false));
         given(planner.plan(any(), any())).willReturn(new PlanResponse(
@@ -226,10 +226,16 @@ class ApiContractTest {
         mvc.perform(get("/api/plan").param("from", "3").param("to_lat", "-33.90").param("to_lon", "18.62"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.from.id").value(3))
+                // The walk to the boarding point, in snake_case like everything else.
+                // "Board at KRAAIFONTEIN" is an instruction only once it says how far.
+                .andExpect(jsonPath("$.options[0].board_away_m").value(1834))
                 .andExpect(jsonPath("$.to.kind").value("pin"))
                 .andExpect(jsonPath("$.options[0].road_path[0][0]").value(-33.98))
                 .andExpect(jsonPath("$.options[0].board_approx").value(false))
-                .andExpect(jsonPath("$.options[0].alight_label").value("near A–B"))
+                // "between A and B", not "near A-B". A rider does not board near a pair
+                // of stops; the bus passes the point after leaving one and before reaching
+                // the other, and that is the instruction.
+                .andExpect(jsonPath("$.options[0].alight_label").value("between A and B"))
                 // Money crosses the wire in cents, as a whole number: a fare that has
                 // been through a float is a bug a customer finds.
                 .andExpect(jsonPath("$.options[0].fare.per_ride_cents").value(2320))
