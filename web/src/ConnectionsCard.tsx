@@ -20,6 +20,7 @@ import { getTripStops, type Connection, type TripNote, type TripStop } from './a
 import { legToJourney } from './ConnectionsPanel'
 import { DAY_LABEL, latestBoard } from './results'
 import { rands } from './money'
+import { clockFace } from './times'
 import { usePlanner } from './planner'
 import TripStrip from './TripStrip'
 
@@ -132,7 +133,10 @@ function OptionBlock({ conn, chosen, planned, onChoose, onAdd, kind }: {
   const departureKnown = first.board_minutes != null
   const lastIndex = conn.legs.length - 1
   const arrival = endLabel(last.arrive_raw, knownBy(conn, lastIndex))
-  const lead = departureKnown ? first.board_raw : arrival
+  // PRASA times its trains to the half minute, so board_raw is "06:19:00". The direct
+  // departures drop the seconds at the point of display; this one printed them in the
+  // largest type on the card, where it reads as a stopwatch rather than a timetable.
+  const lead = departureKnown ? clockFace(first.board_raw) : arrival
   const under = departureKnown ? `arrives ${arrival}` : 'no published departure'
 
   return (
