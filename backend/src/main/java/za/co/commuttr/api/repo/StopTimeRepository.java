@@ -290,6 +290,55 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
     List<Object[]> findStopAnchors(@Param("stopId") Integer stopId);
 
     /**
+     * The same anchors, for a set of stops at once.
+     *
+     * Planning from a place walks to every stop within the walking radius, and in the Cape
+     * Town CBD that is twenty-seven of them. Asked one at a time this ran twenty-seven
+     * separate window-function passes over the trips touching each stop, and a search took
+     * ten seconds. The work is the same work; it is the repetition that costs. One pass
+     * over the union of those trips does it once.
+     *
+     * <p>Carries {@code stopId} in the select list, because the caller needs to know which
+     * stop each anchor belongs to in order to say how far the rider walks to it.
+     */
+    @Query(value = """
+            WITH my_trips AS (
+                SELECT DISTINCT st.trip_id
+                FROM stop_time st
+                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+                WHERE ss.stop_id = ANY(CAST(:stopIds AS integer[]))
+                  AND st.cell_type <> 'NONE'
+            ),
+            ctx AS (
+                SELECT st.trip_id, ss.schedule_id, ss.stop_id, ss.stop_sequence,
+                       st.departure_time, st.raw_value,
+                       max(st.departure_time) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time,
+                       min(st.departure_time) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_time
+                FROM my_trips m
+                JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
+                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+            )
+            SELECT c.schedule_id      AS "scheduleId",
+                   tr.trip_index      AS "tripIndex",
+                   c.stop_sequence    AS "stopSequence",
+                   c.departure_time   AS "departureTime",
+                   c.raw_value        AS "rawValue",
+                   s.name             AS "name",
+                   c.prior_time       AS "priorTime",
+                   c.next_time        AS "nextTime",
+                   c.stop_id          AS "stopId"
+            FROM ctx c
+            JOIN trip tr ON tr.id = c.trip_id
+            JOIN stop s  ON s.id = c.stop_id
+            WHERE c.stop_id = ANY(CAST(:stopIds AS integer[]))
+            """, nativeQuery = true)
+    List<Object[]> findStopAnchorsForStops(@Param("stopIds") String stopIds);
+
+    /**
      * Planner: anchors for a pin, expressed as the consecutive leg A -> B whose road
      * path passes near it. The caller interpolates the time between timeA and timeB.
      */

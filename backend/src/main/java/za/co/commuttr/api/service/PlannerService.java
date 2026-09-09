@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.TreeMap;
 
 /**
@@ -134,6 +135,8 @@ public class PlannerService {
     private static final int A_DEPARTURE_TIME = 3;
     private static final int A_RAW_VALUE = 4;
     private static final int A_NAME = 5;
+    /** Only the batched query selects it; the single-stop one has eight columns. */
+    private static final int A_STOP_ID = 8;
     private static final int A_PRIOR_TIME = 6;
     private static final int A_NEXT_TIME = 7;
 
@@ -147,8 +150,25 @@ public class PlannerService {
 
     /** {@code planner._stop_anchors} */
     private Map<AnchorKey, List<Anchor>> stopAnchors(Integer stopId) {
+        return stopAnchors(stopTimes.findStopAnchors(stopId), Map.of());
+    }
+
+    /**
+     * The anchors for every stop a rider might walk to, in one query.
+     *
+     * @param away how far the rider walks to each stop, by stop id. Carried onto the
+     *             anchor so a journey can say where it starts and how far that is.
+     */
+    private Map<AnchorKey, List<Anchor>> stopAnchors(Map<Integer, Double> away) {
+        String array = away.keySet().stream().map(String::valueOf)
+                .collect(Collectors.joining(",", "{", "}"));
+        return stopAnchors(stopTimes.findStopAnchorsForStops(array), away);
+    }
+
+    private Map<AnchorKey, List<Anchor>> stopAnchors(List<Object[]> rows,
+                                                     Map<Integer, Double> away) {
         Map<AnchorKey, List<Anchor>> anchors = new TreeMap<>();
-        for (Object[] r : stopTimes.findStopAnchors(stopId)) {
+        for (Object[] r : rows) {
             LocalTime own = asTime(r[A_DEPARTURE_TIME]);
             Integer ownMinutes = ApiFormat.minutes(own);
             Number minutes = ownMinutes;
@@ -170,11 +190,18 @@ public class PlannerService {
                 }
             }
 
+            // The batched query carries the stop id in a ninth column, so an anchor from
+            // a walk knows which stop it belongs to and therefore how far that walk is.
+            double walk = 0.0;
+            if (r.length > A_STOP_ID && r[A_STOP_ID] != null) {
+                walk = away.getOrDefault(((Number) r[A_STOP_ID]).intValue(), 0.0);
+            }
+
             AnchorKey key = new AnchorKey(((Number) r[A_SCHEDULE_ID]).intValue(),
                     ((Number) r[A_TRIP_INDEX]).intValue());
             anchors.computeIfAbsent(key, k -> new ArrayList<>())
                     .add(new Anchor(((Number) r[A_STOP_SEQUENCE]).doubleValue(), minutes, raw,
-                            approx, (String) r[A_NAME], 0.0));
+                            approx, (String) r[A_NAME], walk));
         }
         return anchors;
     }
@@ -229,14 +256,19 @@ public class PlannerService {
         // timetable says. The road-leg anchors below still answer the different question
         // of which bus passes this exact point, and where both apply the planner keeps
         // whichever boards earliest on the run.
+        Map<Integer, Double> awayByStop = new HashMap<>();
         for (String kind : new String[] { "train", "bus" }) {
             for (StopRow near : stops.findNearestOfKind(lat, lon, kind, WALK_M)) {
-                double away = GeoUtils.haversineM(lat, lon, near.getLat(), near.getLon());
-                stopAnchors(near.getId()).forEach((key, list) -> list.forEach(a ->
-                        anchors.computeIfAbsent(key, k -> new ArrayList<>())
-                                .add(new Anchor(a.position(), a.minutes(), a.raw(), a.approx(),
-                                        near.getName(), away))));
+                awayByStop.put(near.getId(),
+                        GeoUtils.haversineM(lat, lon, near.getLat(), near.getLon()));
             }
+        }
+        // One query for all of them, not one each. See findStopAnchorsForStops: the CBD
+        // has twenty-seven stops inside the walking radius and asking separately turned a
+        // journey search into ten seconds of repeating the same window pass.
+        if (!awayByStop.isEmpty()) {
+            stopAnchors(awayByStop).forEach((key, list) -> list.forEach(a ->
+                    anchors.computeIfAbsent(key, k -> new ArrayList<>()).add(a)));
         }
 
         for (LegHitDto leg : locatePoint(lat, lon, thresholdM)) {

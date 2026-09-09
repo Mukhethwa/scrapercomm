@@ -589,25 +589,37 @@ def is_served(conn, lat, lon):
 
 
 def _nearest_of_kind(conn, lat, lon, kind, within_m):
-    """The nearest few stops of one network within walking distance of a point."""
+    """
+    The stops of one network within walking distance of a point, nearest first.
+
+    Nearest is not the same as useful. This took the four nearest, and four is an arbitrary
+    number that threw away the answer: twenty-seven bus stops stand within walking distance
+    of a pin in the Cape Town CBD, and CAPE TOWN - the terminus 219 routes run to - is the
+    tenth of them. So the radius decides who is eligible, and then two questions decide who
+    is asked: which stops are closest, and which are served most.
+    """
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT s.id
-        FROM stop s
-        JOIN operator o ON o.id = s.operator_id AND o.kind = %s
-        WHERE s.lat IS NOT NULL
-          AND 6371000 * acos(least(1,
-                cos(radians(s.lat)) * cos(radians(%s))
-                  * cos(radians(%s) - radians(s.lon))
-              + sin(radians(s.lat)) * sin(radians(%s)))) <= %s
-        ORDER BY 6371000 * acos(least(1,
-                cos(radians(s.lat)) * cos(radians(%s))
-                  * cos(radians(%s) - radians(s.lon))
-              + sin(radians(s.lat)) * sin(radians(%s))))
-        LIMIT 4
+        WITH within AS (
+            SELECT s.id,
+                   6371000 * acos(least(1,
+                       cos(radians(s.lat)) * cos(radians(%s))
+                         * cos(radians(%s) - radians(s.lon))
+                     + sin(radians(s.lat)) * sin(radians(%s)))) AS away,
+                   (SELECT count(*) FROM schedule_stop ss WHERE ss.stop_id = s.id) AS calls
+            FROM stop s
+            JOIN operator o ON o.id = s.operator_id AND o.kind = %s
+            WHERE s.lat IS NOT NULL
+        ),
+        eligible AS (SELECT * FROM within WHERE away <= %s)
+        SELECT id FROM (
+            (SELECT id, away FROM eligible ORDER BY away LIMIT 6)
+            UNION
+            (SELECT id, away FROM eligible ORDER BY calls DESC, away LIMIT 4)
+        ) picked ORDER BY away
         """,
-        (kind, lat, lon, lat, within_m, lat, lon, lat),
+        (lat, lon, lat, kind, within_m),
     )
     return [r[0] for r in cur.fetchall()]
 
