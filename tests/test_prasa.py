@@ -253,6 +253,53 @@ def test_a_missing_engine_is_an_error_and_not_an_empty_page():
         ocr.pytesseract.pytesseract.tesseract_cmd = saved_cmd
 
 
+def test_a_crashing_cell_costs_a_cell_and_not_the_run():
+    import prasa_scraper.ocr as ocr
+    from PIL import Image
+    import numpy as np
+
+    # pytesseract's TesseractError subclasses RuntimeError, and the per-cell guard
+    # re-raised RuntimeError to let a missing engine through. So the binary crashing on
+    # one awkward crop - a Windows stack overrun, which is what happened on the Central
+    # Line - came straight back up through the guard written to absorb it and ended a
+    # three-hour read. The distinction is a named class now, not a type hierarchy.
+    crash = ocr.pytesseract.pytesseract.TesseractError(3221226091, "")
+    assert isinstance(crash, RuntimeError), "the confusion this test exists for"
+
+    class Boom:
+        def image_to_string(self, *a, **k):
+            raise crash
+
+    saved = ocr._tesseract
+    ocr._tesseract = lambda: Boom()
+    try:
+        dark = Image.fromarray(np.zeros((40, 40), dtype=np.uint8))
+        assert ocr._read(dark, (0, 0, 40, 40), ocr.CELL_CONFIG) == ""
+    finally:
+        ocr._tesseract = saved
+
+
+def test_a_missing_engine_still_stops_the_run():
+    import prasa_scraper.ocr as ocr
+    from PIL import Image
+    import numpy as np
+
+    # The other half of the same distinction. No engine at all would otherwise return an
+    # empty string forty thousand times and report a page of legible timetables as blank.
+    class Gone:
+        def image_to_string(self, *a, **k):
+            raise ocr.EngineMissing("no engine")
+
+    saved = ocr._tesseract
+    ocr._tesseract = lambda: Gone()
+    try:
+        dark = Image.fromarray(np.zeros((40, 40), dtype=np.uint8))
+        with pytest.raises(ocr.EngineMissing):
+            ocr._read(dark, (0, 0, 40, 40), ocr.CELL_CONFIG)
+    finally:
+        ocr._tesseract = saved
+
+
 def test_the_engine_is_found_where_the_installer_puts_it():
     import prasa_scraper.ocr as ocr
     # Nothing to assert about the machine running the tests beyond this: whatever the

@@ -151,6 +151,21 @@ class Grid:
         }
 
 
+class EngineMissing(RuntimeError):
+    """
+    Tesseract itself cannot be found or run at all.
+
+    Its own class because the difference matters and the type hierarchy does not carry it.
+    Every cell read is wrapped in a broad except so one failed call costs that cell rather
+    than a run of tens of thousands - and the wrapper re-raised RuntimeError to let this
+    case through, not knowing that pytesseract's own TesseractError is also a RuntimeError.
+
+    So a single cell that crashed the binary - a Windows stack overrun on one crop of the
+    Central Line - came back up through the guard designed to absorb it and killed the
+    whole read. Named explicitly now: this one stops a run, and nothing else does.
+    """
+
+
 # Where the Windows installer puts Tesseract. It does not add itself to PATH, so a
 # perfectly good installation is invisible to a shell that was not told about it.
 _TESSERACT_PATHS = (
@@ -179,7 +194,7 @@ def _tesseract():
     """
     global _checked
     if pytesseract is None:
-        raise RuntimeError(
+        raise EngineMissing(
             "pytesseract is not installed. pip install pytesseract, and install the "
             "Tesseract binary (winget install UB-Mannheim.TesseractOCR)."
         )
@@ -187,7 +202,7 @@ def _tesseract():
         if shutil.which(pytesseract.pytesseract.tesseract_cmd) is None:
             found = next((p for p in _TESSERACT_PATHS if p and os.path.isfile(p)), None)
             if found is None:
-                raise RuntimeError(
+                raise EngineMissing(
                     "Tesseract is installed as a Python wrapper but the engine itself "
                     "cannot be found. Install it (winget install UB-Mannheim.TesseractOCR),"
                     " or point TESSERACT_CMD at the binary."
@@ -320,13 +335,15 @@ def _read(img: Image.Image, box: tuple[int, int, int, int], config: str) -> str:
     bigger = crop.resize((crop.width * 3, crop.height * 3), Image.LANCZOS)
     try:
         return _tesseract().image_to_string(bigger, config=config).strip()
-    except RuntimeError:
+    except EngineMissing:
+        # No engine at all is the one thing worth stopping for: it would otherwise return
+        # an empty string forty thousand times and report a legible page as blank.
         raise
     except Exception:      # noqa: BLE001
         # A run over these PDFs is tens of thousands of Tesseract calls and takes hours.
-        # One of them failing - a temp file it could not write, a process killed - should
-        # cost that cell, not the whole run. An empty read becomes a flagged cell further
-        # down, which is visible; a crash three hours in is just lost work.
+        # One of them failing - a temp file it could not write, the binary crashing on one
+        # awkward crop - should cost that cell, not the whole run. An empty read becomes a
+        # flagged cell further down, which is visible; a crash three hours in is lost work.
         return ""
 
 
@@ -666,7 +683,12 @@ def _second_look(grid: Grid, gray: Image.Image) -> None:
         bigger = crop.resize((crop.width * 6, crop.height * 6), Image.LANCZOS)
         for config in ("--psm 8 -c tessedit_char_whitelist=0123456789:",
                        "--psm 13 -c tessedit_char_whitelist=0123456789:"):
-            again = _tesseract().image_to_string(bigger, config=config).strip()
+            try:
+                again = _tesseract().image_to_string(bigger, config=config).strip()
+            except EngineMissing:
+                raise
+            except Exception:      # noqa: BLE001 - one cell, not the run
+                continue
             if again and TIME.match(again) and again != grid.times[ri][ci]:
                 grid.times[ri][ci] = again
                 changed = True
