@@ -107,7 +107,8 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 ORDER BY sc.day_type, ssa.stop_id, sc.direction_label,
                          t1.departure_time, t2.raw_value, sc.id, tr.trip_index
             )
-            SELECT l1.day_type          AS "dayType",
+            SELECT DISTINCT ON (COALESCE(l1.dep, l2.arr_time))
+                   l1.day_type          AS "dayType",
                    x.id                 AS "changeId",
                    x.name               AS "changeName",
                    l1.route             AS "route1",
@@ -134,7 +135,33 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             JOIN leg2 l2 ON l2.x = l1.x AND l2.day_type = l1.day_type
                         AND l2.dep >= l1.arr + (:bufferMinutes * interval '1 minute')
             JOIN stop x ON x.id = l1.x
-            ORDER BY "totalMinutes" NULLS LAST, "waitMinutes", l1.arr
+            -- One option per departure, best first, and every departure of the day.
+            --
+            -- Ordering the whole lot by journey length and taking six gave six journeys
+            -- that happened to be quickest, not six a rider could choose between. For
+            -- KHAYELITSHA to KRAAIFONTEIN it returned 06:19, 08:49, 10:29, 13:17, 17:47 -
+            -- and 06:19 twice - out of ten real departures, so somebody leaving at three
+            -- in the afternoon was shown 17:47 and never told about the 15:09.
+            --
+            -- The screen filters these by the leave-time a rider chose, which only works
+            -- if what reaches it covers the day. So the choice between two ways of making
+            -- one departure is made here, on journey length, and the choice between
+            -- departures is left to the person who knows when they want to leave.
+            --
+            -- Keyed on when the journey leaves, or when it arrives if it never says.
+            --
+            -- Most Golden Arrow stops are printed "via" - the bus passes and no time is
+            -- published - so the first leg of a bus journey often has no departure at all,
+            -- and null groups with null. Keyed on the departure alone, four ways of
+            -- getting from KHAYELITSHA to WYNBERG became one: same first bus, different
+            -- bus onward, arriving 17:50, 18:05 and 18:30. Those are not one journey, and
+            -- the arrival is the only thing telling them apart.
+            --
+            -- No apostrophes in here. Spring scans the whole string for quoted ranges
+            -- without stripping SQL comments, so one in a comment opens a quote that
+            -- never closes and the repository fails to start.
+            ORDER BY COALESCE(l1.dep, l2.arr_time), "totalMinutes" NULLS LAST,
+                     "waitMinutes", l1.arr
             LIMIT :maxResults
             """, nativeQuery = true)
     List<TwoLegRow> findTwoLegConnections(@Param("fromId") Integer fromId,
@@ -244,7 +271,8 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 ORDER BY sc.day_type, ssa.stop_id, sc.direction_label,
                          t1.departure_time, t2.raw_value, sc.id, tr.trip_index
             )
-            SELECT l1.day_type   AS "dayType",
+            SELECT DISTINCT ON (COALESCE(l1.dep, l3.arr_time))
+                   l1.day_type   AS "dayType",
                    x1.id         AS "changeId",
                    x1.name       AS "changeName",
                    x2.id         AS "change2Id",
@@ -285,7 +313,11 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                         AND l3.dep >= l2.arr + (:bufferMinutes * interval '1 minute')
             JOIN stop x1 ON x1.id = l1.x
             JOIN stop x2 ON x2.id = l2.y
-            ORDER BY "totalMinutes" NULLS LAST, "waitMinutes", l1.arr
+            -- One option per departure, and the whole day of them: see the two-leg query.
+            -- A three-leg journey has even more ways to make the same departure, so
+            -- ranking them all together and keeping a handful covered the day even less.
+            ORDER BY COALESCE(l1.dep, l3.arr_time), "totalMinutes" NULLS LAST,
+                     "waitMinutes", l1.arr
             LIMIT :maxResults
             """, nativeQuery = true)
     List<ThreeLegRow> findThreeLegConnections(@Param("fromId") Integer fromId,

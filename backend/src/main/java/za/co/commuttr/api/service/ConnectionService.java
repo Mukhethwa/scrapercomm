@@ -34,12 +34,21 @@ public class ConnectionService {
     private final StopRepository stops;
     private final ConnectionRepository connections;
     private final int bufferMinutes;
+    /**
+     * How many journeys to return, now that they are one per departure.
+     *
+     * Six was the right number when it meant six to show. It is the wrong number for a
+     * day's departures: the screen filters what it gets by the rider's own leave-time, so
+     * anything not sent is a journey they are told does not exist. Khayelitsha to
+     * Kraaifontein has ten departures, the busiest pairs on these lines have around thirty,
+     * and forty is a whole day with room to spare.
+     */
     private final int maxResults;
 
     public ConnectionService(StopRepository stops,
                              ConnectionRepository connections,
                              @Value("${commuttr.connections.transfer-buffer-minutes:10}") int bufferMinutes,
-                             @Value("${commuttr.connections.max-results:6}") int maxResults) {
+                             @Value("${commuttr.connections.max-results:40}") int maxResults) {
         this.stops = stops;
         this.connections = connections;
         this.bufferMinutes = bufferMinutes;
