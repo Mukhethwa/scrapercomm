@@ -21,32 +21,28 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.Set;
 
 /**
- * GET /api/geocode - place lookup via OpenStreetMap Nominatim (no API key), used to turn
- * free text into a pin.
+ * GET /api/geocode - the areas a rider can name, via OpenStreetMap Nominatim (no API key).
  *
- * <p>Two lookups, not one, because Nominatim answers two different questions depending on
- * how the query is punctuated and the search box needs both answers.
+ * <p><b>Areas only.</b> Nominatim will happily return a school, a night shelter, a scout
+ * hall and a supermarket for "kraaifontein", and offering those as places to travel from
+ * is a promise the timetables cannot keep. A pin gets turned into a journey by matching it
+ * against the road a bus drives and the stops within walking distance, so naming a
+ * building produces "a bus passes here" for a point where, as far as anything published
+ * says, no bus stops at all. Golden Arrow's timetables list timing points rather than
+ * every kerb, so the app cannot tell the difference between a stop it does not know about
+ * and no stop.
  *
- * <p>This used to append ", Cape Town, South Africa" to whatever was typed and send that
- * alone. Commas are how Nominatim is told an address hierarchy, so the suffix turns the
- * whole of what a rider typed into one name to be found <em>inside</em> Cape Town. For a
- * suburb that works well - "kraaifontein, Cape Town, South Africa" returns four things
- * standing in Kraaifontein. For a named place it is fatal: "kraaifontein shoprite, Cape
- * Town, South Africa" returns nothing, because no feature is called "kraaifontein
- * shoprite", while the bare "kraaifontein shoprite" finds the supermarket on 1st Avenue
- * immediately. Measured over ten real searches the suffix cost every result in four of
- * them and gained one in one, and the suffixed form was the only one being asked.
+ * <p>An area is a claim the data can stand behind: name Kraaifontein and the answer is
+ * about Kraaifontein, with the boarding stop named in the result so a rider knows where to
+ * walk. That is one entry per area - not the eight things standing inside it.
  *
- * <p>Neither form is the better one, so both are asked, in parallel, and the answers
- * merged. The bare query finds a place by its name; the suffixed query finds what stands
- * within a named suburb.
- *
- * <p>Any failure degrades to whatever the other lookup returned, and two failures to an
- * empty list rather than an error, so the search box stays usable when Nominatim is slow
- * or unreachable.
+ * <p>The named stops and stations in the same menu come from /api/stops, which is the
+ * app's own data, so filtering here removes nothing a rider can actually board at.
+ * EERSTE RIVER is not tagged as a place in OSM at all - it comes back as the river - and
+ * is still searchable, because it is a station and a bus stop in the database.
  */
 @Service
 public class GeocodeService {
@@ -56,27 +52,36 @@ public class GeocodeService {
     /** Cape Town and surrounds. */
     private static final String VIEWBOX = "18.28,-33.40,19.12,-34.45";
 
-    /** Asked of each lookup. The merged list is trimmed to {@link #KEEP}. */
+    /**
+     * Settlement-scale places, and nothing else.
+     *
+     * <p>OSM's {@code class} says what kind of thing a feature is, and "place" is the one
+     * that means somewhere people live rather than a building they visit. The types are
+     * listed rather than taken wholesale because "place" also covers a province and an
+     * ocean, and "Western Cape" is not a journey.
+     */
+    private static final Set<String> AREA_TYPES = Set.of(
+            "city", "town", "borough", "suburb", "quarter", "neighbourhood",
+            "village", "hamlet", "locality", "residential", "city_block");
+
     private static final int PER_LOOKUP = 10;
 
     /**
-     * How many merged places the search box is offered.
+     * How many areas the search box is offered.
      *
-     * <p>The old value was five here and three in the browser, and three was too few to
-     * hold the answer: "kraaifontein" returns the sea scout group, the high school, the
-     * night shelter and then the town of Kraaifontein itself, in that order, so the suburb
-     * - the one thing nearly everybody typing that word means - was what fell off the end.
-     * Ranking now puts it first, and the extra room means a near miss stays reachable.
+     * <p>Small on purpose. Filtered to areas, a real query returns one or two - Parow is
+     * mapped twice, as a town and as a suburb, and collapses to one row by name - so this
+     * is a guard rather than a limit anybody meets.
      */
-    private static final int KEEP = 8;
+    private static final int KEEP = 4;
 
     /**
      * Answers already fetched, keyed by the query.
      *
      * <p>Nominatim's usage policy asks for no more than one request a second, and a search
-     * box debounced at 220ms sends one per pause in typing - now two. Riders backspace and
-     * retype constantly, so most of those pauses land on a query already answered. Bounded
-     * and oldest-out: this is politeness and speed, not a store of anything.
+     * box debounced at 220ms sends one per pause in typing. Riders backspace and retype
+     * constantly, so most of those pauses land on a query already answered. Bounded and
+     * oldest-out: this is politeness and speed, not a store of anything.
      */
     private static final int CACHE_MAX = 500;
 
@@ -107,6 +112,17 @@ public class GeocodeService {
                 .build();
     }
 
+    /**
+     * One lookup, on the bare query.
+     *
+     * <p>There were two for a while, the second appending ", Cape Town, South Africa".
+     * Commas are how Nominatim is told an address hierarchy, so that form asks for what
+     * stands INSIDE a named suburb - which is how the schools and shelters were reaching
+     * the menu in the first place. Measured over twelve areas it never returned one the
+     * bare query missed, and usually returned none at all: filtering to areas leaves the
+     * suffixed lookup with nothing to contribute, so it is a request a second that buys
+     * nothing.
+     */
     public GeocodeResponse geocode(String q) {
         String query = q == null ? "" : q.trim();
         if (query.isEmpty()) {
@@ -118,22 +134,12 @@ public class GeocodeService {
             return new GeocodeResponse(cached);
         }
 
-        // In parallel: the two lookups are independent and a rider waits for both, so
-        // asking twice costs the slower answer rather than the sum of the two.
-        CompletableFuture<List<Hit>> bare =
-                CompletableFuture.supplyAsync(() -> lookup(query));
-        CompletableFuture<List<Hit>> within =
-                CompletableFuture.supplyAsync(() -> lookup(query + ", Cape Town, South Africa"));
-
-        List<Hit> merged = new ArrayList<>(bare.join());
-        merged.addAll(within.join());
-
-        List<GeoHitDto> results = rank(merged, query);
+        List<GeoHitDto> results = rank(lookup(query), query);
         cache.put(cacheKey, results);
         return new GeocodeResponse(results);
     }
 
-    /** One Nominatim search, or an empty list where it fails. */
+    /** The areas Nominatim knows for this query, or an empty list where it fails. */
     private List<Hit> lookup(String q) {
         List<Hit> hits = new ArrayList<>();
         try {
@@ -151,6 +157,10 @@ public class GeocodeService {
             JsonNode results = restClient.get().uri(uri).retrieve().body(JsonNode.class);
             if (results != null && results.isArray()) {
                 for (JsonNode hit : results) {
+                    if (!"place".equals(hit.path("class").asText(""))
+                            || !AREA_TYPES.contains(hit.path("type").asText(""))) {
+                        continue;
+                    }
                     String full = hit.path("display_name").asText(q);
                     // Nominatim names the feature outright. The leading component of
                     // display_name is usually that same string, but for anything with a
@@ -176,13 +186,12 @@ public class GeocodeService {
     }
 
     /**
-     * Merge the two lookups into the order a rider reads them in.
+     * The areas in the order a rider reads them.
      *
-     * <p>Nominatim's own order is not it. For "kraaifontein" it returns the town last of
-     * four, behind a sea scout group, because its ranking is about how well a feature
-     * matched the address hierarchy rather than about what the word most likely meant. A
-     * place whose name IS what was typed comes first here, then one whose name begins with
-     * it, then one that merely contains the words, and importance settles the rest.
+     * <p>Nominatim's own order is not it. Its ranking is about how well a feature matched
+     * the address hierarchy, not about what a word most likely meant. An area whose name
+     * IS what was typed comes first here, then one whose name begins with it, then one
+     * that merely contains the words, and importance settles the rest.
      */
     private List<GeoHitDto> rank(List<Hit> hits, String query) {
         String ql = query.toLowerCase(Locale.ROOT);
@@ -202,15 +211,12 @@ public class GeocodeService {
             }
             score += h.importance() * 10;
 
-            // The same place found by both lookups is one place. Keyed on the OSM feature
-            // where there is one and on the rounded position otherwise, because the two
-            // queries can return one feature under two spellings of its street.
-            String key = h.osmId().length() > 1
-                    ? h.osmId()
-                    : String.format(Locale.ROOT, "%.5f,%.5f", h.lat(), h.lon());
-            Scored existing = best.get(key);
+            // One row per area, keyed on the name. Parow is mapped twice, once as a town
+            // and once as the suburb inside it, and two identical rows is a choice with no
+            // difference behind it.
+            Scored existing = best.get(nl);
             if (existing == null || score > existing.score()) {
-                best.put(key, new Scored(h, score));
+                best.put(nl, new Scored(h, score));
             }
         }
 

@@ -539,8 +539,20 @@ def areas():
         conn.close()
 
 
+# Settlement-scale places, and nothing else.
+#
+# OSM's "class" says what kind of thing a feature is, and "place" is the one that means
+# somewhere people live rather than a building they visit. The types are listed rather
+# than taken wholesale because "place" also covers a province and an ocean, and "Western
+# Cape" is not a journey.
+AREA_TYPES = {
+    "city", "town", "borough", "suburb", "quarter", "neighbourhood",
+    "village", "hamlet", "locality", "residential", "city_block",
+}
+
+
 def _nominatim(q: str) -> list[dict]:
-    """One Nominatim search, or nothing where it fails."""
+    """The areas Nominatim knows for this query, or nothing where it fails."""
     import requests
 
     from .config import settings as _s
@@ -554,14 +566,15 @@ def _nominatim(q: str) -> list[dict]:
             params=params, headers={"User-Agent": _s.user_agent}, timeout=20,
         )
         r.raise_for_status()
-        return r.json()
+        return [h for h in r.json()
+                if h.get("class") == "place" and h.get("type") in AREA_TYPES]
     except Exception:  # noqa: BLE001
         return []
 
 
 def _rank_places(hits: list[dict], query: str) -> list[dict]:
     """
-    The two lookups merged into the order a rider reads them in.
+    The areas in the order a rider reads them.
 
     Nominatim's own order is not it. For "kraaifontein" it returns the town last of four,
     behind a sea scout group, because its ranking is about how well a feature matched the
@@ -581,38 +594,36 @@ def _rank_places(hits: list[dict], query: str) -> list[dict]:
             score = 100.0 * sum(1 for w in words if w in nl) / len(words) if words else 0.0
         score += float(h.get("importance") or 0.0) * 10
 
-        key = f"{h.get('osm_type', '')}/{h.get('osm_id', '')}"
-        if len(key) < 2:
-            key = f"{float(h['lat']):.5f},{float(h['lon']):.5f}"
-        if key not in best or score > best[key][0]:
-            best[key] = (score, {"name": name, "full": h.get("display_name"),
-                                 "lat": float(h["lat"]), "lon": float(h["lon"])})
+        # One row per area, keyed on the name. Parow is mapped twice, once as a town and
+        # once as the suburb inside it, and two identical rows is a choice with no
+        # difference behind it.
+        if nl not in best or score > best[nl][0]:
+            best[nl] = (score, {"name": name, "full": h.get("display_name"),
+                                "lat": float(h["lat"]), "lon": float(h["lon"])})
     ordered = sorted(best.values(), key=lambda p: -p[0])
-    return [place for _, place in ordered[:8]]
+    return [place for _, place in ordered[:4]]
 
 
 @app.get("/api/geocode")
 def geocode_place(q: str):
     """
-    Geocode a place/address via OpenStreetMap Nominatim (no key). For pin input.
+    The areas a rider can name, via OpenStreetMap Nominatim (no key). For pin input.
 
-    Two lookups, because Nominatim answers two different questions depending on how the
-    query is punctuated. This used to append ", Cape Town, South Africa" and send that
-    alone; commas are how Nominatim is told an address hierarchy, so the suffix asks for
-    the whole of what a rider typed as one name found INSIDE Cape Town. For a suburb that
-    works - "kraaifontein, Cape Town, South Africa" returns four things standing in
-    Kraaifontein - but for a named place it is fatal: "kraaifontein shoprite, Cape Town,
-    South Africa" returns nothing while the bare "kraaifontein shoprite" finds the
-    supermarket on 1st Avenue at once.
+    Areas only. Nominatim will happily return a school, a night shelter, a scout hall and
+    a supermarket for "kraaifontein", and offering those as places to travel from is a
+    promise the timetables cannot keep. A pin becomes a journey by matching it against the
+    road a bus drives and the stops within walking distance, so naming a building produces
+    "a bus passes here" for a point where, as far as anything published says, no bus stops
+    at all. Golden Arrow's timetables list timing points rather than every kerb, so the app
+    cannot tell the difference between a stop it does not know about and no stop.
 
-    Neither form is the better one. The bare query finds a place by its name, the suffixed
-    one finds what stands within a named suburb, and the search box needs both.
+    The named stops and stations in the same menu come from /api/stops, which is the app's
+    own data, so this removes nothing a rider can actually board at.
     """
     query = (q or "").strip()
     if not query:
         return {"results": []}
-    hits = _nominatim(query) + _nominatim(f"{query}, Cape Town, South Africa")
-    return {"results": _rank_places(hits, query)}
+    return {"results": _rank_places(_nominatim(query), query)}
 
 
 @app.get("/api/connections")
