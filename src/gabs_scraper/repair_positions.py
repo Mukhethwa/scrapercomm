@@ -24,7 +24,13 @@ So the stop's own route is the context, in two forms, strongest first:
     which towns it runs to     Route names are endpoints - "CAPE TOWN-STELLENBOSCH" - so
                                the name plus each of those towns is worth asking.
 
-Every candidate is then MEASURED, by the same detour the finder uses: how much doubling
+A candidate that lands on top of an existing stop is thrown away first, however well it
+measures. That is a geocoder giving up quietly: asked for "Spekenam, Bellville" and finding
+no Spekenam, it answers with Bellville. The town centre sits on the route by definition, so
+it scores a perfect 0.0 km - and nineteen stops were accepted that way before the guard
+existed, ROUTE 1 and ROUTE 2 both landing on BELLVILLE. A 0.0 is a warning, not a triumph.
+
+Every surviving candidate is then MEASURED, by the same detour the finder uses: how much doubling
 back does this position force on the routes this stop serves? One is accepted if it gets
 under the threshold, or if it removes most of the error - KAPTEINSKLIP STN sits 48.5 km off
 its route and Google places it 11.5 km off, and three quarters of the disagreement gone is
@@ -172,6 +178,39 @@ def neighbourhoods(conn) -> dict[int, list[tuple]]:
     return pairs
 
 
+def lands_on_another_stop(conn, point: tuple[float, float], stop_id: int,
+                          within_m: float = 50.0) -> bool:
+    """
+    Is this candidate simply another stop, wearing a different name?
+
+    The failure it catches is a geocoder giving up quietly. Ask Google for "Spekenam,
+    Bellville" and, finding no Spekenam, it answers with Bellville - the centre of the
+    town. That coordinate then scores a *perfect* 0.0 km detour, because a town centre
+    naturally sits on the route that runs through the town, and the measure waves it
+    through. Nineteen stops were accepted this way, including ROUTE 1 and ROUTE 2 both
+    landing on BELLVILLE and GATTI'S FACTORY landing on CLAREMONT.
+
+    A 0.0 turned out to be a warning rather than a triumph. Two distinct stops at one
+    point are indistinguishable to a planner - it can no longer say which one a rider
+    boards at, and the leg between them has no length - so a candidate that lands on an
+    existing stop is refused however well it measures.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT count(*)
+        FROM stop s
+        WHERE s.id <> %s AND s.lat IS NOT NULL
+          AND 6371000 * acos(least(1,
+                cos(radians(s.lat)) * cos(radians(%s))
+                  * cos(radians(%s) - radians(s.lon))
+              + sin(radians(s.lat)) * sin(radians(%s)))) < %s
+        """,
+        (stop_id, point[0], point[1], point[0], within_m),
+    )
+    return cur.fetchone()[0] > 0
+
+
 def detour_of(point: tuple[float, float], pairs: list[tuple]) -> float:
     """The least detour this position forces on any route the stop serves."""
     best = float("inf")
@@ -297,6 +336,8 @@ def one_pass(conn, args) -> int:
                     time.sleep(PAUSE_NOMINATIM_S)
                 if not found:
                     continue
+                if lands_on_another_stop(conn, found, sid):
+                    continue      # the geocoder answered with the town, not the place
                 score = detour_of(found, pairs[sid])
                 tried.append((score, found, query))
                 if score <= args.limit_km:

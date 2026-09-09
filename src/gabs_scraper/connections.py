@@ -51,12 +51,33 @@ WITH ix AS (
                         AND b.stop_sequence > a.stop_sequence
     WHERE b.stop_id = %(to_id)s
 ),
+-- The earliest a bus can reach a stop the timetable gives no time for.
+--
+-- Golden Arrow prints times at timing points and via everywhere else, and 291 of the 629
+-- stops never get a printed departure at all. Requiring a real departure removed every
+-- journey with a change from nearly half the network. A bus cannot reach you before it
+-- has left the last stop it does have a time for, so that time is a lower bound - which
+-- is the difference between "from 05:30" and no journey at all.
+floors AS (
+    SELECT st.trip_id, ss.stop_sequence,
+           max(st.departure_time) OVER (
+               PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time
+    FROM (SELECT DISTINCT st2.trip_id
+          FROM stop_time st2
+          JOIN schedule_stop ss2 ON ss2.id = st2.schedule_stop_id
+          WHERE ss2.stop_id = %(from_id)s AND st2.cell_type <> 'NONE') m
+    JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
+    JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+),
 leg1 AS (
     SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
-                        t1.departure_time, t2.departure_time)
+                        COALESCE(t1.departure_time, f.prior_time), t2.departure_time)
            sc.day_type, ssb.stop_id AS x, sc.direction_label AS route,
            tt.timetable_number AS ttn,
-           t1.departure_time AS dep, t1.raw_value AS dep_raw,
+           COALESCE(t1.departure_time, f.prior_time) AS dep,
+           CASE WHEN t1.departure_time IS NOT NULL THEN t1.raw_value
+                ELSE 'from ' || to_char(f.prior_time, 'HH24:MI') END AS dep_raw,
            t2.departure_time AS arr,
            sc.id AS sched, tr.trip_index AS trip,
            ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
@@ -72,9 +93,11 @@ leg1 AS (
                      AND t2.cell_type = 'TIME'
                      AND (t1.departure_time IS NULL
                           OR t2.departure_time > t1.departure_time)
+    LEFT JOIN floors f ON f.trip_id = tr.id AND f.stop_sequence = ssa.stop_sequence
     WHERE ssa.stop_id = %(from_id)s AND ssb.stop_id IN (SELECT id FROM ix)
     ORDER BY sc.day_type, ssb.stop_id, sc.direction_label,
-             t1.departure_time, t2.departure_time, sc.id, tr.trip_index
+             COALESCE(t1.departure_time, f.prior_time), t2.departure_time,
+             sc.id, tr.trip_index
 ),
 leg2 AS (
     SELECT DISTINCT ON (sc.day_type, ssa.stop_id, sc.direction_label,
@@ -148,12 +171,33 @@ mid AS (
       AND a.stop_id <> b.stop_id
       AND a.stop_id <> %(to_id)s AND b.stop_id <> %(from_id)s
 ),
+-- The earliest a bus can reach a stop the timetable gives no time for.
+--
+-- Golden Arrow prints times at timing points and via everywhere else, and 291 of the 629
+-- stops never get a printed departure at all. Requiring a real departure removed every
+-- journey with a change from nearly half the network. A bus cannot reach you before it
+-- has left the last stop it does have a time for, so that time is a lower bound - which
+-- is the difference between "from 05:30" and no journey at all.
+floors AS (
+    SELECT st.trip_id, ss.stop_sequence,
+           max(st.departure_time) OVER (
+               PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time
+    FROM (SELECT DISTINCT st2.trip_id
+          FROM stop_time st2
+          JOIN schedule_stop ss2 ON ss2.id = st2.schedule_stop_id
+          WHERE ss2.stop_id = %(from_id)s AND st2.cell_type <> 'NONE') m
+    JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
+    JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+),
 leg1 AS (
     SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
-                        t1.departure_time, t2.departure_time)
+                        COALESCE(t1.departure_time, f.prior_time), t2.departure_time)
            sc.day_type, ssb.stop_id AS x, sc.direction_label AS route,
            tt.timetable_number AS ttn,
-           t1.departure_time AS dep, t1.raw_value AS dep_raw,
+           COALESCE(t1.departure_time, f.prior_time) AS dep,
+           CASE WHEN t1.departure_time IS NOT NULL THEN t1.raw_value
+                ELSE 'from ' || to_char(f.prior_time, 'HH24:MI') END AS dep_raw,
            t2.departure_time AS arr,
            sc.id AS sched, tr.trip_index AS trip,
            ssa.stop_sequence AS from_seq, ssb.stop_sequence AS to_seq
@@ -169,10 +213,12 @@ leg1 AS (
                      AND t2.cell_type = 'TIME'
                      AND (t1.departure_time IS NULL
                           OR t2.departure_time > t1.departure_time)
+    LEFT JOIN floors f ON f.trip_id = tr.id AND f.stop_sequence = ssa.stop_sequence
     WHERE ssa.stop_id = %(from_id)s
       AND ssb.stop_id IN (SELECT x FROM mid)
     ORDER BY sc.day_type, ssb.stop_id, sc.direction_label,
-             t1.departure_time, t2.departure_time, sc.id, tr.trip_index
+             COALESCE(t1.departure_time, f.prior_time), t2.departure_time,
+             sc.id, tr.trip_index
 ),
 leg2 AS (
     SELECT DISTINCT ON (sc.day_type, ssa.stop_id, ssb.stop_id,

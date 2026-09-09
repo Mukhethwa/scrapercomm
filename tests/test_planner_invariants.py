@@ -124,6 +124,76 @@ def test_a_journey_with_a_change_says_when_to_leave():
             "a journey with a change cannot say when to leave home")
 
 
+def test_a_stop_with_no_printed_times_still_reaches_the_network():
+    """
+    BUH REIN to BELLVILLE, which worked for months and then did not.
+
+    Golden Arrow prints times at timing points and "via" everywhere else, and 291 of the
+    629 stops never get a printed departure at all - all 648 of BUH REIN's first legs are
+    untimed. A rule that every journey must start at a printed time therefore cut nearly
+    half the network out of the connections list, and the screen said "No way to get there
+    by bus" about a journey that plainly exists.
+
+    A bus cannot reach you before it has left the last stop it does have a time for, so
+    that time is a floor: "board from 05:30". Not a promise, and worth vastly more than
+    nothing.
+    """
+    stops = get("stops", q="", limit=5000)["stops"]
+    by_name = {s["name"]: s["id"] for s in stops if s["operator_kind"] == "bus"}
+    a, b = by_name.get("BUH REIN"), by_name.get("BELLVILLE")
+    if not (a and b):
+        pytest.skip("sample stops not in this database")
+
+    found = get("connections", **{"from": a, "to": b})["connections"]
+    assert found, "BUH REIN can reach BELLVILLE with a change; the app must say so"
+    for c in found:
+        assert c["legs"][0]["board_minutes"] is not None, (
+            "and it must still say when to be at the first stop")
+
+
+def test_a_repaired_stop_does_not_land_on_another_stop():
+    """
+    A re-geocoded stop must not come to rest on top of a different one.
+
+    The failure it guards is a geocoder giving up quietly: asked for "Spekenam, Bellville"
+    and finding no Spekenam, it answers with Bellville. That scores a perfect 0.0 km
+    detour, because a town centre sits on the route through the town, so the measure waved
+    nineteen of them through - ROUTE 1 and ROUTE 2 both landing on BELLVILLE, GATTI'S
+    FACTORY on CLAREMONT. Two stops at one point are indistinguishable to a planner.
+
+    Only stops the repair moved. Co-located stops that predate it exist and are a separate,
+    older question - AIRPORT IND 1, 2 and 3 have always shared a point - and failing this
+    for them would report someone else's problem as this one.
+    """
+    from gabs_scraper import db
+
+    try:
+        conn = db.connect()
+    except Exception as e:  # noqa: BLE001
+        pytest.skip(f"Postgres not reachable: {e}")
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT a.name, b.name
+            FROM stop a
+            JOIN stop b ON b.id <> a.id
+                       AND 6371000 * acos(least(1,
+                             cos(radians(a.lat)) * cos(radians(b.lat))
+                               * cos(radians(b.lon) - radians(a.lon))
+                           + sin(radians(a.lat)) * sin(radians(b.lat)))) < 50
+            WHERE a.geocode_source = 'route-context' AND a.lat IS NOT NULL
+              AND b.lat IS NOT NULL
+            """
+        )
+        clashes = [f"{x} == {y}" for x, y in cur.fetchall()]
+    finally:
+        conn.close()
+
+    assert not clashes, ("a repaired stop landed on another stop, which means the "
+                         "geocoder answered with the town: " + "; ".join(clashes[:10]))
+
+
 def test_the_search_box_offers_areas_and_not_buildings():
     """
     A pin becomes a journey by matching the road a bus drives, so naming a school claims

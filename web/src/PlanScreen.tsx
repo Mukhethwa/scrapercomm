@@ -241,7 +241,7 @@ export default function PlanScreen() {
    */
   const chosen = only ? MODES.find((m) => m.id === only)?.kind : undefined
   const ride = (chosen ?? s.from?.mode) === 'train' ? 'train' : 'bus'
-  const rides = `${ride}s`
+  const rides = ride === 'bus' ? 'buses' : `${ride}s`
 
   /*
    * The same thing in a sentence, where nothing narrows it to one network.
@@ -252,7 +252,10 @@ export default function PlanScreen() {
    * network had been ruled out, and the trains were never mentioned at all.
    */
   const said = chosen ? ride : (s.from?.mode ?? 'bus or train')
-  const saids = chosen ? rides : (s.from?.mode ? `${s.from.mode}s` : 'buses or trains')
+  // "bus" pluralises to "buses", not "buss". The template made the plural by adding an
+  // s to the kind, which is right for "trains" and wrong for the one it is used for most.
+  const plural = (kind: string) => (kind === 'bus' ? 'buses' : `${kind}s`)
+  const saids = chosen ? rides : (s.from?.mode ? plural(s.from.mode) : 'buses or trains')
 
   /*
    * What the destinations list actually reached, rather than a guess from the origin.
