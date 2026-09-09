@@ -20,6 +20,17 @@ Stellenbosch, used by no route but CAPE TOWN - STELLENBOSCH, geocoded to same-na
 in the CBD, Muizenberg and Kuils River. Geocoding a bare street name against a city of four
 million finds a street; it does not find the right one.
 
+A FLAGGED STOP IS NOT NECESSARILY A WRONG ONE, and this matters more the fewer are left.
+The measure cannot tell three things apart: a stop in the wrong place, a stop whose
+NEIGHBOUR is in the wrong place, and a route that genuinely doubles back. ABBOTSDALE sits
+17 km off the line between MALMESBURY and KALBASKRAAL and is exactly where Abbotsdale is -
+the bus really does go out there and come back. PEP FACTORY is flagged and stands next to
+PEPCOR FACTORY in Parow, which is precisely where it should be.
+
+So the number falling is progress and the number reaching zero is not the goal. After
+gabs_scraper.repair_positions took this from 69 to 11, the survivors are mostly at the
+limit of what the route can say about them.
+
 REPORTS ONLY, and deliberately. A stop is judged against its neighbours, and the odd one
 out is sometimes the only correct one - prasa_scraper.positions learned that the hard way,
 nearly deleting DAL JOSAFAT, the single well-placed station on its stretch of line. Nothing

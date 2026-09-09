@@ -34,7 +34,12 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Integer> {
     /** Planner grouping metadata for a batch of schedules. */
     @Query(value = """
             SELECT sc.id              AS "id",
-                   sc.direction_label AS "directionLabel",
+                   -- The direction where the timetable prints one, the name of the
+                   -- route where it does not. 332 schedules have no direction label,
+                   -- and a journey card headed "Route " with nothing after it tells a
+                   -- rider less than the timetable already told us: the route is
+                   -- called MITCHELLS PLAIN SCHOOLS-KHAYELITSHA, worth saying.
+                   COALESCE(NULLIF(sc.direction_label, ''), r.name) AS "directionLabel",
                    sc.day_type        AS "dayType",
                    sc.day_label       AS "dayLabel",
                    t.timetable_number AS "timetableNumber",

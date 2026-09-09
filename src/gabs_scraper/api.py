@@ -627,19 +627,42 @@ def geocode_place(q: str):
     through it, whether or not it is anywhere near the end of a route: Woodstock is
     somewhere buses drive on the way into town, so a rider coming from Makhaza can get off
     there, and it belongs in the list even though no route is named after it.
+
+    Answered from the `area` table first, and almost always only from there. The 728 named
+    places of the metro were fetched once (gabs_scraper.areas) so this endpoint stops
+    asking a stranger on every pause in typing - Nominatim's policy is one request a second
+    for the whole application, which one developer never notices and a public app breaches
+    immediately. Locally it is also a prefix match, so "woodst" completes to Woodstock the
+    way the stop list beside it already did.
     """
     query = (q or "").strip()
     if not query:
         return {"results": []}
-    found = _nominatim(query)
-    if found is None:
-        return {"results": []}
 
-    # Served areas only, and checked after ranking so the database is asked about a
-    # handful of candidates rather than everything Nominatim returned.
-    from . import planner
     conn = db.connect()
     try:
+        cur = conn.cursor()
+        like = f"%{query.lower()}%"
+        cur.execute(
+            """
+            SELECT name, full_name, lat, lon
+            FROM area
+            WHERE served AND (lower(name) LIKE %s OR aliases LIKE %s)
+            ORDER BY (lower(name) = %s) DESC, (lower(name) LIKE %s) DESC, length(name), name
+            LIMIT 4
+            """,
+            (like, like, query.lower(), f"{query.lower()}%"),
+        )
+        local = [{"name": n, "full": f, "lat": float(la), "lon": float(lo)}
+                 for n, f, la, lo in cur.fetchall()]
+        if local:
+            return {"results": local}
+
+        # Nothing local. Fall back to asking, which is now rare and off the critical path.
+        found = _nominatim(query)
+        if found is None:
+            return {"results": []}
+        from . import planner
         return {"results": [p for p in _rank_places(found, query)
                             if planner.is_served(conn, p["lat"], p["lon"])]}
     finally:

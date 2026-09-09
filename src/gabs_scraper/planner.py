@@ -205,7 +205,12 @@ def _schedule_meta(conn, schedule_ids):
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT sc.id, sc.direction_label, sc.day_type, sc.day_label,
+        -- The direction where the timetable prints one, the name of the route where
+        -- it does not. 332 schedules carry no direction label, and a journey card
+        -- headed "Route " with nothing after it tells a rider less than the
+        -- timetable already told us.
+        SELECT sc.id, COALESCE(NULLIF(sc.direction_label, %s), r.name),
+               sc.day_type, sc.day_label,
                t.timetable_number, o.code, o.name, o.kind
         FROM schedule sc
         JOIN timetable t     ON t.id = sc.timetable_id
@@ -213,7 +218,7 @@ def _schedule_meta(conn, schedule_ids):
         LEFT JOIN operator o ON o.id = r.operator_id
         WHERE sc.id = ANY(%s)
         """,
-        (list(schedule_ids),),
+        ("", list(schedule_ids)),
     )
     return {r[0]: {"direction_label": r[1], "day_type": r[2], "day_label": r[3],
                    "timetable_number": r[4], "operator_code": r[5],
