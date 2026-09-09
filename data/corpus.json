@@ -1,0 +1,158 @@
+{
+  "places": {
+    "Bellville -> Cape Town CBD": {
+      "by_bus": 16,
+      "by_train": 3,
+      "first": "04:46:00",
+      "options": 19
+    },
+    "Bellville -> Khayelitsha": {
+      "by_bus": 14,
+      "by_train": 0,
+      "first": "05:50",
+      "options": 14
+    },
+    "Bellville -> Kraaifontein": {
+      "by_bus": 1,
+      "by_train": 1,
+      "first": "05:00:00",
+      "options": 2
+    },
+    "Bellville -> Mitchells Plain": {
+      "by_bus": 5,
+      "by_train": 0,
+      "first": "07:10",
+      "options": 5
+    },
+    "Bellville -> Woodstock": {
+      "by_bus": 21,
+      "by_train": 3,
+      "first": "04:46:00",
+      "options": 24
+    },
+    "Cape Town CBD -> Khayelitsha": {
+      "by_bus": 21,
+      "by_train": 2,
+      "first": "03:50:00",
+      "options": 23
+    },
+    "Cape Town CBD -> Kraaifontein": {
+      "by_bus": 10,
+      "by_train": 1,
+      "first": "04:45:00",
+      "options": 11
+    },
+    "Cape Town CBD -> Mitchells Plain": {
+      "by_bus": 24,
+      "by_train": 2,
+      "first": "03:25:00",
+      "options": 26
+    },
+    "Cape Town CBD -> Woodstock": {
+      "by_bus": 167,
+      "by_train": 8,
+      "first": "03:25:00",
+      "options": 175
+    },
+    "Khayelitsha -> Kraaifontein": {
+      "by_bus": 3,
+      "by_train": 0,
+      "first": "05:05",
+      "options": 3
+    },
+    "Khayelitsha -> Mitchells Plain": {
+      "by_bus": 2,
+      "by_train": 2,
+      "first": "04:59:00",
+      "options": 4
+    },
+    "Khayelitsha -> Woodstock": {
+      "by_bus": 15,
+      "by_train": 2,
+      "first": "04:30",
+      "options": 17
+    },
+    "Kraaifontein -> Mitchells Plain": {
+      "by_bus": 1,
+      "by_train": 0,
+      "first": "15:40b",
+      "options": 1
+    },
+    "Kraaifontein -> Woodstock": {
+      "by_bus": 5,
+      "by_train": 1,
+      "first": "04:30:00",
+      "options": 6
+    },
+    "Mitchells Plain -> Woodstock": {
+      "by_bus": 38,
+      "by_train": 2,
+      "first": "04:10",
+      "options": 40
+    }
+  },
+  "searches": {
+    "bellville": [
+      "Bellville South"
+    ],
+    "cape town": [
+      "Cape Town"
+    ],
+    "gugulethu": [
+      "Guguletu"
+    ],
+    "kraaifontein": [
+      "Kraaifontein",
+      "Kraaifontein East"
+    ],
+    "obs": [
+      "Observatory",
+      "Dobson"
+    ],
+    "woodst": [
+      "Woodstock"
+    ]
+  },
+  "stops": {
+    "ATLANTIS (bus) -> CAPE TOWN (bus)": {
+      "direct": 2,
+      "first": "05:30",
+      "with_a_change": 7
+    },
+    "BUH REIN (bus) -> BELLVILLE (bus)": {
+      "direct": 0,
+      "first": null,
+      "with_a_change": 3
+    },
+    "BUH REIN (bus) -> SPEKENAM (bus)": {
+      "direct": 0,
+      "first": null,
+      "with_a_change": 0
+    },
+    "CAPE GATE (bus) -> CAPE TOWN (bus)": {
+      "direct": 2,
+      "first": "05:10",
+      "with_a_change": 1
+    },
+    "FISH HOEK (train) -> CAPE TOWN (train)": {
+      "direct": 2,
+      "first": "04:45:00",
+      "with_a_change": 40
+    },
+    "GUGULETU (bus) -> KENRIDGE (bus)": {
+      "direct": 0,
+      "first": null,
+      "with_a_change": 9
+    },
+    "KRAAIFONTEIN (train) -> CAPE TOWN (train)": {
+      "direct": 1,
+      "first": "04:30:00",
+      "with_a_change": 26
+    },
+    "WYNBERG (bus) -> CAPE TOWN (bus)": {
+      "direct": 0,
+      "first": null,
+      "with_a_change": null
+    }
+  }
+}
