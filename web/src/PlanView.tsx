@@ -477,15 +477,20 @@ export default function PlanView() {
                         </div>
                       ) : null,
                     )}
+                    {/* Never on a train: a place is where the walk starts, not where
+                        anybody boards. See PlanScreen. */}
                     {openDep?.oi === i && (
                       <TripStrip
                         stops={tripStops} loading={loadingTrip} notes={tripNotes}
                         riderFromSeq={o.departures[openDep.di]?.from_seq ?? 0}
                         riderToSeq={o.departures[openDep.di]?.to_seq ?? 9999}
-                        boardPin={from?.kind === 'pin' ? { name: from.name, time: o.departures[openDep.di]?.board_raw } : null}
-                        alightPin={to?.kind === 'pin' ? { name: to.name, time: o.departures[openDep.di]?.arrive_raw } : null}
+                        boardPin={from?.kind === 'pin' && o.operator_kind !== 'train'
+                          ? { name: from.name, time: o.departures[openDep.di]?.board_raw } : null}
+                        alightPin={to?.kind === 'pin' && o.operator_kind !== 'train'
+                          ? { name: to.name, time: o.departures[openDep.di]?.arrive_raw } : null}
                         boardTime={alightOrNone(o.departures[openDep.di], 'board')}
                         alightTime={alightOrNone(o.departures[openDep.di], 'alight')}
+                        kind={o.operator_kind === 'train' ? 'train' : 'bus'}
                         onClose={() => setOpenDep(null)}
                       />
                     )}

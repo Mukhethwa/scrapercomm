@@ -576,15 +576,20 @@ export default function PlanScreen() {
                     fare={openOption.fare}
                     mode={openOption.operator_kind === 'train' ? 'train' : 'bus'}
                   />
+                  {/* A place is a boarding point on a bus and never on a train.
+                      A bus is caught where its road passes, so "Kraaifontein High School
+                      - get on here" is a real instruction. A train is caught at a station:
+                      the school is where the walk starts, not where anybody boards, and
+                      listing it among the stops said the train calls there. */}
                   <TripStrip
                     stops={s.tripStops}
                     loading={s.loadingTrip}
                     notes={s.tripNotes}
                     riderFromSeq={openDeparture?.from_seq ?? 0}
                     riderToSeq={openDeparture?.to_seq ?? 9999}
-                    boardPin={s.from?.kind === 'pin'
+                    boardPin={s.from?.kind === 'pin' && openOption.operator_kind !== 'train'
                       ? { name: s.from.name, time: openDeparture?.board_raw } : null}
-                    alightPin={s.to?.kind === 'pin'
+                    alightPin={s.to?.kind === 'pin' && openOption.operator_kind !== 'train'
                       ? { name: s.to.name, time: openDeparture?.arrive_raw } : null}
                     boardTime={alightOrNone(openDeparture, 'board')}
                     alightTime={alightOrNone(openDeparture, 'alight')}
