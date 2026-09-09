@@ -80,3 +80,19 @@ def test_the_arrival_departure_marker_is_not_part_of_the_name():
     assert clean_station("RETREAT (D)") == "RETREAT"
     assert clean_station("BELLVILLE A") == "BELLVILLE"
     assert clean_station("FISH HOEK (A)") == "FISH HOEK"
+
+
+def test_a_column_with_no_train_number_is_not_a_train():
+    import os
+    from prasa_scraper.sheets import read_sheet
+
+    # Central Line Inbound Saturday leads with two columns the TRAIN NO row leaves blank,
+    # holding the running time between stations - 00:03, 00:04, 00:08:15. Loaded as
+    # services they gave a train at SAREPTA at 00:06 reaching CAPE TOWN at 00:03.
+    path = os.path.join("data", "prasa", "xlsx", "Central-Line-Inbound-Saturday.xlsx")
+    if not os.path.exists(path):
+        import pytest as _p
+        _p.skip("the spreadsheets are not downloaded here")
+    grid = read_sheet(path)
+    early = [t for row in grid.times for t in row if t and int(t[:2]) < 3]
+    assert not early, f"running times loaded as departures: {early[:5]}"

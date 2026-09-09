@@ -142,6 +142,20 @@ def read_sheet(path: str) -> Grid:
     grid.title = f"{banner} {os.path.basename(path).replace('-', ' ')}"
     grid.train_numbers = [_text(v) for v in rows[header_at][1:]]
 
+    # A column with no train number is not a train.
+    #
+    # Central Line Inbound Saturday leads with two columns the TRAIN NO row leaves blank,
+    # holding 00:03, 00:04, 00:08:15 - the running time between stations, not departures.
+    # Loaded as services they produced a train calling at SAREPTA at 00:06 and reaching
+    # CAPE TOWN at 00:03, which is not a journey; and because SAREPTA sits earliest on the
+    # line, a place near Pentech boarded there and the planner found nothing.
+    #
+    # The sheet says which columns are trains and I was not reading it. Across the other
+    # fifteen sheets every column carries a number, so this drops those two and nothing
+    # else - and "a time in a spreadsheet is a time" was true about the cells and wrong
+    # about the columns.
+    is_train = [bool(n) for n in grid.train_numbers]
+
     for row in rows[header_at + 1:]:
         if not row:
             continue
@@ -155,7 +169,8 @@ def read_sheet(path: str) -> Grid:
         label = clean_station(_text(row[0]))
         if not label or _PLATFORM.search(label):
             continue
-        times = [_time(v) for v in row[1:]]
+        times = [t if i < len(is_train) and is_train[i] else ""
+                 for i, t in enumerate(_time(v) for v in row[1:])]
         if not any(times):
             continue
 
