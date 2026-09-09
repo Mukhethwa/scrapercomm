@@ -379,5 +379,12 @@ export interface ConnectionsResponse {
   connections: Connection[]
 }
 
-export const getConnections = (from: number, to: number) =>
-  getJSON<ConnectionsResponse>(`${API}/connections?from=${from}&to=${to}`)
+/**
+ * A journey with a change, between two endpoints of any kind.
+ *
+ * A stop goes as its id and a dropped point as its coordinates, the same way /api/plan
+ * takes them - the engine walks a point to the nearest stop that can make the journey.
+ */
+export const getConnections = (from: Endpoint, to: Endpoint) =>
+  getJSON<ConnectionsResponse>(
+    `${API}/connections?${epParams('from', from)}&${epParams('to', to)}`)

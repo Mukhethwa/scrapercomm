@@ -249,11 +249,15 @@ export function usePlanSearch(operator: string | null = null) {
     getPlan(f, t)
       .then((r) => {
         setPlan(r.options)
-        // No direct bus. Look for one that needs a change, which the connections
-        // engine can only work out between named stops.
-        if (r.options.length === 0 && f.kind === 'stop' && t.kind === 'stop') {
+        // Nothing direct. Look for a journey with a change.
+        //
+        // Asked for whatever the endpoints are now. This used to be skipped unless both
+        // were named stops, so a rider who searched a place was told a journey with a
+        // change could not be worked out - a statement about the endpoint, not about the
+        // network. They walk to a stop like anybody else.
+        if (r.options.length === 0) {
           setConnLoading(true)
-          getConnections(f.id!, t.id!)
+          getConnections(f, t)
             .then((c) => { setConns(c.connections); setConnLegs(c.legs_required) })
             .catch(() => { setConns([]); setConnLegs(null) })
             .finally(() => setConnLoading(false))

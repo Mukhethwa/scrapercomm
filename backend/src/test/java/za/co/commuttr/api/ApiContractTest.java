@@ -150,7 +150,7 @@ class ApiContractTest {
                 13987, 0, 0, 6,
                 new FareDto("FYDU", 2530, 12650, 23400, 103000, "Zero",
                         "route", "Cape Town", "Durbanville via Freeway", true));
-        given(connections.connections(anyInt(), anyInt())).willReturn(new ConnectionsResponse(
+        given(connections.connections(anyInt(), any(), any(), anyInt(), any(), any())).willReturn(new ConnectionsResponse(
                 new StopDto(24696, "MALMESBURY", -33.45, 18.73, "gabs", "bus"),
                 new StopDto(3370, "BUH REIN", -33.82, 18.71, "gabs", "bus"),
                 2,
@@ -186,7 +186,7 @@ class ApiContractTest {
     @Test
     @DisplayName("nothing reachable answers 200 with legs_required null, not an error")
     void connectionsWhenUnreachable() throws Exception {
-        given(connections.connections(anyInt(), anyInt())).willReturn(new ConnectionsResponse(
+        given(connections.connections(anyInt(), any(), any(), anyInt(), any(), any())).willReturn(new ConnectionsResponse(
                 new StopDto(24696, "MALMESBURY", -33.45, 18.73, "gabs", "bus"),
                 new StopDto(9099, "KHAYELITSHA", -34.0, 18.65, "gabs", "bus"),
                 null, List.of()));

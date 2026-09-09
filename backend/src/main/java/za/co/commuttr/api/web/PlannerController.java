@@ -69,13 +69,23 @@ public class PlannerController {
     }
 
     /**
-     * How to get there when no single bus does it: two buses if possible, three if not.
-     * Named stops only. Consulted after /api/plan comes back empty.
+     * How to get there when no single service does it: two legs if possible, three if not.
+     * Consulted after /api/plan comes back empty.
+     *
+     * A stop id, or a point. A point was refused until now, so a rider who searched a
+     * place rather than a stop was told a journey with a change could not be worked out -
+     * which is a statement about this endpoint, not about the network. They walk to a
+     * stop like anybody else.
      */
     @GetMapping("/connections")
-    public ConnectionsResponse connections(@RequestParam("from") Integer from,
-                                           @RequestParam("to") Integer to) {
-        return connectionService.connections(from, to);
+    public ConnectionsResponse connections(
+            @RequestParam(value = "from", required = false) Integer from,
+            @RequestParam(value = "from_lat", required = false) Double fromLat,
+            @RequestParam(value = "from_lon", required = false) Double fromLon,
+            @RequestParam(value = "to", required = false) Integer to,
+            @RequestParam(value = "to_lat", required = false) Double toLat,
+            @RequestParam(value = "to_lon", required = false) Double toLon) {
+        return connectionService.connections(from, fromLat, fromLon, to, toLat, toLon);
     }
 
     /** Legs whose real road path passes near a point. */

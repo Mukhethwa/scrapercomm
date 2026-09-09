@@ -16,6 +16,7 @@ import za.co.commuttr.api.repo.projection.Projections.TwoLegRow;
 import za.co.commuttr.api.web.ApiException;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -55,11 +56,63 @@ public class ConnectionService {
         this.maxResults = maxResults;
     }
 
-    public ConnectionsResponse connections(Integer fromId, Integer toId) {
-        StopRow from = stops.findRowById(fromId)
-                .orElseThrow(() -> ApiException.notFound("stop not found"));
-        StopRow to = stops.findRowById(toId)
-                .orElseThrow(() -> ApiException.notFound("stop not found"));
+    /**
+     * How far a rider walks from a place to something they can board.
+     *
+     * The same distance the planner uses for a direct journey, because it is the same
+     * walk. A journey with a change does not start further from home than a journey
+     * without one.
+     */
+    private static final double WALK_M = 1500.0;
+
+    /** How many nearby stops to try for a place, nearest first. */
+    private static final int NEAR_TRIED = 3;
+
+    public ConnectionsResponse connections(Integer fromId, Double fromLat, Double fromLon,
+                                           Integer toId, Double toLat, Double toLon) {
+        List<StopRow> fromStops = resolve(fromId, fromLat, fromLon);
+        List<StopRow> toStops = resolve(toId, toLat, toLon);
+        if (fromStops.isEmpty() || toStops.isEmpty()) {
+            throw ApiException.notFound("stop not found");
+        }
+
+        // Nearest first, and the first pair that connects wins.
+        //
+        // A place is not one stop, and trying every pair would run this query nine times
+        // to no purpose: the nearest stop that can make the journey is the one a rider
+        // would use. Trying the next only when the nearer one connects to nothing keeps
+        // the usual case at one query and still answers where the closest stop happens to
+        // be on the wrong route.
+        for (StopRow from : fromStops) {
+            for (StopRow to : toStops) {
+                ConnectionsResponse found = between(from, to);
+                if (!found.connections().isEmpty()) {
+                    return found;
+                }
+            }
+        }
+        return new ConnectionsResponse(StopService.toDto(fromStops.get(0)),
+                StopService.toDto(toStops.get(0)), null, List.of());
+    }
+
+    /** A stop id as itself, or a point as the stops a rider could walk to. */
+    private List<StopRow> resolve(Integer id, Double lat, Double lon) {
+        if (id != null) {
+            return stops.findRowById(id).map(List::of).orElseGet(List::of);
+        }
+        if (lat == null || lon == null) {
+            return List.of();
+        }
+        List<StopRow> near = new ArrayList<>();
+        for (String kind : new String[] { "train", "bus" }) {
+            near.addAll(stops.findNearestOfKind(lat, lon, kind, WALK_M));
+        }
+        return near.stream().limit(NEAR_TRIED * 2L).toList();
+    }
+
+    private ConnectionsResponse between(StopRow from, StopRow to) {
+        Integer fromId = from.getId();
+        Integer toId = to.getId();
 
         var twoRows = connections.findTwoLegConnections(fromId, toId, bufferMinutes, maxResults);
         if (!twoRows.isEmpty()) {
