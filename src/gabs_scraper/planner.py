@@ -555,6 +555,25 @@ def reachable_from(conn, ep, threshold_m=DEFAULT_THRESHOLD_M):
     return sorted(merged.values(), key=lambda r: r["name"])
 
 
+def is_served(conn, lat, lon):
+    """
+    Could a rider start or finish a journey here?
+
+    Exactly the two things _pin_anchors builds anchors from, asked as a yes or no: a stop
+    of either kind within walking distance, or a road some service drives within the pin
+    threshold. Nothing else can produce a journey from a point, so if both come back empty
+    the planner has nothing to say about this place.
+
+    This is what lets the search box offer a place honestly. Woodstock is worth offering
+    because buses drive through it on the way into town and a rider can walk to a stop
+    there; somewhere the network never goes is not.
+    """
+    for kind in ("train", "bus"):
+        if _nearest_of_kind(conn, lat, lon, kind, WALK_M):
+            return True
+    return bool(locate_point(conn, lat, lon, DEFAULT_THRESHOLD_M))
+
+
 def _nearest_of_kind(conn, lat, lon, kind, within_m):
     """The nearest few stops of one network within walking distance of a point."""
     cur = conn.cursor()

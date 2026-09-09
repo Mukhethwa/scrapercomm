@@ -551,8 +551,8 @@ AREA_TYPES = {
 }
 
 
-def _nominatim(q: str) -> list[dict]:
-    """The areas Nominatim knows for this query, or nothing where it fails."""
+def _nominatim(q: str) -> list[dict] | None:
+    """The areas Nominatim knows for this query, or None where the lookup itself failed."""
     import requests
 
     from .config import settings as _s
@@ -569,7 +569,10 @@ def _nominatim(q: str) -> list[dict]:
         return [h for h in r.json()
                 if h.get("class") == "place" and h.get("type") in AREA_TYPES]
     except Exception:  # noqa: BLE001
-        return []
+        # None, not []. A failed lookup is not the same answer as "no such area", and a
+        # caller that cannot tell them apart reports an outage as a place that does not
+        # exist.
+        return None
 
 
 def _rank_places(hits: list[dict], query: str) -> list[dict]:
@@ -619,11 +622,28 @@ def geocode_place(q: str):
 
     The named stops and stations in the same menu come from /api/stops, which is the app's
     own data, so this removes nothing a rider can actually board at.
+
+    And only areas the network reaches. An area is worth offering when a service runs
+    through it, whether or not it is anywhere near the end of a route: Woodstock is
+    somewhere buses drive on the way into town, so a rider coming from Makhaza can get off
+    there, and it belongs in the list even though no route is named after it.
     """
     query = (q or "").strip()
     if not query:
         return {"results": []}
-    return {"results": _rank_places(_nominatim(query), query)}
+    found = _nominatim(query)
+    if found is None:
+        return {"results": []}
+
+    # Served areas only, and checked after ranking so the database is asked about a
+    # handful of candidates rather than everything Nominatim returned.
+    from . import planner
+    conn = db.connect()
+    try:
+        return {"results": [p for p in _rank_places(found, query)
+                            if planner.is_served(conn, p["lat"], p["lon"])]}
+    finally:
+        conn.close()
 
 
 @app.get("/api/connections")

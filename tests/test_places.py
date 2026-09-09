@@ -111,3 +111,28 @@ def test_a_street_number_is_not_the_name():
 
 def test_an_empty_query_ranks_nothing():
     assert _rank_places([], "") == []
+
+
+def test_a_failed_lookup_is_not_an_empty_one():
+    """
+    None and [] are different answers, and the cache treats them differently.
+
+    They were the same answer once. An audit fired 122 lookups back to back, Nominatim
+    rate-limited most of them exactly as its policy says it will, the failures became
+    empty lists and the empty lists were cached - so WOODSTOCK reported "no such place"
+    for the life of the process. A transient fault, made permanent by remembering it.
+    """
+    import requests
+
+    from gabs_scraper.api import _nominatim
+
+    saved = requests.get
+
+    def rate_limited(*_a, **_k):
+        raise RuntimeError("429 Too Many Requests")
+
+    requests.get = rate_limited          # _nominatim imports requests inside the call
+    try:
+        assert _nominatim("woodstock") is None
+    finally:
+        requests.get = saved

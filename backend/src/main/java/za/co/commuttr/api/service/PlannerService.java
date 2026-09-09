@@ -305,6 +305,28 @@ public class PlannerService {
         return new LocateResponse(lat, lon, locatePoint(lat, lon, DEFAULT_THRESHOLD_M));
     }
 
+    /**
+     * Could a rider start or finish a journey here?
+     *
+     * <p>Exactly the two things {@link #pinAnchors} builds anchors from, asked as a yes or
+     * no: a stop of either kind within walking distance, or a road some service drives
+     * within the pin threshold. Nothing else can produce a journey from a point, so if
+     * both come back empty the planner has nothing to say about this place.
+     *
+     * <p>This is what lets the search box offer a place honestly. Woodstock is worth
+     * offering because buses drive through it on the way into town and a rider can walk to
+     * a stop there; somewhere the network never goes is not, and until now the only way to
+     * find that out was to choose it and get an empty screen.
+     */
+    public boolean isServed(double lat, double lon) {
+        for (String kind : new String[] { "train", "bus" }) {
+            if (!stops.findNearestOfKind(lat, lon, kind, WALK_M).isEmpty()) {
+                return true;
+            }
+        }
+        return !locatePoint(lat, lon, DEFAULT_THRESHOLD_M).isEmpty();
+    }
+
     /** The JSONB {@code [[lat,lon], ...]} column, decoded defensively. */
     private double[][] parsePath(String json) {
         if (json == null || json.isBlank()) {

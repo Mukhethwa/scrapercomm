@@ -39,6 +39,15 @@ import java.util.Set;
  * about Kraaifontein, with the boarding stop named in the result so a rider knows where to
  * walk. That is one entry per area - not the eight things standing inside it.
  *
+ * <p><b>And only areas the network reaches.</b> An area is worth offering when a service
+ * runs through it, whether or not it is anywhere near the end of a route: Woodstock is
+ * somewhere buses drive on the way into town, so a rider coming from Makhaza can get off
+ * there, and it belongs in the list even though no route is named after it. Somewhere the
+ * network never goes does not, and the only way to find that out used to be to choose it
+ * and get an empty screen. {@link PlannerService#isServed} answers it with the same two
+ * tests the planner itself would use, so an offered area is one the planner can plan from
+ * by construction.
+ *
  * <p>The named stops and stations in the same menu come from /api/stops, which is the
  * app's own data, so filtering here removes nothing a rider can actually board at.
  * EERSTE RIVER is not tagged as a place in OSM at all - it comes back as the river - and
@@ -82,6 +91,14 @@ public class GeocodeService {
      * box debounced at 220ms sends one per pause in typing. Riders backspace and retype
      * constantly, so most of those pauses land on a query already answered. Bounded and
      * oldest-out: this is politeness and speed, not a store of anything.
+     *
+     * <p><b>Answers only.</b> A failed lookup is not an answer and must never be stored as
+     * one. It was, and the effect was worse than the outage that caused it: an audit run
+     * fired 122 lookups back to back, Nominatim rate-limited most of them exactly as its
+     * policy says it will, the failures were swallowed into empty lists, and those empties
+     * were cached. WOODSTOCK and SALT RIVER then reported "no such place" for the life of
+     * the process - permanent damage from a transient fault, and indistinguishable from a
+     * filter that had wrongly excluded them.
      */
     private static final int CACHE_MAX = 500;
 
@@ -95,12 +112,15 @@ public class GeocodeService {
 
     private final RestClient restClient;
     private final String baseUrl;
+    private final PlannerService planner;
 
     public GeocodeService(RestClient.Builder builder,
+                          PlannerService planner,
                           @Value("${commuttr.geocode.base-url}") String baseUrl,
                           @Value("${commuttr.geocode.user-agent}") String userAgent,
                           @Value("${commuttr.geocode.timeout-seconds:20}") long timeoutSeconds) {
         this.baseUrl = baseUrl;
+        this.planner = planner;
 
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(timeoutSeconds));
@@ -134,12 +154,25 @@ public class GeocodeService {
             return new GeocodeResponse(cached);
         }
 
-        List<GeoHitDto> results = rank(lookup(query), query);
+        List<Hit> found = lookup(query);
+        if (found == null) {
+            // The lookup failed rather than found nothing. Answer emptily for now and
+            // leave the cache alone, so the next keystroke asks again.
+            return new GeocodeResponse(List.of());
+        }
+
+        List<GeoHitDto> results = rank(found, query);
         cache.put(cacheKey, results);
         return new GeocodeResponse(results);
     }
 
-    /** The areas Nominatim knows for this query, or an empty list where it fails. */
+    /**
+     * The areas Nominatim knows for this query, or null where the lookup itself failed.
+     *
+     * <p>Null and empty are different answers and the caller treats them differently: an
+     * empty list means Nominatim has no area by that name and is worth remembering, null
+     * means we do not know and must not pretend to.
+     */
     private List<Hit> lookup(String q) {
         List<Hit> hits = new ArrayList<>();
         try {
@@ -179,8 +212,10 @@ public class GeocodeService {
                 }
             }
         } catch (Exception ex) {
-            log.debug("Nominatim lookup for '{}' failed, returning no results: {}", q, ex.toString());
-            hits.clear();
+            // Warn, not debug. This was silent, so a rate-limited search box looked
+            // exactly like a place that does not exist.
+            log.warn("Nominatim lookup for '{}' failed: {}", q, ex.toString());
+            return null;
         }
         return hits;
     }
@@ -220,9 +255,12 @@ public class GeocodeService {
             }
         }
 
+        // Served areas only, and checked after ranking so the database is asked about a
+        // handful of candidates rather than everything Nominatim returned.
         return best.values().stream()
                 .sorted((a, b) -> Double.compare(b.score(), a.score()))
                 .limit(KEEP)
+                .filter(s -> planner.isServed(s.hit().lat(), s.hit().lon()))
                 .map(s -> new GeoHitDto(s.hit().name(), s.hit().full(), s.hit().lat(), s.hit().lon()))
                 .toList();
     }
