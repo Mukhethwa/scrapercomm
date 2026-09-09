@@ -406,6 +406,20 @@ def resolve_journeys(conn, from_ep, to_ep, threshold_m=DEFAULT_THRESHOLD_M):
         m = meta.get(sch)
         if not m:
             continue
+        # A departure nobody can be told to be there for is not a departure.
+        #
+        # Where the timetable prints "via" at both ends of the stretch a pin sits on there
+        # is no time to interpolate, and the boarding time comes out None. The screen
+        # rendered that as "no set time", beside a fare and an Add to Planner button, under
+        # the heading DIRECT BUS - an offer to catch a bus at an unknown moment. The bus
+        # still exists and the route browser still shows it; it is this list, of journeys
+        # to go and catch, that it does not belong in.
+        #
+        # The arrival is a different case and is kept. Not knowing exactly when you get
+        # there is a gap in the answer; not knowing when to be at the stop means there is
+        # no answer.
+        if b["minutes"] is None:
+            continue
         gkey = (m["timetable_number"], m["direction_label"], m["day_type"])
         g = groups.get(gkey)
         if g is None:

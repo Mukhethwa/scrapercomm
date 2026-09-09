@@ -577,6 +577,22 @@ public class PlannerService {
             if (m == null) {
                 continue;
             }
+            // A departure nobody can be told to be there for is not a departure.
+            //
+            // Where the timetable prints "via" at both ends of the stretch a pin sits on,
+            // there is no time to interpolate and the boarding time comes out null. The
+            // screen rendered that as "no set time", beside a fare and an Add to Planner
+            // button, under the heading DIRECT BUS - an offer to catch a bus at an unknown
+            // moment. A rider cannot act on it, and it crowded out the answers they can
+            // act on. The bus still exists and the route browser still shows it; it is
+            // this list, of journeys to go and catch, that it does not belong in.
+            //
+            // The arrival is a different case and is kept. Not knowing exactly when you
+            // get there is a gap in the answer; not knowing when to be at the stop means
+            // there is no answer.
+            if (c.board().minutes() == null) {
+                continue;
+            }
             GroupKey gkey = new GroupKey(m.getTimetableNumber(), m.getDirectionLabel(),
                                         m.getDayType() + "|" + m.getOperatorCode());
             PlanGroup g = groups.get(gkey);
