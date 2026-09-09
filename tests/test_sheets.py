@@ -71,3 +71,12 @@ def test_different_stations_are_not_merged():
     assert not _same_station("WOODSTOCK", "SALT RIVER")
     assert not _same_station("RETREAT", "STEENBERG")
     assert not _same_station("", "WOODSTOCK")
+
+
+def test_the_arrival_departure_marker_is_not_part_of_the_name():
+    from prasa_scraper.ocr import clean_station
+    # The sheets write it three ways, and storing it made "RETREAT (D)" a station of its
+    # own while RETREAT kept none of the departures filed under it.
+    assert clean_station("RETREAT (D)") == "RETREAT"
+    assert clean_station("BELLVILLE A") == "BELLVILLE"
+    assert clean_station("FISH HOEK (A)") == "FISH HOEK"

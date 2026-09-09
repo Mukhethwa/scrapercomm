@@ -43,7 +43,7 @@ import openpyxl
 
 from . import db_compat as db
 from .load import load_page
-from .ocr import Grid
+from .ocr import Grid, clean_station
 from .stations import canonical, key
 
 SHEET_DIR = os.path.join("data", "prasa", "xlsx")
@@ -113,8 +113,8 @@ def _same_station(a: str, b: str) -> bool:
     which the Southern Saturday sheet prints as consecutive rows, being the arrival and the
     departure of one call - are recognised as the one station they are.
     """
-    strip = lambda n: re.sub(r"\((?:A|D)\)", "", n or "")
-    return bool(a) and bool(b) and key(canonical(strip(a))) == key(canonical(strip(b)))
+    return bool(a) and bool(b) and (
+        key(canonical(clean_station(a))) == key(canonical(clean_station(b))))
 
 
 def read_sheet(path: str) -> Grid:
@@ -145,7 +145,14 @@ def read_sheet(path: str) -> Grid:
     for row in rows[header_at + 1:]:
         if not row:
             continue
-        label = _text(row[0])
+        # The arrival/departure marker is not part of the station's name.
+        #
+        # The sheets write it three ways - "RETREAT (D)", "BELLVILLE A", and nothing at
+        # all - and storing it made RETREAT (D) a station in its own right, separate from
+        # RETREAT, with FISH HOEK's departures filed under FISH HOEK (D) and FISH HOEK
+        # itself left with none. That is the split-station fault that makes a line
+        # unroutable, arrived at from a new direction.
+        label = clean_station(_text(row[0]))
         if not label or _PLATFORM.search(label):
             continue
         times = [_time(v) for v in row[1:]]
