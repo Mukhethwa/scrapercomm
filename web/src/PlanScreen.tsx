@@ -185,7 +185,16 @@ function Field({ label, value, onChange, onFocus, onBlur, hits, open, onPick, on
 }
 
 export default function PlanScreen() {
-  const s = usePlanSearch()
+  /**
+   * Which operator the screen is narrowed to. Null is "All".
+   *
+   * Declared before the search because the search takes it: the chip scopes what is
+   * offered, not only what is shown. Choosing Metro Rail and still being offered a
+   * Golden Arrow stop - whose journeys are then filtered away to an empty screen - is
+   * the app disagreeing with itself.
+   */
+  const [only, setOnly] = useState<string | null>(null)
+  const s = usePlanSearch(only)
   /**
    * Departures that have already gone are not choices, so the screen opens on the clock.
    * A rider standing at a stop means "the next bus" by default; somebody planning
@@ -193,8 +202,6 @@ export default function PlanScreen() {
    */
   const [leaveAt, setLeaveAt] = useState<number | null>(() => nowMinutes())
   const [showMap, setShowMap] = useState(false)
-  /** Which operator's card to show. Null is "All". */
-  const [only, setOnly] = useState<string | null>(null)
   /**
    * Which operators the API can plan with right now.
    *

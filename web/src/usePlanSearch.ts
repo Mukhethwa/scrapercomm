@@ -48,7 +48,8 @@ export function useDebounced<T>(v: T, ms: number): T {
 
 /** Stops, places and areas for one query, in the order the menu shows them. */
 export async function mergedSearch(q: string, areas: string[],
-                                   railAreas: Set<string> = new Set()): Promise<Hit[]> {
+                                   railAreas: Set<string> = new Set(),
+                                   operator: string | null = null): Promise<Hit[]> {
   const [s, g] = await Promise.all([
     getStops(q).catch(() => ({ stops: [] as StopHit[] })),
     getGeocode(q).catch(() => ({ results: [] as GeoHit[] })),
@@ -63,7 +64,13 @@ export async function mergedSearch(q: string, areas: string[],
    * an area and "bus and train" in one that has no station sends somebody looking for a
    * platform that is not there.
    */
-  const areaHits: Hit[] = areas.filter((a) => a.toLowerCase().includes(ql)).slice(0, 3)
+  // An area is a name Golden Arrow uses for a part of the city, so under a train filter
+  // it belongs in the list only where a station stands in it - which is the one thing
+  // railAreas already knows.
+  const areaHits: Hit[] = areas
+    .filter((a) => a.toLowerCase().includes(ql))
+    .filter((a) => !operator || operator === 'gabs' || railAreas.has(a))
+    .slice(0, 3)
     .map((a) => ({
       kind: 'area', name: a, lat: 0, lon: 0,
       sub: railAreas.has(a) ? 'area with bus and train service' : 'area with bus service',
@@ -78,7 +85,12 @@ export async function mergedSearch(q: string, areas: string[],
    * Steenberg is. Only the map needs a position, and a missing pin is a far smaller
    * failure than an unreachable destination.
    */
-  const stops: Hit[] = s.stops.slice(0, 6)
+  // Only the operator the rider has chosen. RETREAT is a bus stop and a station, and
+  // offering both under a Metro Rail filter means one of the two answers leads to an
+  // empty screen - the results are filtered even though the suggestion was not.
+  const stops: Hit[] = s.stops
+    .filter((x) => !operator || x.operator_code === operator)
+    .slice(0, 6)
     .map((x) => ({ kind: 'stop', id: x.id, name: x.name, lat: x.lat, lon: x.lon,
                    mode: x.operator_kind, operator: x.operator_code }))
   const places: Hit[] = g.results.slice(0, 3)
@@ -86,7 +98,13 @@ export async function mergedSearch(q: string, areas: string[],
   return [...areaHits, ...stops, ...places]
 }
 
-export function usePlanSearch() {
+/**
+ * @param operator when a rider has narrowed the screen to one operator, its code. The
+ *        chip is not a filter on the results alone: choosing Metro Rail and then being
+ *        offered a Golden Arrow stop, whose journeys are then filtered away to nothing,
+ *        is the app disagreeing with itself. Null means All.
+ */
+export function usePlanSearch(operator: string | null = null) {
   const [from, setFrom] = useState<Endpoint | null>(null)
   const [to, setTo] = useState<Endpoint | null>(null)
   const [fromText, setFromText] = useState('')
@@ -192,13 +210,15 @@ export function usePlanSearch() {
 
   useEffect(() => {
     if (!debFrom || (from && from.name === debFrom)) { setFromHits([]); return }
-    mergedSearch(debFrom, areas, railAreas).then(setFromHits).catch(() => setFromHits([]))
+    mergedSearch(debFrom, areas, railAreas, operator).then(setFromHits)
+      .catch(() => setFromHits([]))
   }, [debFrom, areas]) // eslint-disable-line
 
   useEffect(() => {
     if (!from || !debTo || (to && to.name === debTo)) { setToHits([]); return }
-    mergedSearch(debTo, areas, railAreas).then(setToHits).catch(() => setToHits([]))
-  }, [debTo, from, areas]) // eslint-disable-line
+    mergedSearch(debTo, areas, railAreas, operator).then(setToHits)
+      .catch(() => setToHits([]))
+  }, [debTo, from, areas, operator]) // eslint-disable-line
 
   /** Empty the starting point and everything that depended on it. */
   function clearFrom() {
