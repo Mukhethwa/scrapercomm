@@ -147,7 +147,7 @@ def test_a_route_is_named_by_where_its_trains_actually_run():
     # Hoek workings, and a page holds one of them.
     g = Grid(heading="#SouthernLineCT : INBOUND")
     g.stations = ["Fish Hoek", "Kalk Bay", "Cape Town"]
-    assert route_name(g) == "FISH HOEK - CAPE TOWN"
+    assert route_name(g) == "SOUTHERN LINE: FISH HOEK - CAPE TOWN"
 
 
 def test_a_route_is_named_the_way_its_stations_are_stored():
@@ -156,7 +156,20 @@ def test_a_route_is_named_the_way_its_stations_are_stored():
     # a station that exists nowhere in the stop table.
     g = Grid(heading="#SouthernLineCT : OUTBOUND")
     g.stations = ["Woodstock", "Diepriver", "Kalkbaai"]
-    assert route_name(g) == "WOODSTOCK - KALK BAY"
+    assert route_name(g) == "SOUTHERN LINE: WOODSTOCK - KALK BAY"
+
+
+def test_two_lines_between_the_same_places_are_two_routes():
+    # The Central Line and the Monte Vista Line both run Bellville to Cape Town, by
+    # different routes through different stations. Named by their endpoints alone they
+    # became one route in the catalogue carrying 63 trains belonging to two lines.
+    central = Grid(heading="Central Line INBOUND")
+    central.stations = ["Bellville", "Sarepta", "Cape Town"]
+    monte = Grid(heading="Monte Vista Line INBOUND")
+    monte.stations = ["Bellville", "Oosterzee", "Cape Town"]
+    assert route_name(central) != route_name(monte)
+    assert route_name(central) == "CENTRAL LINE: BELLVILLE - CAPE TOWN"
+    assert route_name(monte) == "MONTE VISTA LINE: BELLVILLE - CAPE TOWN"
 
 
 # ---------------------------------------------------------- station names
@@ -521,3 +534,51 @@ def test_a_station_is_not_mistaken_for_a_platform_row():
     assert not _is_platform_row("RETREAT", ["05:03", "05:18", "05:30"])
     assert not _is_platform_row("RETREAT", ["5", "05:18"])
     assert not _is_platform_row("WYNBERG", [])
+
+
+# ------------------------------------ the marker for "this train does not call here"
+
+def test_a_no_service_marker_is_not_a_failed_time():
+    from prasa_scraper.ocr import _read_time
+    import prasa_scraper.ocr as ocr
+    from PIL import Image
+    import numpy as np
+
+    # PRASA prints ".." where a train does not stop. The cell whitelist allows digits and
+    # a colon, so two dots come back as ":" and the checker called a correctly-read marker
+    # a time that was not a time - twenty-eight of thirty-eight failures on one Central
+    # Line page, enough to hold the whole page back.
+    saved = ocr._tesseract
+
+    class Dots:
+        def image_to_string(self, *a, **k):
+            return ":"
+
+    ocr._tesseract = lambda: Dots()
+    try:
+        dark = Image.fromarray(np.zeros((40, 120), dtype=np.uint8))
+        assert _read_time(dark, (0, 0, 120, 40)) == ""
+    finally:
+        ocr._tesseract = saved
+
+
+def test_a_damaged_time_is_still_reported():
+    from prasa_scraper.ocr import _read_time
+    import prasa_scraper.ocr as ocr
+    from PIL import Image
+    import numpy as np
+
+    # A reading with a digit in it was a time somebody printed, and a bad one has to stay
+    # visible. Only punctuation alone means nothing was there.
+    saved = ocr._tesseract
+
+    class Broken:
+        def image_to_string(self, *a, **k):
+            return "18:70"
+
+    ocr._tesseract = lambda: Broken()
+    try:
+        dark = Image.fromarray(np.zeros((40, 120), dtype=np.uint8))
+        assert _read_time(dark, (0, 0, 120, 40)) == "18:70"
+    finally:
+        ocr._tesseract = saved

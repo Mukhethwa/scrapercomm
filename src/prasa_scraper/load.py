@@ -28,8 +28,15 @@ from .stations import canonical, key
 
 OPERATOR_CODE = "metrorail"
 
-# "#SouthernLineCT : INBOUND Simons Town - Cape Town station"
-_LINE = re.compile(r"#(\w+?)Line", re.I)
+# Two ways a page names its line, and both have to work.
+#
+#   "#SouthernLineCT : INBOUND Simons Town - Cape Town station"   the PDF banner
+#   "Cape Flats Line OUTBOUND"                                    the spreadsheet title
+#
+# Reading only the first, every spreadsheet came through as "Metrorail INBOUND", so the
+# app would have labelled a Central Line train with the operator's name instead of the
+# line a rider looks for on the platform indicator.
+_LINE = re.compile(r"#?([A-Za-z][A-Za-z ]*?)\s*Line", re.I)
 _DIRECTION = re.compile(r"\b(INBOUND|OUTBOUND)\b", re.I)
 _EFFECTIVE = re.compile(r"Effective from\s+(\d{1,2})\s+(\w+)\s+(\d{4})", re.I)
 
@@ -96,7 +103,11 @@ def route_name(grid: Grid) -> str:
     """
     stations = [canonical(s) for s in grid.stations if s]
     if len(stations) >= 2:
-        return f"{stations[0]} - {stations[-1]}"
+        # The line, then where it runs. Endpoints alone are not a name: the Central Line
+        # and the Monte Vista Line both run Bellville to Cape Town by different routes
+        # through different stations, and naming both "BELLVILLE - CAPE TOWN" merged them
+        # into one route carrying 63 trains that belong to two lines.
+        return f"{line_name(grid.heading).upper()}: {stations[0]} - {stations[-1]}"
     return line_name(grid.heading).upper()
 
 

@@ -363,7 +363,7 @@ def _read_time(img: Image.Image, box: tuple[int, int, int, int], inset_from: int
 
     This is not guessing. Every candidate is the same cell, and only a reading that is
     actually a time is accepted; if none is, the last attempt is returned as-is so the
-    checker can flag it.
+    checker can flag it - unless there was never a time there to read.
     """
     x0, y0, x1, y1 = box
     base_left, base_right = x0 - inset_from, x1 + inset_from
@@ -376,6 +376,18 @@ def _read_time(img: Image.Image, box: tuple[int, int, int, int], inset_from: int
         if got and PADDED_TIME.match(got):
             return got
         last = got or last
+
+    # Nothing but punctuation is the sheet saying this train does not call here.
+    #
+    # PRASA prints ".." in that cell. The whitelist this is read with allows digits and a
+    # colon, so two dots come back as ":" - and the checker then reported a correctly-read
+    # "no service" marker as a time that was not a time. Twenty-eight of the thirty-eight
+    # failures on one Central Line page were that, and they held the page.
+    #
+    # A reading with no digit in it cannot be a time however it is cropped, and the cell it
+    # came from is one where no train stops. Empty is what that means.
+    if not any(c.isdigit() for c in last):
+        return ""
     return last
 
 
