@@ -93,7 +93,16 @@ export async function mergedSearch(q: string, areas: string[],
     .slice(0, 6)
     .map((x) => ({ kind: 'stop', id: x.id, name: x.name, lat: x.lat, lon: x.lon,
                    mode: x.operator_kind, operator: x.operator_code }))
-  const places: Hit[] = g.results.slice(0, 3)
+  /*
+   * Every place the API ranked, not the first three.
+   *
+   * Three was cutting off the answer rather than trimming a long list. "kraaifontein"
+   * came back as the sea scout group, the high school, the night shelter and then the
+   * town of Kraaifontein itself - so the suburb, which is what almost anyone typing that
+   * word means, was the one dropped. The API orders these properly now and returns
+   * eight; the menu already scrolls, so there is room to show them.
+   */
+  const places: Hit[] = g.results
     .map((x) => ({ kind: 'place', name: x.name, lat: x.lat, lon: x.lon, sub: x.full }))
   return [...areaHits, ...stops, ...places]
 }

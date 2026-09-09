@@ -533,14 +533,13 @@ def areas():
         conn.close()
 
 
-@app.get("/api/geocode")
-def geocode_place(q: str):
-    """Geocode a place/address via OpenStreetMap Nominatim (no key). For pin input."""
+def _nominatim(q: str) -> list[dict]:
+    """One Nominatim search, or nothing where it fails."""
     import requests
 
     from .config import settings as _s
     params = {
-        "q": f"{q}, Cape Town, South Africa", "format": "json", "limit": 5,
+        "q": q, "format": "json", "limit": 10,
         "countrycodes": "za", "viewbox": "18.28,-33.40,19.12,-34.45", "bounded": 0,
     }
     try:
@@ -549,12 +548,65 @@ def geocode_place(q: str):
             params=params, headers={"User-Agent": _s.user_agent}, timeout=20,
         )
         r.raise_for_status()
-        hits = [{"name": h.get("display_name", q).split(",")[0],
-                 "full": h.get("display_name"), "lat": float(h["lat"]), "lon": float(h["lon"])}
-                for h in r.json()]
+        return r.json()
     except Exception:  # noqa: BLE001
-        hits = []
-    return {"results": hits}
+        return []
+
+
+def _rank_places(hits: list[dict], query: str) -> list[dict]:
+    """
+    The two lookups merged into the order a rider reads them in.
+
+    Nominatim's own order is not it. For "kraaifontein" it returns the town last of four,
+    behind a sea scout group, because its ranking is about how well a feature matched the
+    address hierarchy rather than about what the word most likely meant.
+    """
+    ql = query.strip().lower()
+    words = [w for w in ql.split() if w]
+    best: dict[str, tuple[float, dict]] = {}
+    for h in hits:
+        name = (h.get("name") or "").strip() or h.get("display_name", query).split(",")[0].strip()
+        nl = name.lower()
+        if nl == ql:
+            score = 1000.0
+        elif nl.startswith(ql):
+            score = 500.0
+        else:
+            score = 100.0 * sum(1 for w in words if w in nl) / len(words) if words else 0.0
+        score += float(h.get("importance") or 0.0) * 10
+
+        key = f"{h.get('osm_type', '')}/{h.get('osm_id', '')}"
+        if len(key) < 2:
+            key = f"{float(h['lat']):.5f},{float(h['lon']):.5f}"
+        if key not in best or score > best[key][0]:
+            best[key] = (score, {"name": name, "full": h.get("display_name"),
+                                 "lat": float(h["lat"]), "lon": float(h["lon"])})
+    ordered = sorted(best.values(), key=lambda p: -p[0])
+    return [place for _, place in ordered[:8]]
+
+
+@app.get("/api/geocode")
+def geocode_place(q: str):
+    """
+    Geocode a place/address via OpenStreetMap Nominatim (no key). For pin input.
+
+    Two lookups, because Nominatim answers two different questions depending on how the
+    query is punctuated. This used to append ", Cape Town, South Africa" and send that
+    alone; commas are how Nominatim is told an address hierarchy, so the suffix asks for
+    the whole of what a rider typed as one name found INSIDE Cape Town. For a suburb that
+    works - "kraaifontein, Cape Town, South Africa" returns four things standing in
+    Kraaifontein - but for a named place it is fatal: "kraaifontein shoprite, Cape Town,
+    South Africa" returns nothing while the bare "kraaifontein shoprite" finds the
+    supermarket on 1st Avenue at once.
+
+    Neither form is the better one. The bare query finds a place by its name, the suffixed
+    one finds what stands within a named suburb, and the search box needs both.
+    """
+    query = (q or "").strip()
+    if not query:
+        return {"results": []}
+    hits = _nominatim(query) + _nominatim(f"{query}, Cape Town, South Africa")
+    return {"results": _rank_places(hits, query)}
 
 
 @app.get("/api/connections")
