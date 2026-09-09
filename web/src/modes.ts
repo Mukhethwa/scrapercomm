@@ -122,8 +122,32 @@ export function useModes() {
  * first paint rather than making every rider wait on a round trip to learn that the app
  * has buses.
  */
+/**
+ * What was loaded last time this browser asked.
+ *
+ * /api/operators is a network round trip, and until it answers the chips fall back to the
+ * static list - where Metrorail is false, because that list is what a clone with no train
+ * data should believe. So every refresh greyed the Metro Rail chip out and lit it again a
+ * moment later, which reads as the app deciding whether trains work.
+ *
+ * Remembering the last answer removes the flicker without lying: a browser that has seen
+ * trains starts by assuming trains, and the fetch corrects it either way. A browser that
+ * has never seen them still starts from the static list, so a deployment without train
+ * data never shows a chip that would return nothing.
+ */
+const REMEMBERED = 'commuttr.operators'
+
+function remembered(): Set<string> | null {
+  try {
+    const raw = localStorage.getItem(REMEMBERED)
+    return raw ? new Set(JSON.parse(raw) as string[]) : null
+  } catch {
+    return null      // private window, cleared storage, a browser that refuses
+  }
+}
+
 export function useLoadedOperators() {
-  const [loaded, setLoaded] = useState<Set<string> | null>(null)
+  const [loaded, setLoaded] = useState<Set<string> | null>(remembered)
   const [names, setNames] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -131,6 +155,10 @@ export function useLoadedOperators() {
     getOperators()
       .then((r) => {
         if (!live) return
+        try {
+          localStorage.setItem(REMEMBERED, JSON.stringify(
+            r.operators.filter((o) => o.departures > 0).map((o) => o.code)))
+        } catch { /* storage is a convenience here, never a requirement */ }
         // An operator with routes but no departures has been half-loaded; it cannot
         // answer a search, so it does not count as ready.
         setLoaded(new Set(r.operators.filter((o) => o.departures > 0).map((o) => o.code)))
