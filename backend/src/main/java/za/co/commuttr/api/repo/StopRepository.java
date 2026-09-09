@@ -51,6 +51,36 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
                                @Param("prefix") String prefix,
                                @Param("maxRows") int maxRows);
 
+    /**
+     * Stops of one kind within a straight-line distance of a point, nearest first.
+     *
+     * For planning from a place rather than a stop. A bus is found by the road it drives
+     * down, which is what leg_geometry is for; a train is not, and a rider does not board
+     * one between stations. They walk to the station - so a place near a station reaches
+     * the trains that call there, and how far they walk is the whole of the story.
+     */
+    @Query(value = """
+            SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
+                   o.code AS "operatorCode", o.kind AS "operatorKind"
+            FROM stop s
+            JOIN operator o ON o.id = s.operator_id AND o.kind = :kind
+            WHERE s.lat IS NOT NULL
+              AND 6371000 * acos(least(1,
+                    cos(radians(s.lat)) * cos(radians(CAST(:lat AS double precision)))
+                      * cos(radians(CAST(:lon AS double precision)) - radians(s.lon))
+                  + sin(radians(s.lat)) * sin(radians(CAST(:lat AS double precision)))))
+                  <= CAST(:withinM AS double precision)
+            ORDER BY 6371000 * acos(least(1,
+                    cos(radians(s.lat)) * cos(radians(CAST(:lat AS double precision)))
+                      * cos(radians(CAST(:lon AS double precision)) - radians(s.lon))
+                  + sin(radians(s.lat)) * sin(radians(CAST(:lat AS double precision)))))
+            LIMIT 4
+            """, nativeQuery = true)
+    List<StopRow> findNearestOfKind(@Param("lat") double lat,
+                                    @Param("lon") double lon,
+                                    @Param("kind") String kind,
+                                    @Param("withinM") double withinM);
+
     @Query(value = """
             SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
                    o.code AS "operatorCode", o.kind AS "operatorKind"

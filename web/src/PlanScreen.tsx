@@ -219,7 +219,16 @@ export default function PlanScreen() {
    * FISH HOEK station that "no bus goes there" is a true sentence about the wrong network,
    * and it reads as though the app has not understood the question.
    */
-  const ride = s.from?.mode === 'train' ? 'train' : 'bus'
+  /*
+   * Bus or train, in the sentences on this screen.
+   *
+   * The chip first, then where the rider is standing. A place - "Buh-rein Drive" - is not
+   * an operator's stop and carries no mode, so it fell through to bus and the screen said
+   * "on one bus" with Metro Rail selected. If somebody has narrowed the screen to one
+   * operator, that is the most explicit statement of intent available and it should win.
+   */
+  const chosen = only ? MODES.find((m) => m.id === only)?.kind : undefined
+  const ride = (chosen ?? s.from?.mode) === 'train' ? 'train' : 'bus'
   const rides = `${ride}s`
 
   const groups = useMemo(() => groupByOperator(s.plan ?? []), [s.plan])

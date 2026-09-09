@@ -188,9 +188,38 @@ public class PlannerService {
     private static final int P_NAME_A = 5;
     private static final int P_NAME_B = 6;
 
+    /**
+     * How far somebody will walk to a station from a place they named.
+     *
+     * Further than to a bus stop, and deliberately so. A bus is caught wherever its road
+     * passes; a train is caught at a station, and a rider heading for one walks past
+     * several bus stops to get there. A kilometre and a half is the same distance used to
+     * say an area has trains in it, for the same reason.
+     */
+    private static final double WALK_TO_STATION_M = 1500.0;
+
     /** {@code planner._pin_anchors} */
     private Map<AnchorKey, List<Anchor>> pinAnchors(double lat, double lon, double thresholdM) {
         Map<AnchorKey, List<Anchor>> anchors = new TreeMap<>();
+
+        // Stations near the place, as well as the roads through it.
+        //
+        // A pin used to reach only what leg_geometry could find, which is the path a
+        // vehicle drives - so a place could reach buses and nothing else, whatever was
+        // standing beside it. Somebody who names KRAAIFONTEIN and asks for CAPE TOWN
+        // means the area, and both a bus and a train will take them; deciding which is
+        // theirs to make, not ours to make for them by omission.
+        //
+        // The station's own published times are used, not an interpolation: the rider
+        // boards where the timetable says, having walked there.
+        for (StopRow station : stops.findNearestOfKind(lat, lon, "train", WALK_TO_STATION_M)) {
+            double away = GeoUtils.haversineM(lat, lon, station.getLat(), station.getLon());
+            stopAnchors(station.getId()).forEach((key, list) -> list.forEach(a ->
+                    anchors.computeIfAbsent(key, k -> new ArrayList<>())
+                            .add(new Anchor(a.position(), a.minutes(), a.raw(), a.approx(),
+                                    station.getName(), away))));
+        }
+
         for (LegHitDto leg : locatePoint(lat, lon, thresholdM)) {
             double f = leg.fraction();
             for (Object[] r : stopTimes.findPinAnchors(leg.toStopId(), leg.fromStopId())) {
