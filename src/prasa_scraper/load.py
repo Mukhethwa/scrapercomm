@@ -305,7 +305,12 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
                 continue
             cur.execute(
                 "INSERT INTO stop_time (trip_id, schedule_stop_id, cell_type, "
-                "departure_time, raw_value) VALUES (%s, %s, 'time', %s, %s)",
+                # 'TIME', not 'time'. The Golden Arrow loader writes it upper case and
+                # every query that reads it compares upper case - so a lower-case value
+                # matched nothing, and no train connection was possible on any line from
+                # the day trains were added. A journey with a change is exactly what a
+                # rider needs on a network of five lines that meet at Cape Town.
+                "departure_time, raw_value) VALUES (%s, %s, 'TIME', %s, %s)",
                 (trip_id, stop_ids[ri],
                  f"{m.group(1).zfill(2)}:{m.group(2)}"
                  + (f":{m.group(3)}" if m.group(3) else ""),

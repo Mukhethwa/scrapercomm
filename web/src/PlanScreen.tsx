@@ -78,11 +78,13 @@ interface NearStop { id: number; name: string; km: number; change: boolean; lat:
  * are all Khayelitsha and one bus away. Answering the letter of the question and hiding
  * the better journey helps nobody.
  */
-function NearbyBox({ title, tone, stops, onPick }: {
+function NearbyBox({ title, tone, stops, onPick, vehicle = 'bus' }: {
   title: React.ReactNode
   tone: 'suggest' | 'plain'
   stops: NearStop[]
   onPick: (s: NearStop) => void
+  /** Bus or train, so a train rider is not offered "2 buses" to a station. */
+  vehicle?: 'bus' | 'train'
 }) {
   return (
     <div className={`p-4 ${tone === 'suggest' ? 'bg-accent text-white' : 'bg-panel shadow-sm'}`}>
@@ -99,7 +101,7 @@ function NearbyBox({ title, tone, stops, onPick }: {
           >
             <span className="text-[13px] font-bold text-ink">{r.name}</span>
             <span className="text-[11px] text-sub">
-              {away(r.km)} away - {r.change ? '2 buses' : 'direct'}
+              {away(r.km)} away - {r.change ? `2 ${vehicle}s` : 'direct'}
             </span>
           </button>
         ))}
@@ -372,7 +374,7 @@ export default function PlanScreen() {
         <div className="bg-accent-soft px-3 py-2 text-[13px] text-ink">{s.pickError}</div>
       )}
 
-      {s.loading && <div className="py-8 text-center text-[13px] text-sub">Finding buses…</div>}
+      {s.loading && <div className="py-8 text-center text-[13px] text-sub">Finding {ride}s…</div>}
 
       {!s.from && !s.loading && (
         <div className="py-8 text-center text-[13px] text-sub">
@@ -427,8 +429,10 @@ export default function PlanScreen() {
       {!s.loading && !s.connLoading && s.betterNearby.length > 0 && s.bestLegs < Infinity && (
         <NearbyBox
           tone="suggest"
-          title={<><b>Suggestion.</b> {s.to!.name} needs {s.bestLegs} bus{s.bestLegs === 1 ? '' : 'es'}, but these stops nearby are quicker to reach.</>}
+          title={<><b>Suggestion.</b> {s.to!.name} needs {s.bestLegs} {ride}
+            {s.bestLegs === 1 ? '' : 's'}, but these stops nearby are quicker to reach.</>}
           stops={s.betterNearby as unknown as NearStop[]}
+          vehicle={ride}
           onPick={(r) => s.pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}
         />
       )}
@@ -478,6 +482,7 @@ export default function PlanScreen() {
           tone="plain"
           title={<>You can reach these stops near <b>{s.to!.name}</b></>}
           stops={s.nearbyAlternatives as unknown as NearStop[]}
+          vehicle={ride}
           onPick={(r) => s.pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}
         />
       )}
