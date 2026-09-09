@@ -43,7 +43,10 @@ public class StopService {
 
         List<ReachableStopDto> reachable = stopTimes.findReachableFromStop(stopId).stream()
                 .map(r -> new ReachableStopDto(r.getId(), r.getName(), r.getLat(), r.getLon(),
-                        r.getTripCount(), r.getRouteCount()))
+                        r.getTripCount(), r.getRouteCount(),
+                        // Everything loaded before operators existed is Golden Arrow.
+                        r.getOperatorCode() == null ? "gabs" : r.getOperatorCode(),
+                        r.getOperatorKind() == null ? "bus" : r.getOperatorKind()))
                 .toList();
 
         List<ConnectingStopDto> connecting = stopTimes.findConnectingFromStop(stopId).stream()

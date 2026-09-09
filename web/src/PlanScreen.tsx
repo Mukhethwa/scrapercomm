@@ -231,6 +231,33 @@ export default function PlanScreen() {
   const ride = (chosen ?? s.from?.mode) === 'train' ? 'train' : 'bus'
   const rides = `${ride}s`
 
+  /*
+   * The same thing in a sentence, where nothing narrows it to one network.
+   *
+   * `ride` has to resolve to a single kind because the cards and icons take one, and it
+   * falls back to bus when there is nothing to go on. In prose that fallback is a claim:
+   * a place with no chip chosen told a rider "no way to get there by bus" when neither
+   * network had been ruled out, and the trains were never mentioned at all.
+   */
+  const said = chosen ? ride : (s.from?.mode ?? 'bus or train')
+  const saids = chosen ? rides : (s.from?.mode ? `${s.from.mode}s` : 'buses or trains')
+
+  /*
+   * What the destinations list actually reached, rather than a guess from the origin.
+   *
+   * The old sentence read the origin's own mode, so a place - which belongs to no
+   * operator and carries no mode - always produced "on one bus". That was a guess that
+   * happened to be a true sentence about part of the answer, which is the worst kind:
+   * standing in Kraaifontein, the Northern Line runs past and the screen said bus, so
+   * the trains looked like they did not exist. The rows themselves know, so they are
+   * asked instead.
+   */
+  const reachRide = useMemo(() => {
+    const kinds = new Set(s.filteredReach.map((r) => (r.operator_kind === 'train' ? 'train' : 'bus')))
+    if (kinds.size > 1) return 'bus or train'
+    return kinds.size === 1 ? [...kinds][0] : said
+  }, [s.filteredReach, said])
+
   const groups = useMemo(() => groupByOperator(s.plan ?? []), [s.plan])
   /** The journey-with-changes the map should draw, when there is no direct one. */
   const [chosenConn, setChosenConn] = useState<Connection | null>(null)
@@ -390,7 +417,7 @@ export default function PlanScreen() {
         <div className="bg-accent-soft px-3 py-2 text-[13px] text-ink">{s.pickError}</div>
       )}
 
-      {s.loading && <div className="py-8 text-center text-[13px] text-sub">Finding {ride}s…</div>}
+      {s.loading && <div className="py-8 text-center text-[13px] text-sub">Finding {saids}…</div>}
 
       {!s.from && !s.loading && (
         <div className="py-8 text-center text-[13px] text-sub">
@@ -412,7 +439,7 @@ export default function PlanScreen() {
               ? 'Finding destinations…'
               : <>You can reach {s.filteredReach.length} stop{s.filteredReach.length === 1 ? '' : 's'} from{' '}
                   <span className="text-accent">{s.from!.name}</span>{' '}
-                  on one {s.from!.mode === 'train' ? 'train' : 'bus'}</>}
+                  on one {reachRide}</>}
           </div>
           <div className="mb-3 text-[12px] text-sub">
             Tap one, or type any stop or place above.
@@ -428,12 +455,18 @@ export default function PlanScreen() {
                 className="flex cursor-pointer items-center gap-2 border border-line bg-block px-3 py-2.5 text-left hover:border-accent"
                 onClick={() => s.pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}
               >
+                {/* Which network gets you there. The list holds both, and two of these
+                    rows can carry one name: RETREAT the station and RETREAT the bus stop
+                    are 800m apart, exactly as in the search suggestions above. */}
+                <span className="shrink-0 bg-ink px-1 text-[9px] font-bold tracking-wide text-onink uppercase">
+                  {r.operator_kind === 'train' ? 'train' : 'bus'}
+                </span>
                 <span className="truncate text-[13px] font-semibold text-ink">{r.name}</span>
               </button>
             ))}
             {s.reachable != null && s.filteredReach.length === 0 && (
               <div className="py-4 text-center text-[13px] text-sub">
-                No direct {ride} goes to “{s.toText}” from here.
+                No direct {reachRide} goes to “{s.toText}” from here.
               </div>
             )}
           </div>
@@ -445,7 +478,7 @@ export default function PlanScreen() {
       {!s.loading && !s.connLoading && s.betterNearby.length > 0 && s.bestLegs < Infinity && (
         <NearbyBox
           tone="suggest"
-          title={<><b>Suggestion.</b> {s.to!.name} needs {s.bestLegs} {ride}
+          title={<><b>Suggestion.</b> {s.to!.name} needs {s.bestLegs} leg
             {s.bestLegs === 1 ? '' : 's'}, but these stops nearby are quicker to reach.</>}
           stops={s.betterNearby as unknown as NearStop[]}
           vehicle={ride}
@@ -455,7 +488,7 @@ export default function PlanScreen() {
 
       {s.plan && !s.loading && s.plan.length === 0 && s.connLoading && (
         <Banner tone="info" icon={Info}>
-          No direct {ride}. Looking for a journey with a change...
+          No direct {said}. Looking for a journey with a change...
         </Banner>
       )}
 
@@ -465,8 +498,8 @@ export default function PlanScreen() {
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && liveConns && liveConns.length > 0 && (
         <>
           <Banner tone="warn" icon={Warning}>
-            <b>No direct {ride}</b> from {s.from!.name} to {s.to!.name}. You can still get there by taking{' '}
-            <b>{s.connLegs} {rides}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
+            <b>No direct {said}</b> from {s.from!.name} to {s.to!.name}. You can still get there by taking{' '}
+            <b>{s.connLegs} {saids}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
           </Banner>
           <ConnectionsCard connections={liveConns} onChoose={setChosenConn} kind={ride}
             operator={s.from?.operator ?? 'gabs'}
@@ -479,7 +512,7 @@ export default function PlanScreen() {
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading
         && s.conns && s.conns.length > 0 && liveConns && liveConns.length === 0 && (
         <Banner tone="warn" icon={Warning}>
-          <b>No direct {ride}</b> from {s.from!.name} to {s.to!.name}, and the {s.connLegs}-{ride}
+          <b>No direct {said}</b> from {s.from!.name} to {s.to!.name}, and the {s.connLegs}-leg
           journey through <b>{s.conns[0].change_at.join(' then ')}</b> has finished for today.
           Choose an earlier time, or “Any time”, to see how it runs.
         </Banner>
@@ -487,8 +520,8 @@ export default function PlanScreen() {
 
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns && s.conns.length === 0 && (
         <Banner tone="bad" icon={XCircle}>
-          <b>No way to get there by {ride}.</b> There is no direct service from {s.from!.name} to{' '}
-          {s.to!.name}, and no combination of up to three {rides} connects them either.
+          <b>No way to get there by {said}.</b> There is no direct service from {s.from!.name} to{' '}
+          {s.to!.name}, and no combination of up to three {saids} connects them either.
         </Banner>
       )}
 
@@ -507,7 +540,7 @@ export default function PlanScreen() {
           stops - so this is a limit of the question, not of the network. */}
       {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns === null && (
         <Banner tone="bad" icon={XCircle}>
-          <b>No direct {ride}.</b> Journeys with a change can only be worked out between named
+          <b>No direct {said}.</b> Journeys with a change can only be worked out between named
           stops, not dropped pins.
         </Banner>
       )}
@@ -614,8 +647,8 @@ export default function PlanScreen() {
         <div className="border border-line bg-panel p-4">
           <div className="mb-3 text-[13px] font-bold text-ink">
             {s.plan.length
-              ? `On other days, the nearest stop with a direct ${ride}:`
-              : `Nearest stops with a direct ${ride} there:`}
+              ? `On other days, the nearest stop with a direct ${said}:`
+              : `Nearest stops with a direct ${said} there:`}
           </div>
           {s.altDays.map((d) => (
             <div key={d} className="mb-3 last:mb-0">
@@ -632,7 +665,7 @@ export default function PlanScreen() {
                     <span className="text-[13px] font-semibold text-ink">{o.name}</span>
                     <span className="text-[11px] text-sub">
                       {(o.distance_m / 1000).toFixed(1)} km away
-                      {o.earliest ? `, first ${ride} ${o.earliest}` : ''}, {o.trip_count} trips
+                      {o.earliest ? `, first departure ${o.earliest}` : ''}, {o.trip_count} trips
                     </span>
                   </button>
                 ))}
@@ -644,7 +677,7 @@ export default function PlanScreen() {
 
       {s.plan && !s.loading && s.plan.length === 0 && s.altDays.length === 0 && !s.connLoading && (
         <div className="px-1 text-[12px] text-sub">
-          No stop within 8 km has a direct {ride} there either.
+          No stop within 8 km has a direct {said} there either.
         </div>
       )}
 

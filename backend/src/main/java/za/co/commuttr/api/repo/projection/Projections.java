@@ -82,6 +82,16 @@ public final class Projections {
         Double getLon();
         Long getTripCount();
         Long getRouteCount();
+
+        /**
+         * Which network gets you there.
+         *
+         * A destination list can hold both, so a row that does not say which is asking a
+         * rider to guess. Null for anything loaded before operators existed, which is
+         * Golden Arrow.
+         */
+        String getOperatorCode();
+        String getOperatorKind();
     }
 
     /** Ordered stops of a schedule (timetable render payload). */

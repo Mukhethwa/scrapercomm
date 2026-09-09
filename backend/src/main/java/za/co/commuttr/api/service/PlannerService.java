@@ -702,7 +702,7 @@ public class PlannerService {
     }
 
     /**
-     * {@code planner.reachable_from} — distinct downstream stops on a single bus.
+     * {@code planner.reachable_from} — distinct downstream stops on a single vehicle.
      *
      * <p>One query, not one per bus run. See
      * {@link StopTimeRepository#findReachableFromLegs} for why.
@@ -712,16 +712,57 @@ public class PlannerService {
                 ? stopTimes.findReachableFromStop(ep.stopId())
                 : reachableFromPin(ep, thresholdM);
 
-        return rows.stream()
-                .map(r -> new DownstreamStopDto(r.getId(), r.getName(), r.getLat(), r.getLon(),
-                        r.getTripCount() == null ? 0 : r.getTripCount().intValue()))
+        // One destination, however many ways of starting found it. A place near both a
+        // road and a station reaches BELLVILLE by bus and by train, and that is one row
+        // in the list with both trips counted, not the same name printed twice.
+        Map<Integer, DownstreamStopDto> byStop = new LinkedHashMap<>();
+        for (ReachableRow r : rows) {
+            int trips = r.getTripCount() == null ? 0 : r.getTripCount().intValue();
+            byStop.merge(r.getId(),
+                    new DownstreamStopDto(r.getId(), r.getName(), r.getLat(), r.getLon(), trips,
+                            // Everything loaded before operators existed is Golden Arrow.
+                            r.getOperatorCode() == null ? "gabs" : r.getOperatorCode(),
+                            r.getOperatorKind() == null ? "bus" : r.getOperatorKind()),
+                    (a, b) -> new DownstreamStopDto(a.id(), a.name(), a.lat(), a.lon(),
+                            a.tripCount() + b.tripCount(), a.operatorCode(), a.operatorKind()));
+        }
+        return byStop.values().stream()
+                .sorted(Comparator.comparing(DownstreamStopDto::name))
                 .toList();
     }
 
+    /**
+     * Where a place can get to: what passes through it, and what stands beside it.
+     *
+     * <p>This asked only {@link #locatePoint}, which matches a point against
+     * {@code leg_geometry} — the road a vehicle drives between two consecutive stops. That
+     * is the bus network's shape and only the bus network's: a rider boards a bus at a
+     * kerb the route passes, so a pin between two stops is a real place to catch one.
+     * Rail has no such thing. A station is walked to, which is why {@link #pinAnchors}
+     * was taught to walk to the nearest one of each kind and why a journey planned from
+     * Kraaifontein offers the train.
+     *
+     * <p>This list was never taught the same thing, so the screen a rider sees BEFORE
+     * choosing a destination could only ever say "on one bus" — not because no train runs
+     * past, but because a train has no kerb to stand on. The planner and this list were
+     * answering one question two ways: plan Kraaifontein to Cape Town and the Northern
+     * Line is there; ask what Kraaifontein reaches and the line does not exist.
+     *
+     * <p>So both, at the same {@link #WALK_M} the planner walks: the stops near the point,
+     * whatever network they belong to, and the roads through it.
+     */
     private List<ReachableRow> reachableFromPin(EndpointRef ep, double thresholdM) {
+        List<ReachableRow> rows = new ArrayList<>();
+
+        for (String kind : new String[] { "train", "bus" }) {
+            for (StopRow near : stops.findNearestOfKind(ep.lat(), ep.lon(), kind, WALK_M)) {
+                rows.addAll(stopTimes.findReachableFromStop(near.getId()));
+            }
+        }
+
         List<LegHitDto> legs = locatePoint(ep.lat(), ep.lon(), thresholdM);
         if (legs.isEmpty()) {
-            return List.of();
+            return rows;
         }
         try {
             // {"a": fromStopId, "b": toStopId, "f": fractionAlongTheLeg}
@@ -729,12 +770,12 @@ public class PlannerService {
                     .map(l -> Map.<String, Object>of(
                             "a", l.fromStopId(), "b", l.toStopId(), "f", l.fraction()))
                     .toList();
-            return stopTimes.findReachableFromLegs(objectMapper.writeValueAsString(payload));
+            rows.addAll(stopTimes.findReachableFromLegs(objectMapper.writeValueAsString(payload)));
         } catch (JsonProcessingException ex) {
             log.warn("Could not encode {} matched legs for reachability: {}",
                     legs.size(), ex.toString());
-            return List.of();
         }
+        return rows;
     }
 
     /**

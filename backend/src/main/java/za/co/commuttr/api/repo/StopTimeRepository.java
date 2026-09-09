@@ -47,7 +47,9 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                    s2.lat                AS "lat",
                    s2.lon                AS "lon",
                    count(*)              AS "tripCount",
-                   count(DISTINCT r.id)  AS "routeCount"
+                   count(DISTINCT r.id)  AS "routeCount",
+                   max(o2.code)          AS "operatorCode",
+                   max(o2.kind)          AS "operatorKind"
             FROM schedule_stop ssx
             JOIN stop_time bx       ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
             JOIN stop_time byy      ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
@@ -56,6 +58,7 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
             JOIN schedule_stop ssy  ON ssy.id = byy.schedule_stop_id
                                    AND ssy.stop_sequence > ssx.stop_sequence
             JOIN stop s2            ON s2.id = ssy.stop_id
+            LEFT JOIN operator o2   ON o2.id = s2.operator_id
             JOIN schedule sc        ON sc.id = ssx.schedule_id
             JOIN timetable t        ON t.id = sc.timetable_id
             JOIN route r            ON r.id = t.route_id
@@ -371,7 +374,10 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                    s.name     AS "name",
                    s.lat      AS "lat",
                    s.lon      AS "lon",
-                   count(*)   AS "tripCount"
+                   count(*)   AS "tripCount",
+                   CAST(NULL AS bigint) AS "routeCount",
+                   max(o.code) AS "operatorCode",
+                   max(o.kind) AS "operatorKind"
             FROM anchors a
             JOIN trip tr          ON tr.schedule_id = a.schedule_id
                                  AND tr.trip_index = a.trip_index
@@ -379,6 +385,7 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
             JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
                                  AND ss.stop_sequence > a.pos
             JOIN stop s           ON s.id = ss.stop_id
+            LEFT JOIN operator o  ON o.id = s.operator_id
             GROUP BY s.id, s.name, s.lat, s.lon
             ORDER BY s.name
             """, nativeQuery = true)

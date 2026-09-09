@@ -21,6 +21,16 @@ import math
 from . import geo
 
 DEFAULT_THRESHOLD_M = 700.0  # tolerance for imprecise pins / place-search centroids
+
+# How far a rider walks to a stop they were not standing on.
+#
+# Wider than the road-leg tolerance above, and deliberately so: that one asks which
+# vehicle passes this exact point, this one asks what is within reach of it. The bus
+# network is 527 stops and something is always close; the rail network is 102 stations
+# across the whole metro, and the distance between a place and its station is a fact
+# about the network rather than about how far anyone wants to walk. Kraaifontein High
+# School is 1,834m from Kraaifontein station.
+WALK_M = 2500.0
 _DAY = {"WEEKDAY": 0, "SATURDAY": 1, "SUNDAY": 2, "PUBLIC_HOLIDAY": 3}
 
 
@@ -515,31 +525,83 @@ def reachable_from(conn, ep, threshold_m=DEFAULT_THRESHOLD_M):
     """
     if ep["kind"] == "stop":
         return _reachable_from_stop(conn, ep["stop_id"])
+
+    # What stands beside the place, as well as the roads through it.
+    #
+    # locate_point matches a point against leg_geometry - the road a vehicle drives
+    # between two consecutive stops - and that is the bus network's shape and only the
+    # bus network's. A rider boards a bus at a kerb the route passes, so a pin between
+    # two stops is a real place to catch one; a station is walked to instead. So a place
+    # could only ever reach buses, whatever else stood next to it, and the screen that
+    # answers "where can I get to from here" said "on one bus" while the Northern Line
+    # ran past the point.
+    rows = []
+    for kind in ("train", "bus"):
+        for stop_id in _nearest_of_kind(conn, ep["lat"], ep["lon"], kind, WALK_M):
+            rows += _reachable_from_stop(conn, stop_id)
+
     legs = locate_point(conn, ep["lat"], ep["lon"], threshold_m)
-    if not legs:
-        return []
-    return _reachable_from_legs(conn, legs)
+    if legs:
+        rows += _reachable_from_legs(conn, legs)
+
+    # One destination, however many ways of starting reached it.
+    merged = {}
+    for r in rows:
+        seen = merged.get(r["id"])
+        if seen is None:
+            merged[r["id"]] = dict(r)
+        else:
+            seen["trip_count"] += r["trip_count"]
+    return sorted(merged.values(), key=lambda r: r["name"])
+
+
+def _nearest_of_kind(conn, lat, lon, kind, within_m):
+    """The nearest few stops of one network within walking distance of a point."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT s.id
+        FROM stop s
+        JOIN operator o ON o.id = s.operator_id AND o.kind = %s
+        WHERE s.lat IS NOT NULL
+          AND 6371000 * acos(least(1,
+                cos(radians(s.lat)) * cos(radians(%s))
+                  * cos(radians(%s) - radians(s.lon))
+              + sin(radians(s.lat)) * sin(radians(%s)))) <= %s
+        ORDER BY 6371000 * acos(least(1,
+                cos(radians(s.lat)) * cos(radians(%s))
+                  * cos(radians(%s) - radians(s.lon))
+              + sin(radians(s.lat)) * sin(radians(%s))))
+        LIMIT 4
+        """,
+        (kind, lat, lon, lat, within_m, lat, lon, lat),
+    )
+    return [r[0] for r in cur.fetchall()]
 
 
 def _reachable_from_stop(conn, stop_id):
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT s2.id, s2.name, s2.lat, s2.lon, count(*) AS trip_count
+        SELECT s2.id, s2.name, s2.lat, s2.lon, count(*) AS trip_count,
+               coalesce(max(o2.code), 'gabs') AS operator_code,
+               coalesce(max(o2.kind), 'bus')  AS operator_kind
         FROM schedule_stop ssx
         JOIN stop_time bx      ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
         JOIN stop_time byy     ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
         JOIN schedule_stop ssy ON ssy.id = byy.schedule_stop_id
                               AND ssy.stop_sequence > ssx.stop_sequence
         JOIN stop s2           ON s2.id = ssy.stop_id
+        LEFT JOIN operator o2  ON o2.id = s2.operator_id
         WHERE ssx.stop_id = %s AND s2.id <> %s
         GROUP BY s2.id, s2.name, s2.lat, s2.lon
         ORDER BY s2.name
         """,
         (stop_id, stop_id),
     )
-    return [{"id": i, "name": n, "lat": la, "lon": lo, "trip_count": c}
-            for i, n, la, lo, c in cur.fetchall()]
+    return [{"id": i, "name": n, "lat": la, "lon": lo, "trip_count": c,
+             "operator_code": oc, "operator_kind": ok}
+            for i, n, la, lo, c, oc, ok in cur.fetchall()]
 
 
 def _reachable_from_legs(conn, legs):
@@ -571,7 +633,9 @@ def _reachable_from_legs(conn, legs):
                              AND sb.cell_type <> 'NONE'
             GROUP BY ssa.schedule_id, tr.trip_index
         )
-        SELECT s.id, s.name, s.lat, s.lon, count(*) AS trip_count
+        SELECT s.id, s.name, s.lat, s.lon, count(*) AS trip_count,
+               coalesce(max(o.code), 'gabs') AS operator_code,
+               coalesce(max(o.kind), 'bus')  AS operator_kind
         FROM anchors a
         JOIN trip tr          ON tr.schedule_id = a.schedule_id
                              AND tr.trip_index = a.trip_index
@@ -579,13 +643,15 @@ def _reachable_from_legs(conn, legs):
         JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
                              AND ss.stop_sequence > a.pos
         JOIN stop s           ON s.id = ss.stop_id
+        LEFT JOIN operator o  ON o.id = s.operator_id
         GROUP BY s.id, s.name, s.lat, s.lon
         ORDER BY s.name
         """,
         (payload,),
     )
-    return [{"id": i, "name": n, "lat": la, "lon": lo, "trip_count": c}
-            for i, n, la, lo, c in cur.fetchall()]
+    return [{"id": i, "name": n, "lat": la, "lon": lo, "trip_count": c,
+             "operator_code": oc, "operator_kind": ok}
+            for i, n, la, lo, c, oc, ok in cur.fetchall()]
 
 
 def order_by_time(stops):

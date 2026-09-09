@@ -20,13 +20,21 @@ public final class StopDtos {
 
     public record StopsResponse(List<StopDto> stops) { }
 
-    /** GET /api/stops/{id}/reachable row. */
+    /**
+     * GET /api/stops/{id}/reachable row.
+     *
+     * Carries its operator for the same reason StopDto does: a destination list can hold
+     * both networks, and a row that does not say which one gets you there leaves the
+     * rider to guess.
+     */
     public record ReachableStopDto(Integer id,
                                    String name,
                                    Double lat,
                                    Double lon,
                                    Long tripCount,
-                                   Long routeCount) { }
+                                   Long routeCount,
+                                   String operatorCode,
+                                   String operatorKind) { }
 
     /** GET /api/stops/{id}/reachable row for a destination that needs one change. */
     public record ConnectingStopDto(Integer id,
@@ -48,7 +56,9 @@ public final class StopDtos {
                                     String name,
                                     Double lat,
                                     Double lon,
-                                    Integer tripCount) { }
+                                    Integer tripCount,
+                                    String operatorCode,
+                                    String operatorKind) { }
 
     /** An unnamed lat/lon endpoint: {"kind": "pin", "lat": .., "lon": ..}. */
     public record PinDto(String kind, Double lat, Double lon) {

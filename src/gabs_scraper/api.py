@@ -247,7 +247,12 @@ def reachable(stop_id: int):
             """
             SELECT s2.id, s2.name, s2.lat, s2.lon,
                    count(*)                AS trip_count,
-                   count(DISTINCT r.id)    AS route_count
+                   count(DISTINCT r.id)    AS route_count,
+                   -- Which network gets you there. A destination list can hold both, and
+                   -- a row that does not say which leaves the rider to guess. Everything
+                   -- loaded before operators existed is Golden Arrow.
+                   coalesce(max(o2.code), 'gabs') AS operator_code,
+                   coalesce(max(o2.kind), 'bus')  AS operator_kind
             FROM schedule_stop ssx
             JOIN stop_time bx       ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
             JOIN stop_time byy      ON byy.trip_id = bx.trip_id AND byy.cell_type <> 'NONE'
@@ -256,6 +261,7 @@ def reachable(stop_id: int):
             JOIN schedule_stop ssy  ON ssy.id = byy.schedule_stop_id
                                    AND ssy.stop_sequence > ssx.stop_sequence
             JOIN stop s2            ON s2.id = ssy.stop_id
+            LEFT JOIN operator o2   ON o2.id = s2.operator_id
             JOIN schedule sc        ON sc.id = ssx.schedule_id
             JOIN timetable t        ON t.id = sc.timetable_id
             JOIN route r            ON r.id = t.route_id
