@@ -135,6 +135,16 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             JOIN leg2 l2 ON l2.x = l1.x AND l2.day_type = l1.day_type
                         AND l2.dep >= l1.arr + (:bufferMinutes * interval '1 minute')
             JOIN stop x ON x.id = l1.x
+            -- A journey nobody can be told when to leave for is not a journey.
+            --
+            -- The same rule the direct planner applies, and it belongs here more, not
+            -- less: this list is what a rider falls through to when nothing runs straight
+            -- through, so it is their whole answer. Where the timetable prints via at the
+            -- boarding stop there is no departure to give, and 18 of 26 connections
+            -- measured across ten stop pairs were exactly that - a change of bus at
+            -- Bellville, an arrival at half past six, and no way to know when to leave
+            -- home.
+            WHERE l1.dep IS NOT NULL
             -- One option per departure, best first, and every departure of the day.
             --
             -- Ordering the whole lot by journey length and taking six gave six journeys
@@ -313,6 +323,16 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                         AND l3.dep >= l2.arr + (:bufferMinutes * interval '1 minute')
             JOIN stop x1 ON x1.id = l1.x
             JOIN stop x2 ON x2.id = l2.y
+            -- A journey nobody can be told when to leave for is not a journey.
+            --
+            -- The same rule the direct planner applies, and it belongs here more, not
+            -- less: this list is what a rider falls through to when nothing runs straight
+            -- through, so it is their whole answer. Where the timetable prints via at the
+            -- boarding stop there is no departure to give, and 18 of 26 connections
+            -- measured across ten stop pairs were exactly that - a change of bus at
+            -- Bellville, an arrival at half past six, and no way to know when to leave
+            -- home.
+            WHERE l1.dep IS NOT NULL
             -- One option per departure, and the whole day of them: see the two-leg query.
             -- A three-leg journey has even more ways to make the same departure, so
             -- ranking them all together and keeping a handful covered the day even less.

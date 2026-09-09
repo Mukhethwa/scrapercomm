@@ -204,6 +204,16 @@ export function usePlanSearch(operator: string | null = null) {
   // Connections are only consulted once a direct search comes back empty.
   const [conns, setConns] = useState<Connection[] | null>(null)
   const [connLegs, setConnLegs] = useState<number | null>(null)
+  /*
+   * The stop the journey-with-a-change actually starts from.
+   *
+   * The API resolves a place to a stop it can plan from and says which one; the answer
+   * was thrown away, so the card headed itself with the operator of whatever the rider
+   * had typed. A place carries no operator and fell through to Golden Arrow - so a
+   * connection made entirely of trains was headed Golden Arrow Buses. The journey knows
+   * whose it is, and this is where it says so.
+   */
+  const [connFrom, setConnFrom] = useState<StopHit | null>(null)
   const [connLoading, setConnLoading] = useState(false)
 
   /** Add this departure to the planner, or take it off again if it is already there. */
@@ -235,12 +245,14 @@ export function usePlanSearch(operator: string | null = null) {
     setTo(null); setToText(''); setToHits([])
     setPlan(null); setReachable(null); setConnecting([]); setDayAlts({})
     setConns(null); setConnLegs(null); setOpenDep(null); setTripStops(null); setSel(0)
+    setConnFrom(null)
   }
 
   /** Empty the destination. The starting point, and what it can reach, stay. */
   function clearTo() {
     setTo(null); setToText(''); setToHits([]); setArmed(null); setPickError(null)
     setPlan(null); setDayAlts({}); setConns(null); setConnLegs(null)
+    setConnFrom(null)
     setOpenDep(null); setTripStops(null); setSel(0)
   }
 
@@ -255,6 +267,7 @@ export function usePlanSearch(operator: string | null = null) {
   function runPlan(f: Endpoint, t: Endpoint) {
     setPlan(null); setDayAlts({}); setOpenDep(null); setTripStops(null); setLoading(true)
     setConns(null); setConnLegs(null); setConnLoading(false)
+    setConnFrom(null)
     getPlan(f, t)
       .then((r) => {
         setPlan(r.options)
@@ -267,8 +280,10 @@ export function usePlanSearch(operator: string | null = null) {
         if (r.options.length === 0) {
           setConnLoading(true)
           getConnections(f, t)
-            .then((c) => { setConns(c.connections); setConnLegs(c.legs_required) })
-            .catch(() => { setConns([]); setConnLegs(null) })
+            .then((c) => {
+              setConns(c.connections); setConnLegs(c.legs_required); setConnFrom(c.from)
+            })
+            .catch(() => { setConns([]); setConnLegs(null); setConnFrom(null) })
             .finally(() => setConnLoading(false))
         }
         // The "on other days" suggestions are distance-based, so they need a located
@@ -312,6 +327,7 @@ export function usePlanSearch(operator: string | null = null) {
     setFromHits([]); setToHits([]); setArmed(null); setSel(0)
     setPlan(null); setDayAlts({}); setOpenDep(null); setTripStops(null)
     setConns(null); setConnLegs(null); setPickError(null)
+    setConnFrom(null)
     setReachable(null); setConnecting([])
 
     if (nextFrom) {
@@ -458,7 +474,7 @@ export function usePlanSearch(operator: string | null = null) {
     // results
     plan, setPlan, loading, sel, setSel,
     reachable, setReachable, connecting, setConnecting,
-    conns, connLegs, connLoading,
+    conns, connLegs, connLoading, connFrom,
     dayAlts, setDayAlts, altDays,
     // the open departure and its trip breakdown
     openDep, setOpenDep, tripStops, tripNotes, loadingTrip,

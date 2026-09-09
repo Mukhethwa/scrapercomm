@@ -62,11 +62,23 @@ public class ConnectionService {
      * The same distance the planner uses for a direct journey, because it is the same
      * walk. A journey with a change does not start further from home than a journey
      * without one.
+     *
+     * <p>Now actually the same. This said so and then set its own 1,500m while the planner
+     * walked 2,500 - so a place could reach a station directly and not reach it with a
+     * change, and the comment describing the intent was the only part that was right. It
+     * reads the planner's constant now, so the two cannot drift again.
      */
-    private static final double WALK_M = 1500.0;
+    private static final double WALK_M = PlannerService.WALK_M;
 
-    /** How many nearby stops to try for a place, nearest first. */
-    private static final int NEAR_TRIED = 3;
+    /**
+     * How many nearby stops of EACH kind to try for a place, nearest first.
+     *
+     * Per kind, because the two lists are gathered one after the other. A flat cap across
+     * both took the first six of trains-then-buses, so a place with six stations inside
+     * the radius considered no bus stop at all - and a rider reaches this list precisely
+     * when the direct search found nothing, which is when the other network matters most.
+     */
+    private static final int NEAR_TRIED = 5;
 
     public ConnectionsResponse connections(Integer fromId, Double fromLat, Double fromLon,
                                            Integer toId, Double toLat, Double toLon) {
@@ -105,9 +117,10 @@ public class ConnectionService {
         }
         List<StopRow> near = new ArrayList<>();
         for (String kind : new String[] { "train", "bus" }) {
-            near.addAll(stops.findNearestOfKind(lat, lon, kind, WALK_M));
+            near.addAll(stops.findNearestOfKind(lat, lon, kind, WALK_M).stream()
+                    .limit(NEAR_TRIED).toList());
         }
-        return near.stream().limit(NEAR_TRIED * 2L).toList();
+        return near;
     }
 
     private ConnectionsResponse between(StopRow from, StopRow to) {

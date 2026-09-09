@@ -237,7 +237,7 @@ public class PlannerService {
      * widening this without naming where they board would be answering a question they
      * did not ask.
      */
-    private static final double WALK_M = 2500.0;
+    static final double WALK_M = 2500.0;
 
     /** {@code planner._pin_anchors} */
     private Map<AnchorKey, List<Anchor>> pinAnchors(double lat, double lon, double thresholdM) {

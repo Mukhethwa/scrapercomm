@@ -501,9 +501,15 @@ export default function PlanScreen() {
             <b>No direct {said}</b> from {s.from!.name} to {s.to!.name}. You can still get there by taking{' '}
             <b>{s.connLegs} {saids}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
           </Banner>
-          <ConnectionsCard connections={liveConns} onChoose={setChosenConn} kind={ride}
-            operator={s.from?.operator ?? 'gabs'}
-            operatorName={operators.nameOf(s.from?.operator ?? 'gabs')} />
+          {/* Headed by the journey, not by what the rider typed. A place carries no
+              operator and fell through to Golden Arrow, so a connection made entirely of
+              trains was headed Golden Arrow Buses. The API says which stop it resolved
+              the place to, and that stop knows whose it is. */}
+          <ConnectionsCard connections={liveConns} onChoose={setChosenConn}
+            kind={s.connFrom?.operator_kind ?? ride}
+            operator={s.connFrom?.operator_code ?? s.from?.operator ?? 'gabs'}
+            operatorName={operators.nameOf(
+              s.connFrom?.operator_code ?? s.from?.operator ?? 'gabs')} />
         </>
       )}
 

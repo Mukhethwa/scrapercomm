@@ -111,6 +111,13 @@ FROM leg1 l1
 JOIN leg2 l2 ON l2.x = l1.x AND l2.day_type = l1.day_type
             AND l2.dep >= l1.arr + (%(buffer)s * interval '1 minute')
 JOIN stop x ON x.id = l1.x
+-- A journey nobody can be told when to leave for is not a journey.
+--
+-- The same rule the direct planner applies, and it belongs here more, not less: this
+-- list is what a rider falls through to when nothing runs straight through, so it is
+-- their whole answer. Where the timetable prints via at the boarding stop there is no
+-- departure to give.
+WHERE l1.dep IS NOT NULL
 ORDER BY total_minutes NULLS LAST, wait_minutes, l1.arr
 LIMIT %(limit)s
 """
@@ -233,6 +240,13 @@ JOIN leg3 l3 ON l3.y = l2.y AND l3.day_type = l2.day_type
             AND l3.dep >= l2.arr + (%(buffer)s * interval '1 minute')
 JOIN stop x1 ON x1.id = l1.x
 JOIN stop x2 ON x2.id = l2.y
+-- A journey nobody can be told when to leave for is not a journey.
+--
+-- The same rule the direct planner applies, and it belongs here more, not less: this
+-- list is what a rider falls through to when nothing runs straight through, so it is
+-- their whole answer. Where the timetable prints via at the boarding stop there is no
+-- departure to give.
+WHERE l1.dep IS NOT NULL
 ORDER BY total_minutes NULLS LAST, wait_minutes, l1.arr
 LIMIT %(limit)s
 """
