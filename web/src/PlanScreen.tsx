@@ -17,8 +17,9 @@ import { MODES, useLoadedOperators } from './modes'
 import {
   groupByOperator, fromTime, alightOrNone, DAY_LABEL, type DepartureBlock,
 } from './results'
+import { pinEnd } from './pins'
 import { stopLabel } from './stops'
-import { clockFace } from './times'
+import { clockFace, shortTime } from './times'
 import OperatorCard from './OperatorCard'
 import LeaveAt, { hhmm, nowMinutes } from './LeaveAt'
 import PlanMap from './PlanMap'
@@ -657,8 +658,12 @@ export default function PlanScreen() {
                     </div>
                     <div className="mt-1 text-[12px] text-sub">
                       {DAY_LABEL[openOption.day_type] ?? openOption.day_type}
-                      {openDeparture && <> · {clockFace(openDeparture.board_raw)} to{' '}
-                        {clockFace(openDeparture.arrive_raw)}</>}
+                      {/* The same mark as the departure chip above it. Printed bare, this
+                          line said "05:10 to 06:30" directly over a breakdown reading
+                          "before 06:30" - the app disagreeing with itself on one card. */}
+                      {openDeparture && <> ·{' '}
+                        {shortTime(openDeparture.board_raw, openDeparture.board_approx).text} to{' '}
+                        {shortTime(openDeparture.arrive_raw, openDeparture.arrive_approx).text}</>}
                       {openDeparture && stopLabel(openDeparture.stop_count)
                         && <> · {stopLabel(openDeparture.stop_count)}</>}
                     </div>
@@ -678,10 +683,14 @@ export default function PlanScreen() {
                     notes={s.tripNotes}
                     riderFromSeq={openDeparture?.from_seq ?? 0}
                     riderToSeq={openDeparture?.to_seq ?? 9999}
-                    boardPin={s.from?.kind === 'pin' && openOption.operator_kind !== 'train'
-                      ? { name: s.from.name, time: openDeparture?.board_raw } : null}
-                    alightPin={s.to?.kind === 'pin' && openOption.operator_kind !== 'train'
-                      ? { name: s.to.name, time: openDeparture?.arrive_raw } : null}
+                    boardPin={pinEnd({ end: s.from, label: openOption.board_label,
+                      operatorKind: openOption.operator_kind,
+                      time: openDeparture?.board_raw,
+                      approx: openDeparture?.board_approx })}
+                    alightPin={pinEnd({ end: s.to, label: openOption.alight_label,
+                      operatorKind: openOption.operator_kind,
+                      time: openDeparture?.arrive_raw,
+                      approx: openDeparture?.arrive_approx })}
                     boardTime={alightOrNone(openDeparture, 'board')}
                     alightTime={alightOrNone(openDeparture, 'alight')}
                     kind={openOption.operator_kind === 'train' ? 'train' : 'bus'}

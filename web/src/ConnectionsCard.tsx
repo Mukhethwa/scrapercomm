@@ -20,7 +20,7 @@ import { getTripStops, type Connection, type TripNote, type TripStop } from './a
 import { legToJourney } from './ConnectionsPanel'
 import { DAY_LABEL, latestBoard } from './results'
 import { rands } from './money'
-import { clockFace } from './times'
+import { clockFace, isBound, shortTime } from './times'
 import { usePlanner } from './planner'
 import TripStrip from './TripStrip'
 
@@ -89,8 +89,10 @@ function clockIn(raw: string | null | undefined): string | null {
  */
 function endLabel(raw: string | null | undefined, fallback: string | null,
                   notBefore: string | null = null): string {
-  const own = clockIn(raw)
-  if (own) return own
+  // A leg that boards at a "via" stop carries a floor - "from 05:20" - and pulling the
+  // clock out of it printed 05:20 as though the timetable said so. The tilde is the same
+  // mark the direct departures use for the same thing.
+  if (raw && clockIn(raw)) return shortTime(raw, isBound(raw)).text
   // A bound equal to the time the rider boards adds nothing, and worse, "17:00 to after
   // 17:00" hints the ride is instant. Where the bound would only repeat what they already
   // know, say plainly that no time is published.
@@ -138,7 +140,9 @@ function OptionBlock({ conn, chosen, planned, onChoose, onAdd, kind }: {
   // PRASA times its trains to the half minute, so board_raw is "06:19:00". The direct
   // departures drop the seconds at the point of display; this one printed them in the
   // largest type on the card, where it reads as a stopwatch rather than a timetable.
-  const lead = departureKnown ? clockFace(first.board_raw) : arrival
+  const lead = departureKnown
+    ? shortTime(first.board_raw, isBound(first.board_raw)).text
+    : arrival
   const under = departureKnown ? `arrives ${arrival}` : 'no published departure'
 
   return (

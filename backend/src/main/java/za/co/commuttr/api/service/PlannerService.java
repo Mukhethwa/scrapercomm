@@ -44,12 +44,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.TreeMap;
 
@@ -277,16 +275,40 @@ public class PlannerService {
                 Integer ma = ApiFormat.minutes(asTime(r[P_TIME_A]));
                 Integer mb = ApiFormat.minutes(asTime(r[P_TIME_B]));
 
+                // WHICH WAY THE BOUND POINTS, said in the value rather than left to the
+                // screen to guess.
+                //
+                // These three cases are not the same kind of number and were all written
+                // out as a bare clock, which the breakdown then prefixed with "after"
+                // because that is true of the OTHER approximate time the API sends - the
+                // "from 05:20" floor at a via stop. Kraaifontein to Woodstock came out as
+                //
+                //     Woodstock (your stop)   after 06:30
+                //     CAPE TOWN (terminus)          06:30
+                //
+                // where the pin sits on the leg INTO Cape Town and 06:30 is the terminus
+                // it has not reached yet. The rider passes their point before 06:30, and
+                // the screen told them to expect it after - the one reading the timetable
+                // rules out.
+                //
+                // So each case says what it is, in the same shape the via-stop floor
+                // already uses:
+                //
+                //   both ends timed   an interpolation between them   "about 07:12"
+                //   only the one behind   the bus has left it, not yet arrived   "from 07:05"
+                //   only the one ahead    it gets there later, so this is sooner "by 07:20"
                 Number minutes = null;
+                String raw = "via";
                 if (ma != null && mb != null) {
                     minutes = ma + f * (mb - ma);
+                    raw = "about " + ApiFormat.minutesToClock(minutes);
                 } else if (ma != null) {
                     minutes = ma;
+                    raw = "from " + ApiFormat.minutesToClock(minutes);
                 } else if (mb != null) {
                     minutes = mb;
+                    raw = "by " + ApiFormat.minutesToClock(minutes);
                 }
-
-                String raw = minutes == null ? "via" : ApiFormat.minutesToClock(minutes);
                 AnchorKey key = new AnchorKey(((Number) r[P_SCHEDULE_ID]).intValue(),
                         ((Number) r[P_TRIP_INDEX]).intValue());
                 anchors.computeIfAbsent(key, k -> new ArrayList<>())
@@ -528,8 +550,17 @@ public class PlannerService {
         String dayLabel;
         List<PlanSegmentStopDto> segmentStops;
         List<double[]> roadPath;
-        final List<PlanDepartureDto> departures = new ArrayList<>();
-        final Set<List<String>> seen = new HashSet<>();
+        /**
+         * One departure per clock the rider can read, keyed by the two times as shown.
+         *
+         * Keyed on the WORDING before, which stopped working the moment the wording
+         * started saying which way a bound points: a stop anchor printing "07:20" and a
+         * road-leg anchor printing "from 07:20" are one bus at one minute to anybody
+         * reading the screen, and became two chips side by side, one crisp and one
+         * approximate. Keying on the clock puts them back together, and
+         * {@link #moreExact} decides which of the two survives.
+         */
+        final Map<List<String>, PlanDepartureDto> departures = new LinkedHashMap<>();
         boolean boardApprox;
         boolean alightApprox;
         String boardLabel;
@@ -676,11 +707,12 @@ public class PlannerService {
                 groups.put(gkey, g);
             }
 
-            List<String> signature = Arrays.asList(c.board().raw(), c.alight().raw());
-            if (!g.seen.add(signature)) {
-                continue;
-            }
-            g.departures.add(new PlanDepartureDto(
+            // What the two ends will read as, which is what "the same departure twice"
+            // means to somebody looking at the screen.
+            List<String> signature = Arrays.asList(
+                    shownClock(c.board().minutes(), c.board().raw()),
+                    shownClock(c.alight().minutes(), c.alight().raw()));
+            PlanDepartureDto candidate = new PlanDepartureDto(
                     c.board().raw(), c.board().approx(), c.board().minutes(),
                     c.alight().raw(), c.alight().approx(), c.alight().minutes(),
                     c.key().scheduleId(), c.key().tripIndex(),
@@ -689,13 +721,16 @@ public class PlannerService {
                     (int) (c.alight().position() + 1e-6),
                     stopsBetween(served.get(c.key()),
                             Math.max(0, (int) Math.ceil(c.board().position() - 1e-6)),
-                            (int) (c.alight().position() + 1e-6))));
+                            (int) (c.alight().position() + 1e-6)));
+            g.departures.merge(signature, candidate,
+                    (kept, other) -> moreExact(other, kept) ? other : kept);
         }
 
         List<PlanOptionDto> options = new ArrayList<>(groups.size());
         Map<List<Integer>, FareDto> fareCache = new HashMap<>();
         for (PlanGroup g : groups.values()) {
-            g.departures.sort(planDepartureOrder());
+            List<PlanDepartureDto> departures = new ArrayList<>(g.departures.values());
+            departures.sort(planDepartureOrder());
             List<Integer> key = Arrays.asList(fareEndpoint(fromEp, g.segmentStops, true),
                                               fareEndpoint(toEp, g.segmentStops, false));
             FareDto fare = fareCache.computeIfAbsent(key, k -> fareFor(k.get(0), k.get(1)));
@@ -703,7 +738,7 @@ public class PlannerService {
                     g.timetableNumber, g.routeLabel,
                     g.operatorCode, g.operatorName, g.operatorKind,
                     g.dayType, g.dayLabel,
-                    g.segmentStops, g.roadPath, List.copyOf(g.departures),
+                    g.segmentStops, g.roadPath, List.copyOf(departures),
                     g.boardApprox, g.alightApprox, g.boardLabel, g.alightLabel,
                     // Below about a hundred metres there is nothing to tell somebody: they
                     // are standing at it. A named stop the rider chose themselves carries
@@ -743,6 +778,26 @@ public class PlannerService {
             return true;
         }
         return alight.minutes().doubleValue() >= board.minutes().doubleValue() - 1;
+    }
+
+    /**
+     * The clock a time will be shown as, for deciding whether two departures read alike.
+     *
+     * The minutes, not the words: a pin's bound and a stop's printed cell can name the
+     * same minute in different language, and it is the minute a rider compares.
+     */
+    private static String shownClock(Number minutes, String raw) {
+        return minutes == null ? raw : ApiFormat.minutesToClock(minutes);
+    }
+
+    /** Of two departures at the same clock, the one that guesses at fewer of its ends. */
+    private static boolean moreExact(PlanDepartureDto a, PlanDepartureDto b) {
+        return guesses(a) < guesses(b);
+    }
+
+    private static int guesses(PlanDepartureDto d) {
+        return (Boolean.TRUE.equals(d.boardApprox()) ? 1 : 0)
+             + (Boolean.TRUE.equals(d.arriveApprox()) ? 1 : 0);
     }
 
     /** Timed departures first, then in departure order. */

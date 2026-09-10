@@ -3,7 +3,14 @@ import { Info, X } from 'lucide-react'
 import type { TripNote, TripStop } from './api'
 import { longTime } from './times'
 
-export interface PinEnd { name: string; time?: string }
+/**
+ * The rider's own point on the road, where the timetable names no stop.
+ *
+ * `approx` is the departure's own flag and not a constant. It used to be hardcoded true
+ * here, so a published 05:10 walked onto the screen as "after 05:10" - a real departure
+ * dressed as a guess, one row above the same 05:10 printed plainly.
+ */
+export interface PinEnd { name: string; time?: string; approx?: boolean }
 
 /**
  * Shows the whole trip the vehicle makes (its official first stop to terminus), with the
@@ -65,8 +72,8 @@ export default function TripStrip(
   stops.forEach((s, i) => {
     // your (unofficial) boarding point goes just before the first stop at/after it
     if (boardPin && !boardInserted && s.stop_sequence >= riderFromSeq) {
-      rows.push({ name: boardPin.name, time: boardPin.time ?? '', approx: true,
-                  pin: true, role: 'board' })
+      rows.push({ name: boardPin.name, time: boardPin.time ?? '',
+                  approx: boardPin.approx ?? true, pin: true, role: 'board' })
       boardInserted = true
     }
     const isBoardStop = !boardPin && s.stop_sequence === riderFromSeq
@@ -83,8 +90,8 @@ export default function TripStrip(
     // your (unofficial) alighting point goes just after the last stop within your segment
     const next = stops[i + 1]
     if (alightPin && s.stop_sequence <= riderToSeq && (!next || next.stop_sequence > riderToSeq)) {
-      rows.push({ name: alightPin.name, time: alightPin.time ?? '', approx: true,
-                  pin: true, role: 'alight' })
+      rows.push({ name: alightPin.name, time: alightPin.time ?? '',
+                  approx: alightPin.approx ?? true, pin: true, role: 'alight' })
     }
   })
 
@@ -157,8 +164,26 @@ function TripNotes({ notes }: { notes?: TripNote[] }) {
             are the bus's official schedule.
           </p>
           <p>
-            <b>~05:30</b> means the bus cannot get there before 05:30, so be there by then and
-            allow extra, because the timetable does not say how much later it arrives.
+            Where your own stop is not one the timetable names, the time is worked out
+            from the timed stops around it, and says which way it leans:
+          </p>
+          <ul className="notelist">
+            <li>
+              <b>after 05:30</b> - the bus has left 05:30 behind, so it reaches you later
+              than that. Be there by 05:30 and allow extra.
+            </li>
+            <li>
+              <b>before 06:30</b> - it is timed at 06:30 further along, so it passes you
+              sooner than that. Be there well before.
+            </li>
+            <li>
+              <b>about 07:12</b> - stops are timed on both sides of you, so this is the
+              middle of the two, give or take.
+            </li>
+          </ul>
+          <p>
+            On a departure button there is no room for the words, and all three read
+            <b> ~07:12</b>: approximate, without saying which way.
           </p>
           <p>
             <b>"No set time"</b> means even that much is not known for your stop. The timed

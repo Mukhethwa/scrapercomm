@@ -16,6 +16,7 @@ import {
 } from './planner'
 import TripStrip from './TripStrip'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
+import { pinEnd } from './pins'
 import { stopLabel } from './stops'
 import { rands } from './money'
 
@@ -254,8 +255,12 @@ function SortableJourney(props: {
           loading={loadingStops}
           riderFromSeq={j.departure.fromSeq}
           riderToSeq={j.departure.toSeq}
-          boardPin={j.from.kind === 'pin' ? { name: j.from.name, time: j.departure.boardRaw } : null}
-          alightPin={j.to.kind === 'pin' ? { name: j.to.name, time: j.departure.arriveRaw } : null}
+          boardPin={pinEnd({ end: j.from, label: j.where?.boardLabel,
+            operatorKind: j.where?.operatorKind,
+            time: j.departure.boardRaw, approx: j.approx.board })}
+          alightPin={pinEnd({ end: j.to, label: j.where?.alightLabel,
+            operatorKind: j.where?.operatorKind,
+            time: j.departure.arriveRaw, approx: j.approx.alight })}
           boardTime={j.departure.boardRaw}
           alightTime={j.departure.arriveRaw}
         />

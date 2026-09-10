@@ -37,6 +37,16 @@ export interface SavedJourney {
     dayLabel: string
   }
   approx: { board: boolean; alight: boolean }
+  /**
+   * Where the rider joins and leaves: a stop name, or "between A and B" where they stand
+   * on the road between two. The breakdown needs it to know whether their own point is a
+   * row the timetable does not already have - see pinEnd in results.ts.
+   *
+   * Optional because journeys saved before it was recorded do not carry it. Those fall
+   * back to the timetable's own stops, which is the safe direction: a missing row is a
+   * smaller wrong than an invented one.
+   */
+  where?: { boardLabel: string; alightLabel: string; operatorKind?: string }
   departure: {
     boardRaw: string
     arriveRaw: string
@@ -91,6 +101,11 @@ export function buildJourney(
       dayLabel: option.day_label,
     },
     approx: { board: option.board_approx, alight: option.alight_approx },
+    where: {
+      boardLabel: option.board_label,
+      alightLabel: option.alight_label,
+      operatorKind: option.operator_kind,
+    },
     fare: option.fare
       ? { perRideCents: option.fare.per_ride_cents, code: option.fare.code }
       : null,

@@ -383,3 +383,164 @@ def test_every_stop_can_still_be_reached_by_naming_a_place():
 def test_an_area_is_only_offered_where_the_network_goes():
     """Ceres is a real town and no service in this database reaches it."""
     assert get("geocode", q="Ceres")["results"] == []
+
+
+# ---------------------------------------------------------------------------
+# Which way an approximate time points.
+# ---------------------------------------------------------------------------
+
+BOUND_WORDS = ("from ", "by ", "about ")
+
+
+def _minutes(clock: str) -> int:
+    h, m = clock[:5].split(":")
+    return int(h) * 60 + int(m)
+
+
+def _printed(schedule_id: int, trip_index: int) -> list[tuple[int, int]]:
+    """(stop_sequence, minutes) for every stop this trip publishes a time for."""
+    trip = get("trip_stops", schedule_id=schedule_id, trip_index=trip_index,
+               from_seq=0, to_seq=9999)
+    return [(s["stop_sequence"], _minutes(s["departure_time"]))
+            for s in trip["stops"] if s["cell_type"] == "TIME" and s["departure_time"]]
+
+
+def _bounds_in(plan) -> list[dict]:
+    """Every approximate end-time in a plan, with what the trip around it prints."""
+    out = []
+    for option in plan["options"]:
+        for d in option["departures"]:
+            for end, seq_key, label_key in (("board", "from_seq", "board_label"),
+                                            ("arrive", "to_seq", "alight_label")):
+                raw = d[f"{end}_raw"]
+                if not d[f"{end}_approx"] or ":" not in raw:
+                    continue
+                out.append({
+                    "route": option["route_label"], "label": option[label_key],
+                    "end": end, "raw": raw, "seq": d[seq_key],
+                    "printed": _printed(d["schedule_id"], d["trip_index"]),
+                })
+    return out
+
+
+def misdirected(bounds) -> list[str]:
+    """
+    Which of these bounds point away from the times the timetable prints.
+
+    A function rather than a loop inside the test, so the rule can be shown a bound that
+    IS wrong - see test_the_rule_would_have_caught_it below. An invariant nobody has
+    watched fail is an invariant nobody knows is running.
+    """
+    wrong = []
+    for b in bounds:
+        if not b["printed"]:
+            continue
+        when = _minutes(b["raw"].split(" ", 1)[1])
+        seq = b["seq"]
+        # from_seq rounds UP to the stop ahead of the rider, to_seq rounds DOWN to the
+        # one behind - so "at or behind" differs by an end.
+        if b["end"] == "board":
+            behind = [m for s, m in b["printed"] if s < seq]
+            ahead = [m for s, m in b["printed"] if s >= seq]
+        else:
+            behind = [m for s, m in b["printed"] if s <= seq]
+            ahead = [m for s, m in b["printed"] if s > seq]
+
+        if b["raw"].startswith("from ") and when not in behind:
+            wrong.append(f"{b['route']} {b['end']} {b['raw']!r} at {b['label']!r}: "
+                         f"nothing behind the rider is printed at that time "
+                         f"(behind {behind}, ahead {ahead})")
+        elif b["raw"].startswith("by ") and when not in ahead:
+            wrong.append(f"{b['route']} {b['end']} {b['raw']!r} at {b['label']!r}: "
+                         f"nothing ahead of the rider is printed at that time "
+                         f"(behind {behind}, ahead {ahead})")
+        elif b["raw"].startswith("about "):
+            if behind and when < max(behind):
+                wrong.append(f"{b['route']} {b['end']} {b['raw']!r}: earlier than "
+                             f"{max(behind)}, which the bus has already passed")
+            if ahead and when > min(ahead):
+                wrong.append(f"{b['route']} {b['end']} {b['raw']!r}: later than "
+                             f"{min(ahead)}, which the bus has not reached")
+    return wrong
+
+
+def test_the_rule_would_have_caught_it():
+    """
+    The screenshot, as data, put through the rule that now guards it.
+
+    KRAAIFONTEIN - NORTHPINE - CAPE TOWN, trip 3: CAPE GATE prints 05:10, the terminus
+    prints 06:30, and the rider's own point sits on the leg between N1 FREEWAY (stop 6)
+    and CAPE TOWN (stop 7). Calling that "from 06:30" - a floor naming a time the bus has
+    not reached - is what the app did, and reads on screen as "after 06:30" directly above
+    "CAPE TOWN 06:30".
+
+    Needs no database and no API. The point is that the rule rejects it, and goes on
+    rejecting it whether or not anything is running.
+    """
+    woodstock = {
+        "route": "KRAAIFONTEIN - NORTHPINE - CAPE TOWN",
+        "label": "between N1 FREEWAY and CAPE TOWN",
+        "end": "arrive", "seq": 6,
+        "printed": [(1, 5 * 60 + 10), (7, 6 * 60 + 30)],
+    }
+    assert misdirected([{**woodstock, "raw": "by 06:30"}]) == [], (
+        "the terminus is ahead of the rider, so a ceiling naming it is right")
+    assert misdirected([{**woodstock, "raw": "from 06:30"}]), (
+        "the bug itself: a floor naming a time the bus has not reached yet")
+    assert misdirected([{**woodstock, "raw": "about 06:45"}]), (
+        "an estimate later than a terminus it has not got to")
+    # And the ordinary via-stop floor, which must keep passing.
+    assert misdirected([{**woodstock, "raw": "from 05:10"}]) == []
+
+
+def test_an_approximate_time_says_which_way_it_leans(kraaifontein_plan):
+    """
+    A bare clock cannot be read, because there are three ways to mean one.
+
+    The API sends a floor at a via stop, a ceiling on the leg before a timed stop, and an
+    interpolation between two - and it used to send all three as "05:10", leaving the
+    screen to guess. The screen guessed "floor" every time and printed "after".
+    """
+    bare = [b for b in _bounds_in(kraaifontein_plan)
+            if not b["raw"].startswith(BOUND_WORDS)]
+    assert not bare, (
+        "approximate times with no direction on them, which the breakdown can only "
+        "guess at:\n  " + "\n  ".join(f"{b['route']} {b['end']} {b['raw']!r}" for b in bare))
+
+
+def test_a_bound_names_a_time_on_the_side_it_claims(kraaifontein_plan):
+    """
+    The bug Mukhethwa saw: "Woodstock (your stop) after 06:30" above "CAPE TOWN 06:30".
+
+    His words were "time to depart cannot be same time or before or after next stop", and
+    he was right: 06:30 is the terminus the bus has not reached yet, so the rider passes
+    Woodstock BEFORE it, and the screen said after. The clock was the right number with
+    the wrong word in front of it, which is why nothing that checks times caught it.
+
+    So this checks the word against the timetable. A "from" must name a printed time the
+    bus has already left; a "by" must name one it has not reached. Anything else is the
+    two swapped.
+    """
+    wrong = misdirected(_bounds_in(kraaifontein_plan))
+    assert not wrong, ("approximate times pointing the wrong way:\n  "
+                       + "\n  ".join(wrong))
+
+
+def test_a_rider_is_never_offered_the_same_clock_twice(kraaifontein_plan):
+    """
+    Two chips reading 07:20, one crisp and one approximate, are one bus to a reader.
+
+    They used to be told apart by their wording, so the moment a bound started saying
+    "from 07:20" it stopped matching the stop that prints "07:20" and both appeared. The
+    dedupe now keys on the clock, which is what a rider compares.
+    """
+    dupes = []
+    for option in kraaifontein_plan["options"]:
+        seen = set()
+        for d in option["departures"]:
+            pair = (d["board_raw"].split(" ")[-1], str(d["arrive_raw"]).split(" ")[-1])
+            if pair in seen:
+                dupes.append(f"{option['route_label']}: {pair[0]} to {pair[1]}")
+            seen.add(pair)
+    assert not dupes, "the same two clocks offered twice on one route:\n  " + \
+                      "\n  ".join(dupes)

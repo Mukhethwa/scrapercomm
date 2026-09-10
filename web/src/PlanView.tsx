@@ -19,6 +19,7 @@ import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
 import { usePlanSearch } from './usePlanSearch'
 import { alightOrNone } from './results'
+import { pinEnd } from './pins'
 
 const DAY_LABEL: Record<string, string> = {
   WEEKDAY: 'Mon-Fri', SATURDAY: 'Saturday', SUNDAY: 'Sunday',
@@ -487,10 +488,14 @@ export default function PlanView() {
                         stops={tripStops} loading={loadingTrip} notes={tripNotes}
                         riderFromSeq={o.departures[openDep.di]?.from_seq ?? 0}
                         riderToSeq={o.departures[openDep.di]?.to_seq ?? 9999}
-                        boardPin={from?.kind === 'pin' && o.operator_kind !== 'train'
-                          ? { name: from.name, time: o.departures[openDep.di]?.board_raw } : null}
-                        alightPin={to?.kind === 'pin' && o.operator_kind !== 'train'
-                          ? { name: to.name, time: o.departures[openDep.di]?.arrive_raw } : null}
+                        boardPin={pinEnd({ end: from, label: o.board_label,
+                          operatorKind: o.operator_kind,
+                          time: o.departures[openDep.di]?.board_raw,
+                          approx: o.departures[openDep.di]?.board_approx })}
+                        alightPin={pinEnd({ end: to, label: o.alight_label,
+                          operatorKind: o.operator_kind,
+                          time: o.departures[openDep.di]?.arrive_raw,
+                          approx: o.departures[openDep.di]?.arrive_approx })}
                         boardTime={alightOrNone(o.departures[openDep.di], 'board')}
                         alightTime={alightOrNone(o.departures[openDep.di], 'alight')}
                         kind={o.operator_kind === 'train' ? 'train' : 'bus'}
