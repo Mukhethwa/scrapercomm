@@ -116,41 +116,49 @@
   "stops": {
     "ATLANTIS (bus) -> CAPE TOWN (bus)": {
       "direct": 2,
+      "fare": 5250,
       "first": "05:30",
       "with_a_change": 7
     },
     "BUH REIN (bus) -> BELLVILLE (bus)": {
       "direct": 0,
+      "fare": null,
       "first": null,
       "with_a_change": 3
     },
     "BUH REIN (bus) -> SPEKENAM (bus)": {
       "direct": 0,
+      "fare": null,
       "first": null,
       "with_a_change": 0
     },
     "CAPE GATE (bus) -> CAPE TOWN (bus)": {
       "direct": 2,
+      "fare": null,
       "first": "05:10",
       "with_a_change": 1
     },
     "FISH HOEK (train) -> CAPE TOWN (train)": {
       "direct": 2,
+      "fare": 1200,
       "first": "04:45:00",
       "with_a_change": 40
     },
     "GUGULETU (bus) -> KENRIDGE (bus)": {
       "direct": 0,
+      "fare": null,
       "first": null,
       "with_a_change": 9
     },
     "KRAAIFONTEIN (train) -> CAPE TOWN (train)": {
       "direct": 1,
+      "fare": 1200,
       "first": "04:30:00",
       "with_a_change": 26
     },
     "WYNBERG (bus) -> CAPE TOWN (bus)": {
       "direct": 0,
+      "fare": null,
       "first": null,
       "with_a_change": null
     }

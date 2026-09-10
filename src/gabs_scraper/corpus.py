@@ -150,6 +150,11 @@ def snapshot() -> dict:
             "direct": len(plan["options"]) if plan else None,
             "with_a_change": len(conns["connections"]) if conns else None,
             "first": first_departure(plan["options"] if plan else []),
+            # The price, because it is money and it changes for reasons nobody intended:
+            # a fare table reloaded, a band boundary moved, a column read wrongly off a
+            # scan. A journey quietly becoming two rand dearer is exactly the kind of
+            # thing this exists to notice.
+            "fare": fare_of(plan["options"] if plan else []),
         }
 
     for q in SEARCHES:
@@ -157,6 +162,15 @@ def snapshot() -> dict:
         out["searches"][q] = [x["name"] for x in answer["results"]] if answer else None
 
     return out
+
+
+def fare_of(options: list) -> int | None:
+    """The price the app would put on this journey, in cents, or None if it shows none."""
+    for option in options:
+        fare = option.get("fare")
+        if fare and fare.get("cash_cents") is not None:
+            return fare["cash_cents"]
+    return None
 
 
 def first_departure(options: list) -> str | None:
@@ -179,7 +193,8 @@ def compare(old: dict, new: dict) -> list[str]:
                 continue
             for field, label in (("options", "options"), ("direct", "direct journeys"),
                                  ("with_a_change", "journeys with a change"),
-                                 ("by_bus", "by bus"), ("by_train", "by train")):
+                                 ("by_bus", "by bus"), ("by_train", "by train"),
+                                 ("fare", "the fare, in cents")):
                 if field not in was or was[field] == now.get(field):
                     continue
                 before_n, after_n = was[field], now.get(field)

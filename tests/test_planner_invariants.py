@@ -227,6 +227,65 @@ def test_a_repaired_stop_does_not_land_on_another_stop():
                          "geocoder answered with the town: " + "; ".join(clashes[:10]))
 
 
+def test_a_price_on_screen_is_a_price_somebody_pays(kraaifontein_plan):
+    """
+    Every fare the app shows is a cash fare or a train ticket, never a Gold Card price.
+
+    The app led with the five-ride price divided by five for months. It is the right
+    number for nobody: a card holder has already bought their rides and does not price a
+    journey, and a cash payer is charged something else - R18.00 against R26.80 between
+    Bellville and Welgemoed. The card figures still come through the API, because the
+    fare table holds them; what must not happen is one reaching a screen.
+    """
+    # What the operators actually publish. A price on screen has to be one of these; a
+    # number arrived at by dividing a card product is not, and that is the whole test.
+    PRASA_SINGLES = {1000, 1200, 1400, 1500}
+
+    for option in kraaifontein_plan["options"]:
+        fare = option.get("fare")
+        if not fare or fare.get("cash_cents") is None:
+            # No cash fare means the app shows no price at all, which is intended.
+            continue
+        cash = fare["cash_cents"]
+        if option["operator_kind"] == "train":
+            assert cash in PRASA_SINGLES, (
+                f"a train fare of {cash} is not one of PRASA's four published singles")
+        else:
+            # Golden Arrow's cash fares are whole or half rands off a printed notice,
+            # never a fifth of a card product - R134/5 = R26.80 would fail this.
+            assert cash % 50 == 0, (
+                f"a bus cash fare of {cash} is not a published figure; the card price "
+                f"divided by five looks exactly like this")
+
+
+def test_a_train_journey_carries_the_whole_ticket_range():
+    """
+    Metrorail sells four tickets for one journey and the detail view lists them.
+
+    Unlike Golden Arrow's card products these are choices a rider makes at the window, so
+    a missing one is a missing option rather than clutter removed.
+    """
+    stops = get("stops", q="", limit=5000)["stops"]
+    trains = {s["name"]: s["id"] for s in stops if s["operator_kind"] == "train"}
+    a, b = trains.get("KRAAIFONTEIN"), trains.get("CAPE TOWN")
+    if not (a and b):
+        pytest.skip("stations not in this database")
+
+    options = get("plan", **{"from": a, "to": b})["options"]
+    fares = [o["fare"] for o in options if o.get("fare")]
+    assert fares, "a train journey between two stations must have a fare"
+    fare = fares[0]
+
+    for field in ("cash_cents", "return_cents", "weekly_cents",
+                  "weekly_sat_cents", "monthly_cents"):
+        assert fare.get(field), f"a train fare is missing {field}"
+
+    assert fare["return_cents"] == fare["cash_cents"] * 2, "a return is two singles"
+    assert fare["weekly_cents"] > fare["return_cents"], "a week costs more than a return"
+    assert fare["monthly_cents"] > fare["weekly_sat_cents"], "a month costs more than a week"
+    assert fare["distance_km"], "the band comes from the distance, so it must be carried"
+
+
 def test_the_search_box_offers_areas_and_not_buildings():
     """
     A pin becomes a journey by matching the road a bus drives, so naming a school claims
