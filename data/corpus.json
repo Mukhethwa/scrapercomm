@@ -1,10 +1,10 @@
 {
   "places": {
     "Bellville -> Cape Town CBD": {
-      "by_bus": 16,
+      "by_bus": 19,
       "by_train": 3,
-      "first": "04:46:00",
-      "options": 19
+      "first": "04:56:00",
+      "options": 22
     },
     "Bellville -> Khayelitsha": {
       "by_bus": 14,
@@ -13,22 +13,22 @@
       "options": 14
     },
     "Bellville -> Kraaifontein": {
-      "by_bus": 1,
+      "by_bus": 4,
       "by_train": 1,
       "first": "05:00:00",
-      "options": 2
-    },
-    "Bellville -> Mitchells Plain": {
-      "by_bus": 5,
-      "by_train": 0,
-      "first": "07:10",
       "options": 5
     },
+    "Bellville -> Mitchells Plain": {
+      "by_bus": 6,
+      "by_train": 0,
+      "first": "07:10",
+      "options": 6
+    },
     "Bellville -> Woodstock": {
-      "by_bus": 21,
+      "by_bus": 25,
       "by_train": 3,
-      "first": "04:46:00",
-      "options": 24
+      "first": "04:56:00",
+      "options": 28
     },
     "Cape Town CBD -> Khayelitsha": {
       "by_bus": 21,
@@ -49,10 +49,10 @@
       "options": 26
     },
     "Cape Town CBD -> Woodstock": {
-      "by_bus": 167,
+      "by_bus": 169,
       "by_train": 8,
       "first": "03:25:00",
-      "options": 175
+      "options": 177
     },
     "Khayelitsha -> Kraaifontein": {
       "by_bus": 3,
@@ -61,21 +61,21 @@
       "options": 3
     },
     "Khayelitsha -> Mitchells Plain": {
-      "by_bus": 2,
+      "by_bus": 3,
       "by_train": 2,
-      "first": "04:59:00",
-      "options": 4
+      "first": "05:06:00",
+      "options": 5
     },
     "Khayelitsha -> Woodstock": {
-      "by_bus": 15,
+      "by_bus": 16,
       "by_train": 2,
       "first": "04:30",
-      "options": 17
+      "options": 18
     },
     "Kraaifontein -> Mitchells Plain": {
       "by_bus": 1,
       "by_train": 0,
-      "first": "15:40b",
+      "first": "from 15:40",
       "options": 1
     },
     "Kraaifontein -> Woodstock": {
@@ -85,10 +85,10 @@
       "options": 6
     },
     "Mitchells Plain -> Woodstock": {
-      "by_bus": 38,
+      "by_bus": 40,
       "by_train": 2,
       "first": "04:10",
-      "options": 40
+      "options": 42
     }
   },
   "searches": {

@@ -17,6 +17,7 @@ this samples the network rather than sweeping it - the sweeps live in their own 
 from __future__ import annotations
 
 import json
+import math
 import urllib.parse
 import urllib.request
 
@@ -544,3 +545,145 @@ def test_a_rider_is_never_offered_the_same_clock_twice(kraaifontein_plan):
             seen.add(pair)
     assert not dupes, "the same two clocks offered twice on one route:\n  " + \
                       "\n  ".join(dupes)
+
+
+# ---------------------------------------------------------------------------
+# Getting on and off where the rider asked.
+# ---------------------------------------------------------------------------
+
+# Two suburbs a kilometre apart, both with a station, and the pair that showed what
+# happens when the walking radius reaches past the destination.
+ROSEBANK = (-33.9520, 18.4720)
+MOWBRAY = (-33.9470, 18.4740)
+WOODSTOCK = (-33.9270, 18.4450)
+
+
+def metres(a, b) -> float:
+    lat1, lon1, lat2, lon2 = map(math.radians, (a[0], a[1], b[0], b[1]))
+    inner = (math.sin(lat1) * math.sin(lat2)
+             + math.cos(lat1) * math.cos(lat2) * math.cos(lon2 - lon1))
+    return 6371000 * math.acos(max(-1.0, min(1.0, inner)))
+
+
+def ends_that_miss_a_nearer_stop(plan, origin, destination, trip_stops) -> list[str]:
+    """
+    Options that ride past a stop nearer to what the rider searched than the one used.
+
+    A function so it can be shown an answer that IS wrong - see the pure test below.
+    `trip_stops` is passed in rather than fetched, for the same reason.
+    """
+    apart = metres(origin, destination)
+    wrong = []
+    for o in plan["options"]:
+        d = (o["departures"] or [None])[0]
+        if d is None:
+            continue
+        stops = {s["stop_sequence"]: s for s in trip_stops(d["schedule_id"], d["trip_index"])
+                 if s.get("lat") is not None}
+        board_m = o["board_away_m"] or 0
+        alight_m = o["alight_away_m"] or 0
+
+        # Boarding earlier on the run than a stop nearer to where the rider is.
+        for q, s in stops.items():
+            if d["from_seq"] < q < d["to_seq"]:
+                near = metres(origin, (s["lat"], s["lon"]))
+                if near < board_m - 50:
+                    wrong.append(f"{o['route_label']}: boards {o['board_label']} "
+                                 f"{round(board_m)}m from the origin, then passes "
+                                 f"{s['name']} at {round(near)}m")
+        # Getting off before a stop nearer to where they are going.
+        for q, s in stops.items():
+            if q > d["to_seq"]:
+                near = metres(destination, (s["lat"], s["lon"]))
+                if near < alight_m - 50:
+                    wrong.append(f"{o['route_label']}: alights {o['alight_label']} "
+                                 f"{round(alight_m)}m from the destination, then goes on "
+                                 f"to {s['name']} at {round(near)}m")
+        # Walking further to reach it than the whole journey is long.
+        if board_m >= apart:
+            wrong.append(f"{o['route_label']}: {round(board_m)}m to reach "
+                         f"{o['board_label']}, further than the {round(apart)}m journey")
+        if alight_m >= apart:
+            wrong.append(f"{o['route_label']}: set down {round(alight_m)}m away, "
+                         f"further than the {round(apart)}m journey")
+    return wrong
+
+
+def test_the_rule_catches_an_answer_that_rides_past_the_stop_asked_for():
+    """
+    Kraaifontein to Woodstock, as it answered: off at SALT RIVER with WOODSTOCK next.
+
+    Needs neither database nor API. The rule has to go on rejecting this, or the live
+    check below is only asserting that the app still runs.
+    """
+    salt_river = (-33.9270, 18.4650)
+    woodstock = (-33.9270, 18.4450)
+    stops = [
+        {"stop_sequence": 20, "name": "SALT RIVER", "lat": salt_river[0], "lon": salt_river[1]},
+        {"stop_sequence": 21, "name": "WOODSTOCK", "lat": woodstock[0], "lon": woodstock[1]},
+    ]
+    plan = {"options": [{
+        "route_label": "Northern Line INBOUND", "board_label": "KRAAIFONTEIN",
+        "alight_label": "SALT River", "board_away_m": 1054,
+        "alight_away_m": round(metres(WOODSTOCK, salt_river)),
+        "departures": [{"schedule_id": 1, "trip_index": 0, "from_seq": 0, "to_seq": 20}],
+    }]}
+    assert ends_that_miss_a_nearer_stop(plan, KRAAIFONTEIN, WOODSTOCK,
+                                        lambda s, t: stops), (
+        "alighting at Salt River with Woodstock one stop further on must be rejected")
+
+    # And the same answer, corrected, must pass.
+    plan["options"][0]["alight_label"] = "WOODSTOCK"
+    plan["options"][0]["alight_away_m"] = round(metres(WOODSTOCK, woodstock))
+    plan["options"][0]["departures"][0]["to_seq"] = 21
+    assert ends_that_miss_a_nearer_stop(plan, KRAAIFONTEIN, WOODSTOCK,
+                                        lambda s, t: stops) == []
+
+
+def test_the_rule_catches_walking_past_the_destination_to_board():
+    """
+    Rosebank to Mowbray, as it answered: 1.5km to OBSERVATORY for a journey of 1km.
+
+    Whatever the timetable says, a rider told to walk further than the whole trip before
+    boarding has been given an answer they cannot use.
+    """
+    plan = {"options": [{
+        "route_label": "Southern Line OUTBOUND", "board_label": "OBSERVATORY",
+        "alight_label": "MOWBRAY", "board_away_m": 1915, "alight_away_m": 174,
+        "departures": [{"schedule_id": 1, "trip_index": 0, "from_seq": 3, "to_seq": 4}],
+    }]}
+    assert ends_that_miss_a_nearer_stop(plan, ROSEBANK, MOWBRAY, lambda s, t: []), (
+        "boarding 1.9km away on a 1km journey must be rejected")
+
+
+@pytest.mark.parametrize("name,origin,destination", [
+    ("Kraaifontein to Woodstock", KRAAIFONTEIN, WOODSTOCK),
+    ("Rosebank to Mowbray", ROSEBANK, MOWBRAY),
+    ("Kraaifontein to the CBD", KRAAIFONTEIN, CBD),
+])
+def test_a_journey_gets_on_and_off_where_the_rider_asked(name, origin, destination):
+    """
+    The ends of a journey must match the ends of the search.
+
+    Mukhethwa's words: "on and off should match what i searched". Both of the answers he
+    found were built the same way - each end chosen by where it falls on the TRIP rather
+    than by how near it is to the place he named - so both are checked here, along with a
+    long journey where the walking radius cannot reach past either end.
+    """
+    plan = get("plan", from_lat=origin[0], from_lon=origin[1],
+               to_lat=destination[0], to_lon=destination[1])
+    if not plan["options"]:
+        pytest.skip(f"no direct journey for {name}")
+
+    seen: dict = {}
+
+    def trip_stops(schedule_id, trip_index):
+        key = (schedule_id, trip_index)
+        if key not in seen:
+            seen[key] = get("trip_stops", schedule_id=schedule_id, trip_index=trip_index,
+                            from_seq=0, to_seq=9999)["stops"]
+        return seen[key]
+
+    wrong = ends_that_miss_a_nearer_stop(plan, origin, destination, trip_stops)
+    assert not wrong, (f"{name} answers with ends the rider did not ask for:\n  "
+                       + "\n  ".join(sorted(set(wrong))[:12]))

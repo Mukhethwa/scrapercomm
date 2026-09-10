@@ -618,24 +618,99 @@ public class PlannerService {
         Map<AnchorKey, List<Anchor>> board = endpointAnchors(fromEp, thresholdM);
         Map<AnchorKey, List<Anchor>> alight = endpointAnchors(toEp, thresholdM);
 
-        // Candidate journeys per bus run: earliest board, first alight after it.
+        // Candidate journeys per bus run: the pair of ends that walks the rider least.
+        //
+        // This was "earliest board, first alight after it" - both ends picked by where
+        // they fall on the TRIP, and neither by how near they are to what the rider
+        // actually searched for. Once a place could walk to any stop within 2.5km, that
+        // stopped being a detail and started answering different questions:
+        //
+        //   Kraaifontein to Woodstock   got off at SALT RIVER, 1,381m from Woodstock,
+        //                               with WOODSTOCK itself two minutes further on at
+        //                               651m - because Salt River comes first.
+        //   Rosebank to Mowbray         got off at ROSEBANK - the rider's own origin -
+        //                               for the same reason, and on the outbound service
+        //                               boarded at OBSERVATORY, 1.5km away, which means
+        //                               walking PAST Mowbray to ride back to it.
+        //
         // Iteration follows the natural (schedule, trip) order rather than Python's
         // set-intersection order, which makes the grouping deterministic run to run.
         record Candidate(AnchorKey key, Anchor board, Anchor alight) { }
         List<Candidate> candidates = new ArrayList<>();
+
+        // How far it is to simply walk, which is as far as either end may ask.
+        //
+        // Rosebank and Mowbray are a kilometre apart, and the stations of both are within
+        // walking distance of both places, so the planner could pair them either way
+        // round. It offered the way round that has the rider walk 1.5km to OBSERVATORY -
+        // past Mowbray - to ride one stop back to it. Nothing about the stops makes that
+        // a journey: they would already have walked further than the whole distance
+        // before boarding.
+        //
+        // Per end rather than on the two added together, which was tried first and takes
+        // too much: it removed the Rosebank train outright, on a journey where the train
+        // is a fair thing to want. An end further away than the destination itself is
+        // absurd on its own terms; two ordinary walks that happen to sum past it are
+        // merely a poor option, and {@code leastWalk} below already prefers better ones.
+        double apart = straightLineBetween(fromEp, toEp);
 
         for (Map.Entry<AnchorKey, List<Anchor>> entry : board.entrySet()) {
             List<Anchor> alightAnchors = alight.get(entry.getKey());
             if (alightAnchors == null) {
                 continue;
             }
-            Anchor b = earliestByPosition(entry.getValue());
-            Anchor a = alightAnchors.stream()
-                    .filter(x -> x.position() > b.position() && timeConsistent(b, x))
-                    .min(Comparator.comparingDouble(Anchor::position))
-                    .orElse(null);
-            if (a != null) {
-                candidates.add(new Candidate(entry.getKey(), b, a));
+            // How far from the DESTINATION each point on this run is, for the stops near
+            // enough to it to have been measured. Two anchors on one run are the same
+            // stop exactly when they sit at the same position, so this reads across from
+            // one end's anchors to the other's without carrying stop ids about.
+            Map<Double, Double> towardsEnd = new HashMap<>();
+            for (Anchor a : alightAnchors) {
+                towardsEnd.merge(a.position(), a.distanceM(), Math::min);
+            }
+
+            Candidate best = null;
+            double leastWalk = Double.MAX_VALUE;
+            for (Anchor b : entry.getValue()) {
+                // A stop the timetable gives no time for, and that no earlier timed stop
+                // sets a floor from, is not somewhere a rider can be told to stand - and
+                // the grouping below drops such a departure outright. Choosing one here
+                // therefore does not produce a worse journey, it produces none: the
+                // nearer stop wins the pairing and the whole service disappears.
+                //
+                // Vasco to Groenheuwel lost all three of its Wellington buses this way,
+                // to a stop 400m nearer that the timetable only prints "via" against.
+                if (b.minutes() == null || b.distanceM() >= apart) {
+                    continue;
+                }
+                // Where the rider already is, measured against where they are going. A
+                // boarding point out of range of the destination is not in here at all,
+                // which means it is further off than anything they could alight at.
+                Double startsFrom = towardsEnd.get(b.position());
+                for (Anchor a : alightAnchors) {
+                    if (a.position() <= b.position() || !timeConsistent(b, a)
+                            || a.distanceM() >= apart) {
+                        continue;
+                    }
+                    // The ride has to close the gap it was asked to close. Boarding at
+                    // MOWBRAY and riding to a point 596m from Mowbray is a real ride and
+                    // is not this rider's: it sets them down further from the place they
+                    // named than the stop they got on at.
+                    if (startsFrom != null && a.distanceM() >= startsFrom) {
+                        continue;
+                    }
+                    double walk = b.distanceM() + a.distanceM();
+                    // Ties go to the earliest ends, which is what this did before and
+                    // keeps a single-anchor journey answering exactly as it always has.
+                    if (best == null || walk < leastWalk - 1e-9
+                            || (walk < leastWalk + 1e-9
+                                && earlier(b, a, best.board(), best.alight()))) {
+                        best = new Candidate(entry.getKey(), b, a);
+                        leastWalk = walk;
+                    }
+                }
+            }
+            if (best != null) {
+                candidates.add(best);
             }
         }
 
@@ -768,8 +843,43 @@ public class PlannerService {
         return n;
     }
 
-    private static Anchor earliestByPosition(List<Anchor> anchors) {
-        return anchors.stream().min(Comparator.comparingDouble(Anchor::position)).orElseThrow();
+    /**
+     * How far apart the two ends of the search are, on foot as the crow flies.
+     *
+     * A stop the rider chose themselves has no coordinates on the reference and is
+     * looked up; it also walks them nowhere, so the ceiling only ever binds the other
+     * end. Where a coordinate cannot be had at all the ceiling lifts rather than guesses,
+     * because refusing journeys on a distance nobody knows would be worse than the fault
+     * it prevents.
+     */
+    private double straightLineBetween(EndpointRef from, EndpointRef to) {
+        double[] a = coordsOf(from);
+        double[] b = coordsOf(to);
+        if (a == null || b == null) {
+            return Double.MAX_VALUE;
+        }
+        return GeoUtils.haversineM(a[0], a[1], b[0], b[1]);
+    }
+
+    private double[] coordsOf(EndpointRef ep) {
+        if (ep.lat() != null && ep.lon() != null) {
+            return new double[] { ep.lat(), ep.lon() };
+        }
+        if (ep.stopId() == null) {
+            return null;
+        }
+        return stops.findRowById(ep.stopId())
+                .filter(r -> r.getLat() != null && r.getLon() != null)
+                .map(r -> new double[] { r.getLat(), r.getLon() })
+                .orElse(null);
+    }
+
+    /** Between two equally-short walks, the pair that boards - then alights - soonest. */
+    private static boolean earlier(Anchor board, Anchor alight, Anchor thanBoard, Anchor thanAlight) {
+        if (board.position() != thanBoard.position()) {
+            return board.position() < thanBoard.position();
+        }
+        return alight.position() < thanAlight.position();
     }
 
     /** Alighting must not predate boarding by more than the one-minute rounding slack. */
