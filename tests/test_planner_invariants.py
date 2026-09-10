@@ -318,6 +318,21 @@ def test_the_chip_and_the_suggestions_agree():
         assert present in names, f"{present} vanished from an unfiltered search"
 
 
+def test_words_nobody_chose_are_not_a_place():
+    """
+    The app plans between places it knows, and typing is not choosing.
+
+    A rider typed "random place" into the destination box and the screen answered "No
+    direct bus or train goes to random place from here" - a claim about the network,
+    about somewhere that does not exist. The API is the half that can be asserted here:
+    a query matching nothing must return nothing, so there is never a place for the
+    screen to plan to.
+    """
+    for nonsense in ("random place", "zzz nowhere", "asdfghjkl"):
+        results = get("geocode", q=nonsense)["results"]
+        assert results == [], f"{nonsense!r} was offered as a place: {results}"
+
+
 def test_a_place_is_offered_once():
     """
     OpenStreetMap maps Atlantis as a node and again as an outline.

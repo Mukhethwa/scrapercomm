@@ -438,9 +438,27 @@ export default function PlanScreen() {
 
       {s.loading && <div className="py-8 text-center text-[13px] text-sub">Finding {saids}…</div>}
 
-      {!s.from && !s.loading && (
+      {!s.from && !s.loading && !s.typingFrom && (
         <div className="py-8 text-center text-[13px] text-sub">
-          Search a stop or place to start planning.
+          Search for a place to start planning.
+        </div>
+      )}
+
+      {/* Words in a box are not a destination.
+          A rider typed "random place" and the screen answered "No direct bus or train
+          goes to random place from here" - a statement about the network, about somewhere
+          that does not exist. The app can only plan between places it knows, so when the
+          text is not one of them it says what to do rather than inventing an answer. */}
+      {(s.typingFrom || s.typingTo) && !s.loading && (
+        <div className="border border-line bg-panel px-4 py-6 text-center">
+          <div className="text-[13px] font-bold text-ink">
+            Choose a place from the list
+          </div>
+          <div className="mt-1 text-[12px] text-sub">
+            Commuttr plans between places it knows, so “{(s.typingFrom ? s.fromText : s.toText).trim()}”
+            has to be picked from the suggestions as you type
+            {only ? <> — and this one is narrowed to {operators.nameOf(only)}</> : null}.
+          </div>
         </div>
       )}
 
@@ -451,7 +469,7 @@ export default function PlanScreen() {
         * name of a stop for anything to happen. This list answers "I am here - where can
         * this take me", which is how somebody who does not know the network starts.
         */}
-      {s.stage === 'reachable' && (
+      {s.stage === 'reachable' && !s.typingTo && (
         <div className="border border-line bg-panel p-4">
           <div className="mb-1 text-[14px] font-bold text-ink">
             {s.reachable == null
@@ -461,7 +479,7 @@ export default function PlanScreen() {
                   on one {reachRide}</>}
           </div>
           <div className="mb-3 text-[12px] text-sub">
-            Tap one, or type any stop or place above.
+            Tap one, or search for a place above.
           </div>
           <div className="flex flex-col gap-1">
             {s.filteredReach.slice(0, 40).map((r) => (
@@ -485,7 +503,8 @@ export default function PlanScreen() {
             ))}
             {s.reachable != null && s.filteredReach.length === 0 && (
               <div className="py-4 text-center text-[13px] text-sub">
-                No direct {reachRide} goes to “{s.toText}” from here.
+                Nothing runs from here on a single {reachRide}. Try a journey with a
+                change by choosing a destination above.
               </div>
             )}
           </div>

@@ -203,12 +203,30 @@ export function usePlanSearch(operator: string | null = null) {
   }
 
   useEffect(() => {
+    /*
+     * Typing over a chosen place un-chooses it.
+     *
+     * Without this the box and the answer drift apart: pick Cape Town, type "random
+     * place" over it, and the screen keeps planning from Cape Town while the field says
+     * something else. A journey has to be to somewhere the app can name, and the only way
+     * it learns a name is a rider tapping one.
+     */
+    if (from && from.name !== debFrom) {
+      setFrom(null)
+      setPlan(null); setReachable(null); setConnecting([]); setDayAlts({})
+      setConns(null); setConnLegs(null); setConnFrom(null)
+    }
     if (!debFrom || (from && from.name === debFrom)) { setFromHits([]); return }
     mergedSearch(debFrom, operatorKind).then(setFromHits)
       .catch(() => setFromHits([]))
   }, [debFrom, operatorKind]) // eslint-disable-line
 
   useEffect(() => {
+    if (to && to.name !== debTo) {
+      setTo(null)
+      setPlan(null); setDayAlts({}); setConns(null); setConnLegs(null); setConnFrom(null)
+      setOpenDep(null); setTripStops(null); setSel(0)
+    }
     if (!from || !debTo || (to && to.name === debTo)) { setToHits([]); return }
     mergedSearch(debTo, operatorKind).then(setToHits)
       .catch(() => setToHits([]))
@@ -342,11 +360,17 @@ export function usePlanSearch(operator: string | null = null) {
 
   const modes = useModes()
 
-  const filteredReach = useMemo(() => {
-    if (!reachable) return []
-    const q = toText.trim().toLowerCase()
-    return q ? reachable.filter((r) => r.name.toLowerCase().includes(q)) : reachable
-  }, [reachable, toText])
+  /*
+   * Everywhere this origin reaches, unfiltered.
+   *
+   * It used to be narrowed by whatever was in the destination box, which turned free text
+   * into a search over a list it has nothing to do with: the box offers places and this
+   * list holds stops. Typing "random place" emptied it and the screen then said "You can
+   * reach 0 stops from Cape Town" and "No direct bus or train goes to random place" -
+   * two statements about the network, neither of them true, both caused by a word nobody
+   * had chosen.
+   */
+  const filteredReach = reachable ?? []
 
   /**
    * Places near the chosen destination that CAN be reached from here.
@@ -399,10 +423,16 @@ export function usePlanSearch(operator: string | null = null) {
     [nearbyAlternatives, bestLegs],
   )
 
-  const filteredConnecting = useMemo(() => {
-    const q = toText.trim().toLowerCase()
-    return q ? connecting.filter((r) => r.name.toLowerCase().includes(q)) : connecting
-  }, [connecting, toText])
+  const filteredConnecting = connecting
+
+  /**
+   * A field holds words that are not a place the app knows.
+   *
+   * Which is not an error - it is what typing looks like before the rider taps something -
+   * so the screen says what to do rather than answering a question nobody asked.
+   */
+  const typingFrom = !from && fromText.trim().length > 0
+  const typingTo = Boolean(from) && !to && toText.trim().length > 0
 
   const stage = !from ? 'from' : !to ? 'reachable' : 'journeys'
   /**
@@ -456,7 +486,7 @@ export function usePlanSearch(operator: string | null = null) {
     // map
     mapOpen, setMapOpen, armed, setArmed, onMapClick, segment, roadPath, ride,
     // errors and stage
-    pickError, setPickError, stage,
+    pickError, setPickError, stage, typingFrom, typingTo,
     // derived suggestions
     filteredReach, filteredConnecting, nearbyAlternatives, betterNearby, bestLegs,
     // actions
