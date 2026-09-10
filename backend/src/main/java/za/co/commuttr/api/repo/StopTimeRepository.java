@@ -73,9 +73,33 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
      * already reaches. Without this the app only ever offered the handful of stops on
      * one bus - six, from a stop like BUH REIN - so a rider had no way to discover that
      * MALMESBURY is perfectly reachable by changing at CAPE TOWN.
+     *
+     * <p>It must not offer what the connections engine will then refuse. It did: the app
+     * listed SPEKENAM as reachable from BUH REIN with a change, and choosing it produced
+     * "No way to get there by bus". Both were right about their own question. This one
+     * asked whether an interchange exists; the engine asked whether a rider could actually
+     * make it, and on the only trips that join those two stops the timetable prints no
+     * time at BUH REIN and none anywhere before it - so there is nothing to tell a rider
+     * about when to be there, and nothing to build a journey from.
+     *
+     * <p>An offer the app withdraws when taken up is worse than a shorter list, so the
+     * first leg is held to the same test here: a printed departure, or a floor derived
+     * from the last printed time before it.
      */
     @Query(value = """
-            WITH direct AS (
+            WITH floors AS (
+                SELECT st.trip_id, ss.stop_sequence,
+                       max(st.departure_time) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time
+                FROM (SELECT DISTINCT st2.trip_id
+                      FROM stop_time st2
+                      JOIN schedule_stop ss2 ON ss2.id = st2.schedule_stop_id
+                      WHERE ss2.stop_id = :stopId AND st2.cell_type <> 'NONE') m
+                JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
+                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+            ),
+            direct AS (
                 SELECT DISTINCT ssy.stop_id AS mid
                 FROM schedule_stop ssx
                 JOIN stop_time bx  ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
@@ -84,7 +108,10 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                                        OR byy.departure_time >= bx.departure_time)
                 JOIN schedule_stop ssy ON ssy.id = byy.schedule_stop_id
                                       AND ssy.stop_sequence > ssx.stop_sequence
+                LEFT JOIN floors f ON f.trip_id = bx.trip_id
+                                  AND f.stop_sequence = ssx.stop_sequence
                 WHERE ssx.stop_id = :stopId
+                  AND COALESCE(bx.departure_time, f.prior_time) IS NOT NULL
             )
             SELECT s2.id                   AS "id",
                    s2.name                 AS "name",

@@ -151,6 +151,39 @@ def test_a_stop_with_no_printed_times_still_reaches_the_network():
             "and it must still say when to be at the first stop")
 
 
+def test_the_app_does_not_offer_what_it_will_then_refuse():
+    """
+    Whatever the app lists as reachable with a change, it must actually deliver.
+
+    Mukhethwa clicked SPEKENAM out of the "you can reach these stops near BELLVILLE" list
+    and got "No way to get there by bus". Both answers were right about their own
+    question: the list asked whether an interchange exists, the engine asked whether a
+    rider could make the journey. On the only trips joining BUH REIN to SPEKENAM the
+    timetable prints no time at BUH REIN and none anywhere before it, so there is nothing
+    to tell a rider about when to be there.
+
+    An offer the app withdraws when taken up is worse than a shorter list.
+
+    Sampled, not swept: each destination is a separate query and there are 171 of them.
+    """
+    stops = get("stops", q="", limit=5000)["stops"]
+    by_name = {s["name"]: s["id"] for s in stops if s["operator_kind"] == "bus"}
+    origin = by_name.get("BUH REIN")
+    if not origin:
+        pytest.skip("sample stop not in this database")
+
+    offered = get(f"stops/{origin}/reachable")["connecting"]
+    assert offered, "BUH REIN should reach plenty with one change"
+
+    refused = []
+    for destination in offered[::20]:
+        answer = get("connections", **{"from": origin, "to": destination["id"]})
+        if not answer["connections"]:
+            refused.append(destination["name"])
+    assert not refused, ("offered as reachable with a change and then refused: "
+                         + ", ".join(refused))
+
+
 def test_a_repaired_stop_does_not_land_on_another_stop():
     """
     A re-geocoded stop must not come to rest on top of a different one.

@@ -126,12 +126,18 @@ def snapshot() -> dict:
                 continue
             print(f"  {name} -> {other}", flush=True)
             plan = get("plan", from_lat=lat, from_lon=lon, to_lat=olat, to_lon=olon)
-            options = plan["options"] if plan else []
+            # null, not zero. A question the app could not answer in time is not the same
+            # answer as "nothing runs", and recording it as 0 would let a journey that
+            # timed out today look identical to one that never existed - the corpus
+            # reporting "nothing changed" about the very thing it is here to notice.
+            options = plan["options"] if plan else None
             out["places"][f"{name} -> {other}"] = {
-                "options": len(options),
-                "by_bus": sum(1 for o in options if o["operator_kind"] == "bus"),
-                "by_train": sum(1 for o in options if o["operator_kind"] == "train"),
-                "first": first_departure(options),
+                "options": len(options) if options is not None else None,
+                "by_bus": sum(1 for o in options if o["operator_kind"] == "bus")
+                          if options is not None else None,
+                "by_train": sum(1 for o in options if o["operator_kind"] == "train")
+                            if options is not None else None,
+                "first": first_departure(options or []),
             }
 
     for a, akind, b, bkind in STOP_PAIRS:
@@ -174,10 +180,18 @@ def compare(old: dict, new: dict) -> list[str]:
             for field, label in (("options", "options"), ("direct", "direct journeys"),
                                  ("with_a_change", "journeys with a change"),
                                  ("by_bus", "by bus"), ("by_train", "by train")):
-                if field in was and was[field] != now.get(field):
-                    arrow = "LOST" if now.get(field, 0) < was[field] else "gained"
-                    notes.append(f"  {arrow:<8} {key}: {label} "
-                                 f"{was[field]} -> {now.get(field)}")
+                if field not in was or was[field] == now.get(field):
+                    continue
+                before_n, after_n = was[field], now.get(field)
+                if after_n is None:
+                    notes.append(f"  TIMEOUT  {key}: {label} was {before_n}, "
+                                 f"no answer in time")
+                elif before_n is None:
+                    notes.append(f"  answered {key}: {label} now {after_n}, "
+                                 f"previously no answer in time")
+                else:
+                    arrow = "LOST" if after_n < before_n else "gained"
+                    notes.append(f"  {arrow:<8} {key}: {label} {before_n} -> {after_n}")
             if was.get("first") != now.get("first"):
                 notes.append(f"  changed  {key}: first departure "
                              f"{was.get('first')} -> {now.get('first')}")

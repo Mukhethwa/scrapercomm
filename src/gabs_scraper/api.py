@@ -280,7 +280,25 @@ def reachable(stop_id: int):
         # lists do not repeat each other.
         cur.execute(
             """
-            WITH direct AS (
+            -- The first leg is held to the same test the connections engine applies:
+            -- a printed departure, or a floor from the last printed time before it.
+            -- Without it this list offered SPEKENAM from BUH REIN and the engine then
+            -- refused it, because on the only trips joining those two the timetable
+            -- prints no time at BUH REIN and none anywhere before it. An offer the app
+            -- withdraws when taken up is worse than a shorter list.
+            WITH floors AS (
+                SELECT st.trip_id, ss.stop_sequence,
+                       max(st.departure_time) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time
+                FROM (SELECT DISTINCT st2.trip_id
+                      FROM stop_time st2
+                      JOIN schedule_stop ss2 ON ss2.id = st2.schedule_stop_id
+                      WHERE ss2.stop_id = %s AND st2.cell_type <> 'NONE') m
+                JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
+                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+            ),
+            direct AS (
                 SELECT DISTINCT ssy.stop_id AS mid
                 FROM schedule_stop ssx
                 JOIN stop_time bx  ON bx.schedule_stop_id = ssx.id AND bx.cell_type <> 'NONE'
@@ -289,7 +307,10 @@ def reachable(stop_id: int):
                                        OR byy.departure_time >= bx.departure_time)
                 JOIN schedule_stop ssy ON ssy.id = byy.schedule_stop_id
                                       AND ssy.stop_sequence > ssx.stop_sequence
+                LEFT JOIN floors f ON f.trip_id = bx.trip_id
+                                  AND f.stop_sequence = ssx.stop_sequence
                 WHERE ssx.stop_id = %s
+                  AND COALESCE(bx.departure_time, f.prior_time) IS NOT NULL
             )
             SELECT s2.id, s2.name, s2.lat, s2.lon, count(DISTINCT d.mid) AS change_count
             FROM direct d
@@ -307,7 +328,7 @@ def reachable(stop_id: int):
             GROUP BY s2.id, s2.name, s2.lat, s2.lon
             ORDER BY s2.name
             """,
-            (stop_id, stop_id),
+            (stop_id, stop_id, stop_id),
         )
         return {"origin": origin[0], "reachable": direct, "connecting": _rows(cur)}
     finally:
