@@ -54,6 +54,24 @@ export default function FarePanel(
   const perLeg = kind === 'per_leg'
   const through = kind === 'through'
 
+  /*
+   * The cash fare, where Golden Arrow publishes one.
+   *
+   * Only 21 routes have it, so this is null far more often than not - and that is the
+   * honest shape of the data rather than a gap worth filling. Dated, because these took
+   * effect in August 2025 and the card fares moved again a year later, so a rider should
+   * read it as the last published figure and not as today's.
+   */
+  const cash = (fare as Fare).cash_cents ?? null
+  const cashDate = (() => {
+    const raw = (fare as Fare).cash_effective_from
+    if (!raw) return null
+    const d = new Date(raw)
+    return Number.isNaN(d.getTime())
+      ? raw
+      : d.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+  })()
+
   return (
     <div className="farebox">
       <div className="fareline">
@@ -81,10 +99,18 @@ export default function FarePanel(
           {perLeg && tickets
             ? <>for all {tickets} {mode === 'train' ? 'trains' : 'buses'}. </>
             : null}
-          {mode === 'bus' && (
-            <><b>Golden Arrow Gold Card</b> price. Cash is <b>higher at peak times</b>,
-            lower off-peak.</>
-          )}
+          {/* Cash where the operator publishes it, and the card price named as such
+              where they do not. Most riders pay cash, and the number above has always
+              been the Gold Card price - correct, and not what they hand the driver.
+              Golden Arrow prints a cash fare for 21 routes and directs everyone else to
+              phone, so this says which of the two a rider is looking at. */}
+          {mode === 'bus' && (cash != null
+            ? <><b>Golden Arrow Gold Card</b> price. Cash on this route is{' '}
+              <b>{rands(cash)}</b>{cashDate ? <> as at {cashDate}</> : null}, and differs
+              between peak and off-peak.</>
+            : <><b>Golden Arrow Gold Card</b> price. Cash is <b>higher at peak times</b>,
+              lower off-peak, and Golden Arrow does not publish a cash fare for this
+              route.</>)}
         </span>
         {(fare as Fare).zone_approx && (
           <span className="faretag area" title="Published for the surrounding area, not this exact stop">

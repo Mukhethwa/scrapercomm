@@ -190,7 +190,9 @@ public class ConnectionService {
                 r[3] == null ? null : ((Number) r[3]).intValue(),
                 r[4] == null ? null : ((Number) r[4]).intValue(),
                 (String) r[5], (String) r[6], (String) r[7], (String) r[8],
-                r[9] != null && (Boolean) r[9]);
+                r[9] != null && (Boolean) r[9],
+                r.length > 10 && r[10] != null ? ((Number) r[10]).intValue() : null,
+                r.length > 11 ? (String) r[11] : null);
     }
 
     /**

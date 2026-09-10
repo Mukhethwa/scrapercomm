@@ -88,7 +88,19 @@ public final class PlanDtos {
                           String basisTo,
                           /** The stop is not itself named on the fare page and was
                            *  priced as part of the surrounding area. */
-                          Boolean zoneApprox) { }
+                          Boolean zoneApprox,
+                          /**
+                           * What a cash passenger pays, where the operator publishes it.
+                           *
+                           * Null for all but 21 routes, and not a gap that can be filled
+                           * by arithmetic: Golden Arrow charges one card price for
+                           * Atlantis to Cape Town and for Darling to Cape Town, and
+                           * R52.50 against R85.50 in cash. Every other number on this
+                           * record is a Gold Card price.
+                           */
+                          Integer cashCents,
+                          /** When that cash fare took effect, so the app can date it. */
+                          String cashEffectiveFrom) { }
 
     public record PlanOptionDto(String timetableNumber,
                                 String routeLabel,

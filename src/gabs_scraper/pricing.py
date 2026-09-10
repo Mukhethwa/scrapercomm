@@ -51,6 +51,12 @@ CREATE TABLE IF NOT EXISTS journey_fare (
     -- this exact stop is ours, and the app says so.
     zone_approx     BOOLEAN NOT NULL DEFAULT FALSE,
     computed_at     TIMESTAMPTZ,
+    -- What a cash passenger pays, where Golden Arrow publishes it - which is for 21
+    -- routes and nowhere else. It cannot be derived from the columns above: the operator
+    -- charges one card price for Atlantis to Cape Town and for Darling to Cape Town, and
+    -- R52.50 against R85.50 in cash. See gabs_scraper.cash_fares.
+    cash_cents          INTEGER,
+    cash_effective_from DATE,
     PRIMARY KEY (from_stop_id, to_stop_id)
 );
 """
@@ -280,10 +286,47 @@ def compute(conn) -> dict:
     return counts
 
 
+def apply_cash_fares(conn) -> int:
+    """
+    Fill in the cash fare for every journey between two areas that have one published.
+
+    Done as one statement after the fact rather than threaded through the pricing loop,
+    because it answers a different question from a different source. The loop asks what
+    the Gold Card costs; this asks what a cash passenger hands the driver, and the two are
+    not related by any rule - see the module docstring of gabs_scraper.cash_fares.
+
+    Either way round: the notice prints "Bellville to Cape Town" and a rider going the
+    other way pays the same.
+    """
+    cur = conn.cursor()
+    cur.execute("SELECT to_regclass(%s)", ("public.cash_fare",))
+    if cur.fetchone()[0] is None:
+        return 0
+
+    cur.execute(
+        """
+        UPDATE journey_fare jf
+        SET cash_cents = cf.cash_cents,
+            cash_effective_from = cf.effective_from
+        FROM fare_zone_stop a, fare_zone_stop b, cash_fare cf
+        WHERE a.stop_id = jf.from_stop_id
+          AND b.stop_id = jf.to_stop_id
+          AND ((lower(cf.origin_zone) = lower(a.zone)
+                AND lower(cf.destination_zone) = lower(b.zone))
+            OR (lower(cf.origin_zone) = lower(b.zone)
+                AND lower(cf.destination_zone) = lower(a.zone)))
+        """
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 def run() -> dict:
     conn = db.connect()
     try:
-        return compute(conn)
+        counts = compute(conn)
+        counts["cash"] = apply_cash_fares(conn)
+        return counts
     finally:
         conn.close()
 
@@ -295,3 +338,6 @@ if __name__ == "__main__":
     print(f"journey pairs priced : {c['pairs']}")
     for k in ("go_easy", "exact", "section", "route", "none"):
         print(f"  {k:8}: {c[k]:6}  ({100 * c[k] / max(total, 1):.1f}%)")
+    print(f"with a published cash fare : {c.get('cash', 0)}  "
+          f"({100 * c.get('cash', 0) / max(c['pairs'], 1):.1f}% - the rest are not "
+          f"published anywhere)")

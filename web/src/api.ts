@@ -201,6 +201,15 @@ export interface Fare {
   basis_to: string | null
   /** The stop is not named on the fare page; the fare is the one for its area. */
   zone_approx: boolean
+  /**
+   * What a cash passenger pays, for the 21 routes Golden Arrow publishes a cash fare
+   * for. Null everywhere else - it is published nowhere else, and cannot be worked out
+   * from the card price: one card fare covers both Atlantis and Darling to Cape Town,
+   * which cost R52.50 and R85.50 in cash.
+   */
+  cash_cents: number | null
+  /** The date that cash fare took effect, so the app can say how old it is. */
+  cash_effective_from: string | null
 }
 
 export interface PlanDeparture {

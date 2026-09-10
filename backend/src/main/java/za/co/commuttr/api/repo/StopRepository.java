@@ -151,7 +151,11 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
      */
     @Query(value = """
             SELECT code, per_ride_cents, five_ride_cents, weekly_cents, monthly_cents,
-                   transfers, basis, basis_from, basis_to, zone_approx
+                   transfers, basis, basis_from, basis_to, zone_approx,
+                   -- What a cash passenger pays, for the 21 routes Golden Arrow prints a
+                   -- cash fare for. Null everywhere else, because it is published nowhere
+                   -- else and cannot be worked out from the card price.
+                   cash_cents, CAST(cash_effective_from AS text)
             FROM journey_fare
             WHERE from_stop_id = :fromId AND to_stop_id = :toId
             """, nativeQuery = true)
