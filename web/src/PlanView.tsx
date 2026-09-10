@@ -13,7 +13,7 @@ import { useModes } from './modes'
 import { buildJourney, usePlanner } from './planner'
 import { shortTime, boundIsUseful, NO_TIME } from './times'
 import { stopLabel } from './stops'
-import { rands } from './money'
+import { rands, plural } from './money'
 import { ArrowRightLeft, CircleCheck, CircleX, Info, Lightbulb, TriangleAlert, X } from 'lucide-react'
 import ConnectionsPanel from './ConnectionsPanel'
 import { PinIcon } from './icons'
@@ -105,7 +105,7 @@ export default function PlanView() {
 
   // Bus or train, taken from where the rider is standing - see PlanScreen for why.
   const vehicle = from?.mode === 'train' ? 'train' : 'bus'
-  const vehicles = `${vehicle}s`
+  const vehicles = plural(vehicle)
 
   return (
     <div className="planwrap">
@@ -448,8 +448,11 @@ export default function PlanView() {
                                       <DepTime raw={d.arrive_raw} approx={d.arrive_approx}
                                         useful={boundIsUseful(d.arrive_minutes, d.arrive_approx, d.board_minutes)} />
                                     </span>
-                                    {o.fare?.per_ride_cents != null && (
-                                      <span className="depfare">{rands(o.fare.per_ride_cents)}</span>
+                                    {/* Cash only, as everywhere else. A card price is
+                                        not what a cash payer is charged and a card holder
+                                        has already bought their rides. */}
+                                    {o.fare?.cash_cents != null && (
+                                      <span className="depfare">{rands(o.fare.cash_cents)}</span>
                                     )}
                                   </button>
                                   {/* The stop count shares the row with Add, so a rider

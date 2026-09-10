@@ -212,7 +212,8 @@ public class ConnectionService {
             return new ConnectionFareDto("through", 1, through.perRideCents(),
                     through.fiveRideCents(), through.weeklyCents(), through.monthlyCents(),
                     through.code(), through.transfers(), through.basis(),
-                    through.basisFrom(), through.basisTo(), through.zoneApprox());
+                    through.basisFrom(), through.basisTo(), through.zoneApprox(),
+                    through.cashCents(), through.cashEffectiveFrom());
         }
         int total = 0;
         for (ConnectionLegDto leg : legs) {
@@ -223,11 +224,20 @@ public class ConnectionService {
         }
         boolean approx = legs.stream()
                 .anyMatch(l -> l.fare() != null && Boolean.TRUE.equals(l.fare().zoneApprox()));
+        // The cash total, and only when every leg has one. A journey where two buses
+        // publish a cash fare and the third does not has no cash price, the same way it
+        // has no card price - a sum missing a leg is not a total.
+        Integer cash = sumOver(legs, FareDto::cashCents);
+        String cashFrom = legs.stream()
+                .map(l -> l.fare() == null ? null : l.fare().cashEffectiveFrom())
+                .filter(java.util.Objects::nonNull)
+                .findFirst().orElse(null);
         return new ConnectionFareDto("per_leg", legs.size(), total,
                 sumOver(legs, FareDto::fiveRideCents),
                 sumOver(legs, FareDto::weeklyCents),
                 sumOver(legs, FareDto::monthlyCents),
-                null, null, "per_leg", null, null, approx);
+                null, null, "per_leg", null, null, approx,
+                cash, cash == null ? null : cashFrom);
     }
 
     /** A ticket per bus means buying each product once per bus. */

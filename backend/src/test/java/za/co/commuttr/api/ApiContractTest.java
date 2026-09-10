@@ -157,9 +157,12 @@ class ApiContractTest {
                 List.of(new ConnectionDto("WEEKDAY", List.of("CAPE TOWN"),
                         List.of(leg1, leg2), 290, 425,
                         new ConnectionFareDto("per_leg", 2, 7180, null, null, null,
-                                null, null, "per_leg", null, null, false)))));
+                                null, null, "per_leg", null, null, false,
+                                // A cash total exists only when every leg has one.
+                                6000, "2025-08-11")))));
 
         mvc.perform(get("/api/connections").param("from", "24696").param("to", "3370"))
+                // Cash is the only price the app shows now, so it has to reach the client.
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.from.name").value("MALMESBURY"))
                 .andExpect(jsonPath("$.legs_required").value(2))

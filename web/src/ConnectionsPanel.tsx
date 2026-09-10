@@ -81,11 +81,11 @@ function LegDetail({ leg, onClose, throughTicket, mode = 'bus' }:
           Covered by the one ticket for the whole journey - there is nothing extra to pay
           for this leg.
         </div>
-      ) : leg.fare?.per_ride_cents != null ? (
+      ) : leg.fare?.cash_cents != null ? (
         <div className="connlegfarenote">
-          This leg costs <b>{rands(leg.fare.per_ride_cents)}</b> a ride
+          This leg costs <b>{rands(leg.fare.cash_cents)}</b> in cash
           {mode === 'train' ? '.' : (
-            <> on a Golden Arrow Gold Card. Cash is higher at peak times, lower off-peak.</>
+            <>. Golden Arrow charges more at peak times (16:00 to 08:00), less off-peak.</>
           )}
         </div>
       ) : null}
@@ -152,9 +152,9 @@ export default function ConnectionsPanel(
               </div>
               <div className="conntotals">
                 <span className="conntotal">{duration(c.total_minutes)}</span>
-                {c.fare?.per_ride_cents != null && (
+                {c.fare?.cash_cents != null && (
                   <span className="connfare">
-                    {rands(c.fare.per_ride_cents)}
+                    {rands(c.fare.cash_cents)}
                     <span className={`connfarelbl ${c.fare.kind === 'through' ? 'once' : 'many'}`}>
                       {c.fare.kind === 'through'
                         ? ' pay once'
@@ -190,8 +190,8 @@ export default function ConnectionsPanel(
                         <b>{l.board_raw}</b>
                         <span className="connlegdash">to</span>
                         <b>{l.arrive_raw}</b>
-                        {c.fare?.kind === 'per_leg' && l.fare?.per_ride_cents != null && (
-                          <span className="connlegfare">{rands(l.fare.per_ride_cents)}</span>
+                        {c.fare?.kind === 'per_leg' && l.fare?.cash_cents != null && (
+                          <span className="connlegfare">{rands(l.fare.cash_cents)}</span>
                         )}
                       </span>
                       <ChevronDown size={14} aria-hidden="true"

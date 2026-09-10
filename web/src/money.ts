@@ -11,12 +11,39 @@ import type { Fare } from './api'
 /** Rides each product carries. Straight off the operator's product page. */
 export const RIDES = { five: 5, weekly: 10, monthly: 48 }
 
+/**
+ * "bus" pluralises to "buses", not "buss".
+ *
+ * Three components each built the plural by appending an s, which is right for "trains"
+ * and wrong for the word it is used for most. One function so the next one to need it
+ * cannot get it wrong again.
+ */
+export const plural = (vehicle: string) => (vehicle === 'bus' ? 'buses' : `${vehicle}s`)
+
 /** GO Easy is the flat fare: one price for any journey, wherever it goes. */
 export const isFlat = (basis: string) => basis === 'go_easy'
 
 export function rands(cents: number | null | undefined): string | null {
   if (cents == null) return null
   return `R${(cents / 100).toFixed(2)}`
+}
+
+/**
+ * The price to show a rider: the cash fare, or nothing.
+ *
+ * Gold Card prices are not shown anywhere any more. They were what the app led with -
+ * the five-ride price divided by five - and they are the wrong number for almost
+ * everybody: a card holder has already paid for five rides and does not care what one
+ * costs, while a cash payer hands over something else entirely. Mukhethwa: "only cash
+ * price should be displayed because thats what users would actually care for who want
+ * to compare with train prices".
+ *
+ * Golden Arrow publishes a cash fare for 21 routes, so this is null far more often than
+ * not, and null means the screen says nothing rather than something misleading. Showing
+ * no price is a smaller failure than showing a price nobody will be charged.
+ */
+export function cashFare(fare: { cash_cents?: number | null } | null | undefined) {
+  return rands(fare?.cash_cents ?? null)
 }
 
 /** Per-ride cost of each product, cheapest last, for the breakdown. */

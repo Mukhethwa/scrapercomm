@@ -121,7 +121,9 @@ function OptionBlock({ conn, chosen, planned, onChoose, onAdd, kind }: {
 }) {
   const first = conn.legs[0]
   const last = conn.legs[conn.legs.length - 1]
-  const fare = rands(conn.fare?.per_ride_cents)
+  // Cash or nothing, like everywhere else. A Gold Card total on a journey with a change
+  // is doubly wrong for a cash payer: the wrong price, added up the wrong number of times.
+  const fare = rands(conn.fare?.cash_cents ?? null)
   /**
    * What goes in the big type.
    *
@@ -356,8 +358,8 @@ export default function ConnectionsCard({ connections, onChoose, kind = 'bus',
                 {endLabel(l.board_raw, knownBy(conn, i - 1))} to{' '}
                 {endLabel(l.arrive_raw, knownBy(conn, i), clockIn(l.board_raw))}
               </span>
-              {l.fare?.per_ride_cents != null && (
-                <span className="text-[11px] text-sub">{rands(l.fare.per_ride_cents)}</span>
+              {l.fare?.cash_cents != null && (
+                <span className="text-[11px] text-sub">{rands(l.fare.cash_cents)}</span>
               )}
             </span>
           </button>
@@ -375,10 +377,10 @@ export default function ConnectionsCard({ connections, onChoose, kind = 'bus',
               Covered by the one ticket for the whole journey, so there is nothing extra to
               pay for this leg.
             </div>
-          ) : legOpen.fare?.per_ride_cents != null ? (
+          ) : legOpen.fare?.cash_cents != null ? (
             <div className="mb-2 border border-line bg-block px-3 py-2 text-[12px] text-sub">
-              This leg costs <b className="text-ink">{rands(legOpen.fare.per_ride_cents)}</b> a
-              ride{kind === 'train' ? '.' : ' on a Golden Arrow Gold Card.'}
+              This leg costs <b className="text-ink">{rands(legOpen.fare.cash_cents)}</b> in
+              cash{kind === 'train' ? '.' : ', more at peak times.'}
             </div>
           ) : null}
           <TripStrip
@@ -400,14 +402,14 @@ export default function ConnectionsCard({ connections, onChoose, kind = 'bus',
       {/* What the whole journey costs, once, rather than a price on every leg. */}
       {conn.fare && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border border-line bg-block px-3 py-2.5">
-          <span className="text-[18px] font-bold text-ink">{rands(conn.fare.per_ride_cents)}</span>
+          <span className="text-[18px] font-bold text-ink">{rands(conn.fare.cash_cents)}</span>
           <span className="inline-flex items-center gap-1 bg-accent px-2 py-0.5 text-[11px] font-bold text-white">
             {conn.fare.kind === 'through' ? 'One ticket' : `Pay ${conn.fare.tickets} times`}
           </span>
           <span className="w-full text-[11px] text-sub">
             for all {conn.legs.length} {kind === 'train' ? 'trains' : 'buses'}.
-            {kind === 'train' ? '' : ' Golden Arrow Gold Card price. Cash is higher at'
-              + ' peak times, lower off-peak.'}
+            {kind === 'train' ? '' : ' Golden Arrow cash fare. It is higher at peak'
+              + ' times (16:00 to 08:00) and lower off-peak.'}
           </span>
         </div>
       )}

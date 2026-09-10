@@ -343,6 +343,10 @@ export interface ConnectionFare {
   five_ride_cents: number | null
   weekly_cents: number | null
   monthly_cents: number | null
+  /** The whole journey in cash, and when that fare was published. Null unless every
+   *  leg has one - a sum missing a leg is not a total. */
+  cash_cents: number | null
+  cash_effective_from: string | null
   code: string | null
   transfers: string | null
   basis: string

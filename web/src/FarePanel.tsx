@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Info, TicketCheck, Tickets } from 'lucide-react'
 import type { Fare, ConnectionFare } from './api'
-import { rands, perRide, basisNote, isFlat } from './money'
+import { rands, basisNote } from './money'
 
 /**
  * What a journey costs.
@@ -31,7 +31,10 @@ export default function FarePanel(
 ) {
   const [open, setOpen] = useState(false)
 
-  if (!fare || fare.per_ride_cents == null) {
+  // Only a cash fare counts as a price now. A journey with a Gold Card fare and no cash
+  // fare shows nothing, because the card number is not what a cash payer is charged and
+  // is of no use to a card holder, who has already bought their five rides.
+  if (!fare || fare.cash_cents == null) {
     return (
       <div className="farebox none">
         <Info size={13} aria-hidden="true" />
@@ -42,8 +45,9 @@ export default function FarePanel(
           <span>Metrorail does not publish fares in its timetables. Buy at the station.</span>
         ) : (
           <span>
-            Golden Arrow publishes no fare for{' '}
-            {kind ? 'part of this journey' : 'this journey'}. Ask the driver.
+            Golden Arrow publishes no cash fare for{' '}
+            {kind ? 'part of this journey' : 'this journey'}. Ask the driver, or phone
+            the Transport Information Centre on 0800 65 64 63.
           </span>
         )}
       </div>
@@ -75,7 +79,7 @@ export default function FarePanel(
   return (
     <div className="farebox">
       <div className="fareline">
-        <span className="fareamt">{rands(fare.per_ride_cents)}</span>
+        <span className="fareamt">{rands(cash)}</span>
         {/* Whether a change of bus is paid for twice is the thing a rider most wants to
             know here, and it is not our judgement: Golden Arrow publishes a fare for
             this journey with a transfer allowance, or it does not. */}
@@ -99,18 +103,15 @@ export default function FarePanel(
           {perLeg && tickets
             ? <>for all {tickets} {mode === 'train' ? 'trains' : 'buses'}. </>
             : null}
-          {/* Cash where the operator publishes it, and the card price named as such
-              where they do not. Most riders pay cash, and the number above has always
-              been the Gold Card price - correct, and not what they hand the driver.
-              Golden Arrow prints a cash fare for 21 routes and directs everyone else to
-              phone, so this says which of the two a rider is looking at. */}
-          {mode === 'bus' && (cash != null
-            ? <><b>Golden Arrow Gold Card</b> price. Cash on this route is{' '}
-              <b>{rands(cash)}</b>{cashDate ? <> as at {cashDate}</> : null}, and differs
-              between peak and off-peak.</>
-            : <><b>Golden Arrow Gold Card</b> price. Cash is <b>higher at peak times</b>,
-              lower off-peak, and Golden Arrow does not publish a cash fare for this
-              route.</>)}
+          {/* What the number is, and what it is not. Cash fares differ between peak and
+              off-peak - the operator says so and gives the window - but the notice
+              prints one figure per route, so this is the published fare and not a
+              promise about a particular bus at a particular hour. */}
+          {mode === 'bus' && (
+            <><b>cash</b> fare{cashDate ? <>, published {cashDate}</> : null}. Golden
+            Arrow charges more at peak times (16:00 to 08:00) and less off-peak, and
+            publishes one figure per route.</>
+          )}
         </span>
         {(fare as Fare).zone_approx && (
           <span className="faretag area" title="Published for the surrounding area, not this exact stop">
@@ -120,7 +121,7 @@ export default function FarePanel(
         {fare.code && <span className="farecode">{fare.code}</span>}
         <button className="infobtn" onClick={() => setOpen(!open)} aria-expanded={open}>
           <Info size={13} aria-hidden="true" />
-          <span>{open ? 'Hide' : 'Other tickets'}</span>
+          <span>{open ? 'Hide' : 'About this fare'}</span>
         </button>
       </div>
 
@@ -141,25 +142,11 @@ export default function FarePanel(
               , so the change of bus costs nothing extra.
             </p>
           ) : null}
-          <table className="faretable">
-            <thead>
-              <tr><th>Ticket</th><th>Price</th><th>Rides</th><th>Each</th></tr>
-            </thead>
-            <tbody>
-              {perRide(fare as Fare).map((p) => (
-                <tr key={p.label}>
-                  <td>{p.label}</td>
-                  <td>{rands(p.total) ?? '-'}</td>
-                  <td>{p.rides}</td>
-                  <td><b>{rands(p.each) ?? '-'}</b></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="farefoot">
-            A "Weekly" is 10 rides valid 30 days and a "Monthly" is 48 rides valid 90
-            days, so the longer tickets are cheaper per ride, not just longer.
-          </p>
+          {/* The Gold Card products used to be listed here - 5 Ride, Weekly, Monthly,
+              with a per-ride column. They are gone. A card holder has already bought
+              their rides and does not price a journey; a cash payer is charged something
+              else entirely, and putting a cheaper card figure beside the cash fare
+              invites reading the wrong one. */}
           {fare.transfers && fare.transfers !== 'Zero' && (
             <p className="farefoot">Includes {fare.transfers.toLowerCase()} transfer.</p>
           )}
@@ -176,12 +163,14 @@ export default function FarePanel(
           )}
           {mode === 'bus' && (
             <p className="farefoot">
-              {isFlat(fare.basis)
-                ? 'These are GO Easy prices on a Golden Arrow Gold Card'
-                : 'These are Golden Arrow Gold Card prices'}
-              {' '}and do not change with the time of day. A cash fare does: it is higher
-              at peak times and lower off-peak. Golden Arrow does not publish cash fares
-              per journey, so this app cannot show you one. Ask the driver.
+              This is Golden Arrow's published cash fare for the route
+              {(fare as Fare).cash_effective_from
+                ? `, which took effect on ${(fare as Fare).cash_effective_from}`
+                : ''}. Cash fares differ with the time of day - Golden Arrow charges the
+              peak fare from 16:00 to 08:00 and the off-peak fare from 08:00 to 16:00 -
+              but only one figure per route is published, so treat this as the fare for
+              the route rather than for your particular bus. Gold Card prices are not
+              shown: a card is bought by the ride, not by the journey.
             </p>
           )}
         </div>

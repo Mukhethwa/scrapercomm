@@ -17,7 +17,7 @@ import OperatorLogo from './OperatorLogo'
 import type { DepartureBlock, OperatorGroup } from './results'
 import { bucketByTimeOfDay, journeySpan, spanLabel, travelLabel, DAY_LABEL } from './results'
 import { shortTime, boundIsUseful } from './times'
-import { rands } from './money'
+import { cashFare } from './money'
 
 /**
  * What a rider looks for on the front of the bus.
@@ -74,7 +74,9 @@ function Block({ block, planned, onAdd, onOpen, open, kind }: {
     d.arrive_approx,
   )
   const arriveUseful = boundIsUseful(d.arrive_minutes, d.arrive_approx, d.board_minutes)
-  const fare = rands(block.fare?.per_ride_cents)
+  // The cash fare or none. A Gold Card price on a tile told a cash payer a number they
+  // will not be charged, which is the whole reason this changed.
+  const fare = cashFare(block.fare)
   const stops = stopsLabel(d.stop_count)
   /**
    * How long this one bus takes, in brackets beside the arrival.

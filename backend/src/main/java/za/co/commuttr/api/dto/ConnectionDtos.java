@@ -66,7 +66,20 @@ public final class ConnectionDtos {
                                     String basis,
                                     String basisFrom,
                                     String basisTo,
-                                    Boolean zoneApprox) { }
+                                    Boolean zoneApprox,
+                                    /**
+                                     * What the whole journey costs in cash, and the date
+                                     * that fare was published.
+                                     *
+                                     * Null unless EVERY leg has a published cash fare: a
+                                     * partial sum shown as a total understates the trip,
+                                     * which is the same rule the card total already
+                                     * follows. Golden Arrow publishes cash fares for 21
+                                     * routes, so on a journey with a change this is
+                                     * usually null.
+                                     */
+                                    Integer cashCents,
+                                    String cashEffectiveFrom) { }
 
     public record ConnectionDto(String dayType,
                                 List<String> changeAt,

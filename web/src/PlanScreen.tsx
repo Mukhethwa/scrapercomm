@@ -24,6 +24,7 @@ import LeaveAt, { hhmm, nowMinutes } from './LeaveAt'
 import PlanMap from './PlanMap'
 import TripStrip from './TripStrip'
 import FarePanel from './FarePanel'
+import { plural } from './money'
 import ConnectionsCard, { connectionsFrom } from './ConnectionsCard'
 import { PinIcon } from './icons'
 
@@ -101,7 +102,7 @@ function NearbyBox({ title, tone, stops, onPick, vehicle = 'bus' }: {
           >
             <span className="text-[13px] font-bold text-ink">{r.name}</span>
             <span className="text-[11px] text-sub">
-              {away(r.km)} away - {r.change ? `2 ${vehicle}s` : 'direct'}
+              {away(r.km)} away - {r.change ? `2 ${plural(vehicle)}` : 'direct'}
             </span>
           </button>
         ))}
@@ -241,7 +242,7 @@ export default function PlanScreen() {
    */
   const chosen = only ? MODES.find((m) => m.id === only)?.kind : undefined
   const ride = (chosen ?? s.from?.mode) === 'train' ? 'train' : 'bus'
-  const rides = ride === 'bus' ? 'buses' : `${ride}s`
+  const rides = plural(ride)
 
   /*
    * The same thing in a sentence, where nothing narrows it to one network.
@@ -254,7 +255,6 @@ export default function PlanScreen() {
   const said = chosen ? ride : (s.from?.mode ?? 'bus or train')
   // "bus" pluralises to "buses", not "buss". The template made the plural by adding an
   // s to the kind, which is right for "trains" and wrong for the one it is used for most.
-  const plural = (kind: string) => (kind === 'bus' ? 'buses' : `${kind}s`)
   const saids = chosen ? rides : (s.from?.mode ? plural(s.from.mode) : 'buses or trains')
 
   /*
