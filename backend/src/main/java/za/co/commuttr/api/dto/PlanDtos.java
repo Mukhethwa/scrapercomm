@@ -100,7 +100,21 @@ public final class PlanDtos {
                            */
                           Integer cashCents,
                           /** When that cash fare took effect, so the app can date it. */
-                          String cashEffectiveFrom) { }
+                          String cashEffectiveFrom,
+                          /**
+                           * Metrorail's other tickets for the same journey.
+                           *
+                           * PRASA prices by distance band and sells a single, a return, a
+                           * weekly and a monthly, so unlike Golden Arrow's Gold Card these
+                           * are choices a rider actually makes at the window. Null on a
+                           * bus, where the equivalent products are card prices and are
+                           * deliberately not shown.
+                           */
+                          Integer returnCents,
+                          Integer weeklySatCents,
+                          /** How far apart the two stations are, which is what sets the
+                           *  band the fare comes from. */
+                          Double distanceKm) { }
 
     public record PlanOptionDto(String timetableNumber,
                                 String routeLabel,

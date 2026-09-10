@@ -46,6 +46,23 @@ export function cashFare(fare: { cash_cents?: number | null } | null | undefined
   return rands(fare?.cash_cents ?? null)
 }
 
+/**
+ * The tickets Metrorail sells for one journey, for the detail view.
+ *
+ * Unlike Golden Arrow's Gold Card products - which are gone from the app because a card
+ * holder has already bought their rides - these are four things a rider chooses between
+ * at the window, and the price of each is the reason to choose it.
+ */
+export function trainTickets(fare: Fare) {
+  return [
+    { label: 'Single', note: 'one trip', cents: fare.cash_cents },
+    { label: 'Return', note: 'there and back', cents: fare.return_cents },
+    { label: 'Weekly', note: 'Monday to Friday', cents: fare.weekly_cents },
+    { label: 'Weekly', note: 'Monday to Saturday', cents: fare.weekly_sat_cents },
+    { label: 'Monthly', note: 'calendar month', cents: fare.monthly_cents },
+  ].filter((t) => t.cents != null)
+}
+
 /** Per-ride cost of each product, cheapest last, for the breakdown. */
 export function perRide(fare: Fare) {
   return [

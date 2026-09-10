@@ -143,13 +143,14 @@ class ApiContractTest {
                 "MALMESBURY - KILLARNEY - CAPE TOWN", "013501", "07:45", "10:00", 465, 600,
                 14230, 4, 0, 8,
                 new FareDto("MACI", 4650, 23250, 43000, 189000, "Zero",
-                        "exact", "Malmesbury", "Cape Town", false, null, null));
+                        "exact", "Malmesbury", "Cape Town", false, null, null, null, null, null));
         ConnectionLegDto leg2 = new ConnectionLegDto(
                 101, "CAPE TOWN", -33.92, 18.42, 3370, "BUH REIN", -33.82, 18.71,
                 "CAPE TOWN - NORTHPINE - KRAAIFONTEIN", "001501", "14:50", "via", 890, null,
                 13987, 0, 0, 6,
                 new FareDto("FYDU", 2530, 12650, 23400, 103000, "Zero",
-                        "route", "Cape Town", "Durbanville via Freeway", true, null, null));
+                        "route", "Cape Town", "Durbanville via Freeway", true, null, null,
+                        null, null, null));
         given(connections.connections(anyInt(), any(), any(), anyInt(), any(), any())).willReturn(new ConnectionsResponse(
                 new StopDto(24696, "MALMESBURY", -33.45, 18.73, "gabs", "bus"),
                 new StopDto(3370, "BUH REIN", -33.82, 18.71, "gabs", "bus"),
@@ -221,7 +222,10 @@ class ApiContractTest {
                 List.of(new PlanDepartureDto("0605", false, 365, "06:47", true, 407.5, 88, 2, 0, 6, 3)),
                 false, true, "NYANGA TERM", "between A and B", 1834L, null,
                 new FareDto("CIBV", 2320, 11600, 21500, 94600, "Zero",
-                        "exact", "Cape Town", "Bellville", false, 4150, "2025-08-11"));
+                        "exact", "Cape Town", "Bellville", false, 4150, "2025-08-11",
+                        // Metrorail sells four tickets for one journey; a bus sells none
+                        // the app shows, so these are null on the Golden Arrow fixture.
+                        null, null, null));
         given(planner.plan(any(), any())).willReturn(new PlanResponse(
                 new StopDto(3, "NYANGA TERM", -33.98, 18.58, "gabs", "bus"), PinDto.of(-33.90, 18.62),
                 List.of(option)));

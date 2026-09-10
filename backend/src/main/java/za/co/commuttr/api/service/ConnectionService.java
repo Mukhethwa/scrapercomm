@@ -192,7 +192,10 @@ public class ConnectionService {
                 (String) r[5], (String) r[6], (String) r[7], (String) r[8],
                 r[9] != null && (Boolean) r[9],
                 r.length > 10 && r[10] != null ? ((Number) r[10]).intValue() : null,
-                r.length > 11 ? (String) r[11] : null);
+                r.length > 11 ? (String) r[11] : null,
+                r.length > 12 && r[12] != null ? ((Number) r[12]).intValue() : null,
+                r.length > 13 && r[13] != null ? ((Number) r[13]).intValue() : null,
+                r.length > 14 && r[14] != null ? ((Number) r[14]).doubleValue() : null);
     }
 
     /**

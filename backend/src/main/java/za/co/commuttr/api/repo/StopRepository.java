@@ -155,7 +155,11 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
                    -- What a cash passenger pays, for the 21 routes Golden Arrow prints a
                    -- cash fare for. Null everywhere else, because it is published nowhere
                    -- else and cannot be worked out from the card price.
-                   cash_cents, CAST(cash_effective_from AS text)
+                   cash_cents, CAST(cash_effective_from AS text),
+                   -- Metrorail sells a journey four ways and prices it by distance band,
+                   -- so unlike Golden Arrow these are real tickets a rider chooses
+                   -- between. See prasa_scraper.fares.
+                   return_cents, weekly_sat_cents, distance_km
             FROM journey_fare
             WHERE from_stop_id = :fromId AND to_stop_id = :toId
             """, nativeQuery = true)

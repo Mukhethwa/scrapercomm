@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Info, TicketCheck, Tickets } from 'lucide-react'
 import type { Fare, ConnectionFare } from './api'
-import { rands, basisNote } from './money'
+import { rands, basisNote, trainTickets } from './money'
 
 /**
  * What a journey costs.
@@ -42,7 +42,9 @@ export default function FarePanel(
           /* Not "ask the driver": on Metrorail you buy before you board, and there is no
              driver to ask. Said as a fact about the timetables rather than about the
              fare, because what we know is that PRASA does not print prices on them. */
-          <span>Metrorail does not publish fares in its timetables. Buy at the station.</span>
+          <span>
+            Metrorail publishes no fare for this journey. Buy at the station.
+          </span>
         ) : (
           <span>
             Golden Arrow publishes no cash fare for{' '}
@@ -112,6 +114,14 @@ export default function FarePanel(
             Arrow charges more at peak times (16:00 to 08:00) and less off-peak, and
             publishes one figure per route.</>
           )}
+          {/* A train fare is set by how far apart the stations are, not by the route, so
+              saying the distance explains the number rather than decorating it. */}
+          {mode === 'train' && (
+            <><b>single</b> ticket
+            {(fare as Fare).distance_km != null
+              ? <>, {Math.round((fare as Fare).distance_km as number)} km apart</>
+              : null}. 40% off between 09:00 and 14:00.</>
+          )}
         </span>
         {(fare as Fare).zone_approx && (
           <span className="faretag area" title="Published for the surrounding area, not this exact stop">
@@ -142,11 +152,41 @@ export default function FarePanel(
               , so the change of bus costs nothing extra.
             </p>
           ) : null}
-          {/* The Gold Card products used to be listed here - 5 Ride, Weekly, Monthly,
-              with a per-ride column. They are gone. A card holder has already bought
-              their rides and does not price a journey; a cash payer is charged something
-              else entirely, and putting a cheaper card figure beside the cash fare
-              invites reading the wrong one. */}
+          {/* Golden Arrow's Gold Card products used to be listed here and are gone: a
+              card holder has already bought their rides and does not price a journey.
+              Metrorail is the opposite case. PRASA sells four tickets for one journey
+              and the price of each is the reason to pick it, so they belong here. */}
+          {mode === 'train' && trainTickets(fare as Fare).length > 0 && (
+            <>
+              <table className="faretable">
+                <thead>
+                  <tr><th>Ticket</th><th>Price</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {trainTickets(fare as Fare).map((t) => (
+                    <tr key={`${t.label}-${t.note}`}>
+                      <td>{t.label}</td>
+                      <td><b>{rands(t.cents)}</b></td>
+                      <td>{t.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="farefoot">
+                Metrorail prices by distance, not by route
+                {(fare as Fare).distance_km != null
+                  ? `: these two stations are ${Math.round((fare as Fare).distance_km as number)} km apart`
+                  : ''}
+                {(fare as Fare).code ? `, which is zone ${(fare as Fare).code}` : ''}.
+              </p>
+              <p className="farefoot">
+                Everyone pays <b>40% less</b> on single and return tickets between{' '}
+                <b>09:00 and 14:00</b>. Pensioners, military veterans and scholars in full
+                uniform pay <b>50% less</b> - pensioners and veterans off-peak, scholars at
+                any hour.
+              </p>
+            </>
+          )}
           {fare.transfers && fare.transfers !== 'Zero' && (
             <p className="farefoot">Includes {fare.transfers.toLowerCase()} transfer.</p>
           )}

@@ -210,6 +210,15 @@ export interface Fare {
   cash_cents: number | null
   /** The date that cash fare took effect, so the app can say how old it is. */
   cash_effective_from: string | null
+  /**
+   * Metrorail's other tickets for the same journey. PRASA prices by distance band and
+   * sells a single, a return, a weekly and a monthly, so these are real choices at the
+   * ticket window. Null on a bus, where the equivalent products are card prices.
+   */
+  return_cents: number | null
+  weekly_sat_cents: number | null
+  /** How far apart the stations are - what puts the fare in its band. */
+  distance_km: number | null
 }
 
 export interface PlanDeparture {
