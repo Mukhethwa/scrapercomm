@@ -163,15 +163,26 @@ public class GeocodeService {
      * nothing.
      */
     public GeocodeResponse geocode(String q) {
+        return geocode(q, null);
+    }
+
+    /**
+     * @param kind "bus" or "train" to offer only places that network reaches, or null for
+     *             both. A rider who has narrowed the screen to Metro Rail and is then
+     *             offered somewhere with no station has been invited to a dead end.
+     */
+    public GeocodeResponse geocode(String q, String kind) {
         String query = q == null ? "" : q.trim();
         if (query.isEmpty()) {
             return new GeocodeResponse(List.of());
         }
-        String cacheKey = query.toLowerCase(Locale.ROOT);
+        String cacheKey = query.toLowerCase(Locale.ROOT) + "|" + (kind == null ? "" : kind);
 
         // The table first, and almost always only the table.
-        List<GeoHitDto> local = areas.search("%" + cacheKey + "%", cacheKey + "%",
-                                             cacheKey, KEEP).stream()
+        List<GeoHitDto> local = areas.search("%" + query.toLowerCase(Locale.ROOT) + "%",
+                                             query.toLowerCase(Locale.ROOT) + "%",
+                                             query.toLowerCase(Locale.ROOT),
+                                             kind == null ? "" : kind, KEEP).stream()
                 .map(a -> new GeoHitDto(a.getName(), a.getFullName(), a.getLat(), a.getLon()))
                 .toList();
         if (!local.isEmpty()) {
@@ -190,7 +201,7 @@ public class GeocodeService {
             return new GeocodeResponse(List.of());
         }
 
-        List<GeoHitDto> results = rank(found, query);
+        List<GeoHitDto> results = rank(found, query, kind);
         cache.put(cacheKey, results);
         return new GeocodeResponse(results);
     }
@@ -257,7 +268,7 @@ public class GeocodeService {
      * IS what was typed comes first here, then one whose name begins with it, then one
      * that merely contains the words, and importance settles the rest.
      */
-    private List<GeoHitDto> rank(List<Hit> hits, String query) {
+    private List<GeoHitDto> rank(List<Hit> hits, String query, String kind) {
         String ql = query.toLowerCase(Locale.ROOT);
         List<String> words = Arrays.stream(ql.split("\\s+")).filter(w -> !w.isBlank()).toList();
 
@@ -289,7 +300,7 @@ public class GeocodeService {
         return best.values().stream()
                 .sorted((a, b) -> Double.compare(b.score(), a.score()))
                 .limit(KEEP)
-                .filter(s -> planner.isServed(s.hit().lat(), s.hit().lon()))
+                .filter(s -> planner.isServed(s.hit().lat(), s.hit().lon(), kind))
                 .map(s -> new GeoHitDto(s.hit().name(), s.hit().full(), s.hit().lat(), s.hit().lon()))
                 .toList();
     }

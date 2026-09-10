@@ -409,7 +409,11 @@ export default function PlanScreen() {
         >
           All
         </button>
-        {MODES.filter((m) => m.available || m.id === 'myciti' || m.id === 'metrorail').map((m) => {
+        {/* Only operators with data behind them. MyCiTi sat here greyed out for months
+            on the reasoning that a rider should learn the app does not have it yet; that
+            reasoning loses to a simpler one - a control that never does anything reads as
+            a half-built app, and there is no MyCiTi row in the operator table at all. */}
+        {MODES.filter((m) => m.available || m.id === 'metrorail').map((m) => {
           const ready = operators.ready(m.id)
           return (
             <button

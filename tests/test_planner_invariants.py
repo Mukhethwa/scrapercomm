@@ -297,6 +297,74 @@ def test_the_search_box_offers_areas_and_not_buildings():
     assert not any("School" in n or "Shelter" in n for n in names), names
 
 
+def test_the_chip_and_the_suggestions_agree():
+    """
+    A place offered under Metro Rail must have a station a rider can walk to.
+
+    The search box offers places and nothing else now, and the operator chip filters them,
+    so the two can contradict each other in a way they could not before: Hout Bay under
+    Metro Rail is an invitation to a dead end, its nearest station being ten kilometres
+    away. The table said so correctly and the Nominatim fallback, asking whether ANY
+    service reached the place, said otherwise - so the filter has to hold on both paths.
+    """
+    for query, absent in (("hout bay", "Hout Bay"), ("atlantis", "Atlantis")):
+        names = [r["name"] for r in get("geocode", q=query, kind="train")["results"]]
+        assert absent not in names, (
+            f"{absent} was offered under a train filter and has no station near it")
+
+    # And the same places are there when the rider has not narrowed anything.
+    for query, present in (("hout bay", "Hout Bay"), ("atlantis", "Atlantis")):
+        names = [r["name"] for r in get("geocode", q=query)["results"]]
+        assert present in names, f"{present} vanished from an unfiltered search"
+
+
+def test_a_place_is_offered_once():
+    """
+    OpenStreetMap maps Atlantis as a node and again as an outline.
+
+    Two identical suggestions is a choice with no difference behind it, and the menu now
+    holds nothing but places, so a duplicate is half the list.
+    """
+    names = [r["name"] for r in get("geocode", q="atlantis")["results"]]
+    assert len(names) == len(set(names)), f"duplicate suggestions: {names}"
+
+
+def test_every_stop_can_still_be_reached_by_naming_a_place():
+    """
+    The search box no longer offers stops, so a stop with no place near it is a
+    destination nobody can ask for.
+
+    Eight were like that - FALSE BAY, FISANTEKRAAL, KALBASKRAAL, DASSENBERG among them -
+    and were added to the gazetteer from the stops themselves. This is the check that
+    made dropping stop suggestions safe, so it stays.
+    """
+    from gabs_scraper import db
+
+    try:
+        conn = db.connect()
+    except Exception as e:  # noqa: BLE001
+        pytest.skip(f"Postgres not reachable: {e}")
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT s.name FROM stop s
+            WHERE s.lat IS NOT NULL AND NOT EXISTS (
+              SELECT 1 FROM area a WHERE a.served
+                AND 6371000 * acos(least(1,
+                      cos(radians(a.lat)) * cos(radians(s.lat))
+                        * cos(radians(s.lon) - radians(a.lon))
+                    + sin(radians(a.lat)) * sin(radians(s.lat)))) <= 2500)
+            """
+        )
+        orphans = [r[0] for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    assert not orphans, ("no place within walking distance, so a rider cannot ask for "
+                         "these at all: " + ", ".join(orphans))
+
+
 def test_an_area_is_only_offered_where_the_network_goes():
     """Ceres is a real town and no service in this database reaches it."""
     assert get("geocode", q="Ceres")["results"] == []

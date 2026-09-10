@@ -299,8 +299,13 @@ export interface PlanOption {
   fare: Fare | null
 }
 
-export const getGeocode = (q: string) =>
-  getJSON<{ results: GeoHit[] }>(`${API}/geocode?q=${encodeURIComponent(q)}`)
+/**
+ * @param kind "bus" or "train" to be offered only places that network reaches. A rider
+ *        who has chosen Metro Rail should not be shown somewhere with no station.
+ */
+export const getGeocode = (q: string, kind?: string | null) =>
+  getJSON<{ results: GeoHit[] }>(
+    `${API}/geocode?q=${encodeURIComponent(q)}` + (kind ? `&kind=${kind}` : ''))
 
 export const getAreas = () =>
   getJSON<{ areas: string[]; railAreas?: string[] }>(`${API}/areas`)

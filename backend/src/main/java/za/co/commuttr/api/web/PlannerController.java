@@ -118,8 +118,14 @@ public class PlannerController {
     }
 
     /** Geocode a place/address via OpenStreetMap Nominatim (no key). For pin input. */
+    /**
+     * @param kind "bus" or "train" to offer only places that network reaches. The search
+     *             box passes whatever operator chip the rider has chosen, so the
+     *             suggestions and the results can no longer disagree.
+     */
     @GetMapping("/geocode")
-    public GeocodeResponse geocode(@RequestParam String q) {
-        return geocodeService.geocode(q);
+    public GeocodeResponse geocode(@RequestParam String q,
+                                   @RequestParam(required = false) String kind) {
+        return geocodeService.geocode(q, kind);
     }
 }

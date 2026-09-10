@@ -351,12 +351,27 @@ public class PlannerService {
      * find that out was to choose it and get an empty screen.
      */
     public boolean isServed(double lat, double lon) {
-        for (String kind : new String[] { "train", "bus" }) {
-            if (!stops.findNearestOfKind(lat, lon, kind, WALK_M).isEmpty()) {
+        return isServed(lat, lon, null);
+    }
+
+    /**
+     * @param kind "bus" or "train" to ask about one network, or null for either.
+     *
+     * Asking about one matters because the search box filters places by the operator chip
+     * now. Without it the Nominatim fallback answered a Metro Rail search with Hout Bay,
+     * whose nearest station is ten kilometres away - the table said no and the fallback,
+     * asking a different question, said yes.
+     */
+    public boolean isServed(double lat, double lon, String kind) {
+        for (String each : kind == null ? new String[] { "train", "bus" }
+                                        : new String[] { kind }) {
+            if (!stops.findNearestOfKind(lat, lon, each, WALK_M).isEmpty()) {
                 return true;
             }
         }
-        return !locatePoint(lat, lon, DEFAULT_THRESHOLD_M).isEmpty();
+        // A road some service drives is a bus answer, so it only counts when buses are
+        // what was asked about.
+        return !"train".equals(kind) && !locatePoint(lat, lon, DEFAULT_THRESHOLD_M).isEmpty();
     }
 
     /** The JSONB {@code [[lat,lon], ...]} column, decoded defensively. */

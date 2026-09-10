@@ -22,22 +22,39 @@ public interface AreaRepository extends JpaRepository<Area, Integer> {
      * GUGULETU while the standard spelling is Gugulethu, and somebody typing their own
      * township correctly should not be told it does not exist.
      *
-     * <p>Only served areas. One nothing reaches is a place, not a journey, and offering it
-     * means a rider chooses it and gets an empty screen.
+     * <p>One row per name. OpenStreetMap maps Atlantis as a node and again as an outline,
+     * and two identical suggestions is a choice with no difference behind it - the same
+     * reasoning that collapsed Parow when it was mapped as a town and a suburb.
+     *
+     * <p>Only served areas, and only by the network the rider has chosen. One nothing
+     * reaches is a place, not a journey; and offering Hout Bay under a Metro Rail filter,
+     * when the nearest station is forty kilometres away, is the same failure wearing a
+     * different hat - suggested, chosen, and answered with nothing. 873 of the 884 places
+     * are reachable by bus and 584 by train, so the filter is not cosmetic.
      */
     @Query(value = """
-            SELECT * FROM area a
-            WHERE a.served
-              AND (lower(a.name) LIKE :contains OR a.aliases LIKE :contains)
+            SELECT * FROM (
+                -- One row per name, chosen inside. DISTINCT ON has to be ordered by the
+                -- thing it distinguishes, which is not the order a rider should read, so
+                -- the ranking happens outside where it is free to.
+                SELECT DISTINCT ON (lower(a.name)) a.*
+                FROM area a
+                WHERE (CASE WHEN :kind = 'bus'   THEN a.served_bus
+                            WHEN :kind = 'train' THEN a.served_train
+                            ELSE a.served END)
+                  AND (lower(a.name) LIKE :contains OR a.aliases LIKE :contains)
+                ORDER BY lower(a.name), a.kind, a.id
+            ) d
             ORDER BY
-                (lower(a.name) = :exact) DESC,
-                (lower(a.name) LIKE :prefix) DESC,
-                length(a.name),
-                a.name
+                (lower(d.name) = :exact) DESC,
+                (lower(d.name) LIKE :prefix) DESC,
+                length(d.name),
+                d.name
             LIMIT :maxRows
             """, nativeQuery = true)
     List<Area> search(@Param("contains") String contains,
                       @Param("prefix") String prefix,
                       @Param("exact") String exact,
+                      @Param("kind") String kind,
                       @Param("maxRows") int maxRows);
 }

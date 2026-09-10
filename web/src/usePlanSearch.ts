@@ -17,7 +17,7 @@ import {
   type PlanOption, type PlanDeparture, type TripStop, type TripNote, type NearbyOrigin,
   type Connection,
 } from './api'
-import { useModes } from './modes'
+import { MODES, useModes } from './modes'
 import { buildJourney, usePlanner } from './planner'
 
 /** A suggestion in either endpoint field: a real stop, a geocoded place, or an area. */
@@ -46,65 +46,29 @@ export function useDebounced<T>(v: T, ms: number): T {
   return s
 }
 
-/** Stops, places and areas for one query, in the order the menu shows them. */
-export async function mergedSearch(q: string, areas: string[],
-                                   railAreas: Set<string> = new Set(),
-                                   operator: string | null = null): Promise<Hit[]> {
-  const [s, g] = await Promise.all([
-    getStops(q).catch(() => ({ stops: [] as StopHit[] })),
-    getGeocode(q).catch(() => ({ results: [] as GeoHit[] })),
-  ])
-  const ql = q.trim().toLowerCase()
-  /*
-   * An area says which networks a rider will actually find in it.
-   *
-   * Only where it can be shown: an area is a name no stop carries, so nothing about the
-   * name says whether there is a station, and the API answers it from geography instead.
-   * Where it cannot be shown the line stays as it was, because "bus service" understates
-   * an area and "bus and train" in one that has no station sends somebody looking for a
-   * platform that is not there.
-   */
-  // An area is a name Golden Arrow uses for a part of the city, so under a train filter
-  // it belongs in the list only where a station stands in it - which is the one thing
-  // railAreas already knows.
-  const areaHits: Hit[] = areas
-    .filter((a) => a.toLowerCase().includes(ql))
-    .filter((a) => !operator || operator === 'gabs' || railAreas.has(a))
-    .slice(0, 3)
-    .map((a) => ({
-      kind: 'area', name: a, lat: 0, lon: 0,
-      sub: railAreas.has(a) ? 'area with bus and train service' : 'area with bus service',
-    }))
-  /*
-   * Every stop the API returned, whether or not it has been geocoded.
-   *
-   * This used to drop any stop with no coordinates, which quietly hid 247 of the 527
-   * stops in the network - Steenberg among them - from the search box. The stops were
-   * never the problem: a plan is requested by stop id, so STEENBERG to CAPE TOWN
-   * resolves six routes and twenty-three departures whether or not we know where
-   * Steenberg is. Only the map needs a position, and a missing pin is a far smaller
-   * failure than an unreachable destination.
-   */
-  // Only the operator the rider has chosen. RETREAT is a bus stop and a station, and
-  // offering both under a Metro Rail filter means one of the two answers leads to an
-  // empty screen - the results are filtered even though the suggestion was not.
-  const stops: Hit[] = s.stops
-    .filter((x) => !operator || x.operator_code === operator)
-    .slice(0, 6)
-    .map((x) => ({ kind: 'stop', id: x.id, name: x.name, lat: x.lat, lon: x.lon,
-                   mode: x.operator_kind, operator: x.operator_code }))
-  /*
-   * Every place the API ranked, not the first three.
-   *
-   * Three was cutting off the answer rather than trimming a long list. "kraaifontein"
-   * came back as the sea scout group, the high school, the night shelter and then the
-   * town of Kraaifontein itself - so the suburb, which is what almost anyone typing that
-   * word means, was the one dropped. The API orders these properly now and returns
-   * eight; the menu already scrolls, so there is room to show them.
-   */
-  const places: Hit[] = g.results
-    .map((x) => ({ kind: 'place', name: x.name, lat: x.lat, lon: x.lon, sub: x.full }))
-  return [...areaHits, ...stops, ...places]
+/**
+ * The places one query offers - and only places.
+ *
+ * The menu used to hold three kinds of thing at once. Typing "cape" produced BUS CAPE
+ * GATE, TRAIN CAPE TOWN, BUS CAPE TOWN, BUS ARTSCAPE, BUS ARTSCAPE (HERTZOG BL and then
+ * PLACE Cape Town, and a rider had to know which of those the app wanted before it would
+ * answer. Mukhethwa: "its confusing for a user which one to select second".
+ *
+ * So one area is one option. The planner already turns a place into a journey by walking
+ * to the stops around it, so nothing is lost by not naming them - and every stop in the
+ * network has a place within walking distance, which was checked rather than assumed: all
+ * 527 bus stops and all 102 stations, after eight that nothing was mapped near were added
+ * to the gazetteer from the stops themselves.
+ *
+ * @param kind the operator chip, so a rider who has chosen Metro Rail is offered only
+ *        places a train reaches. 873 of the 884 places have a bus near them and 584 a
+ *        station, so choosing trains genuinely narrows the list rather than decorating it.
+ */
+export async function mergedSearch(q: string, kind: string | null = null): Promise<Hit[]> {
+  const g = await getGeocode(q, kind).catch(() => ({ results: [] as GeoHit[] }))
+  return g.results.map((x) => ({
+    kind: 'place', name: x.name, lat: x.lat, lon: x.lon, sub: x.full,
+  }))
 }
 
 /**
@@ -114,6 +78,17 @@ export async function mergedSearch(q: string, areas: string[],
  *        is the app disagreeing with itself. Null means All.
  */
 export function usePlanSearch(operator: string | null = null) {
+  /*
+   * The chip, as a network rather than a company.
+   *
+   * Places are marked with which networks reach them, not with which operator, because
+   * that is the question a rider is asking: a station is a station whoever runs it. Null
+   * means All, and All offers every place something serves.
+   */
+  const operatorKind = operator
+    ? (MODES.find((m) => m.id === operator)?.kind ?? null)
+    : null
+
   const [from, setFrom] = useState<Endpoint | null>(null)
   const [to, setTo] = useState<Endpoint | null>(null)
   const [fromText, setFromText] = useState('')
@@ -229,15 +204,15 @@ export function usePlanSearch(operator: string | null = null) {
 
   useEffect(() => {
     if (!debFrom || (from && from.name === debFrom)) { setFromHits([]); return }
-    mergedSearch(debFrom, areas, railAreas, operator).then(setFromHits)
+    mergedSearch(debFrom, operatorKind).then(setFromHits)
       .catch(() => setFromHits([]))
-  }, [debFrom, areas]) // eslint-disable-line
+  }, [debFrom, operatorKind]) // eslint-disable-line
 
   useEffect(() => {
     if (!from || !debTo || (to && to.name === debTo)) { setToHits([]); return }
-    mergedSearch(debTo, areas, railAreas, operator).then(setToHits)
+    mergedSearch(debTo, operatorKind).then(setToHits)
       .catch(() => setToHits([]))
-  }, [debTo, from, areas, operator]) // eslint-disable-line
+  }, [debTo, from, operatorKind]) // eslint-disable-line
 
   /** Empty the starting point and everything that depended on it. */
   function clearFrom() {
