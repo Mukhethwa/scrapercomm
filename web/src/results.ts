@@ -13,7 +13,7 @@
  * Every block therefore carries its option's index home again.
  */
 import type { Fare, PlanDeparture, PlanOption } from './api'
-import { NO_TIME, boundIsUseful } from './times'
+import { NO_TIME, boundIsUseful } from './times.ts'
 
 /** One departure, lifted out of its route and ready to stand on its own. */
 export interface DepartureBlock {
@@ -333,4 +333,35 @@ export function spanLabel(span: Span | null): string | null {
 export function countFrom(blocks: DepartureBlock[], minutes: number | null): number {
   if (minutes == null) return blocks.length
   return blocks.filter((b) => b.boardMinutes != null && (b.boardMinutes as number) >= minutes).length
+}
+
+/**
+ * Which departure is which, on a screen that has taken them out of their routes.
+ *
+ * A block's identity is the option it came from and its place within that option, and
+ * the pair was being written out by hand in four places. They agreed; the point is that
+ * nothing made them.
+ */
+export function blockKey(optionIndex: number, departureIndex: number): string {
+  return `${optionIndex}-${departureIndex}`
+}
+
+/**
+ * Does the opened departure belong to this operator's card?
+ *
+ * A rider opens one departure, and the breakdown for it was handed to every card on the
+ * screen - each of which drew it, because none of them asked. Opening the 04:50 train to
+ * Kraaifontein put an identical train breakdown under Golden Arrow Buses, under a heading
+ * that says DIRECT BUS: the app appearing to claim a bus runs the same stops at the same
+ * times. Mukhethwa's words for it were "it copies exactly the same info which then comes
+ * off as false", which is exactly right - nothing on the second card was true of a bus.
+ *
+ * An operator owns the departure or it does not, and only the owner draws it.
+ */
+export function ownsOpenDeparture(
+  openKey: string | null,
+  blocks: DepartureBlock[],
+): boolean {
+  if (openKey == null) return false
+  return blocks.some((b) => blockKey(b.optionIndex, b.departureIndex) === openKey)
 }

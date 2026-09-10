@@ -15,7 +15,7 @@ import type { Connection } from './api'
 import type { Pt } from './PlanMap'
 import { MODES, useLoadedOperators } from './modes'
 import {
-  groupByOperator, fromTime, alightOrNone, DAY_LABEL, type DepartureBlock,
+  groupByOperator, fromTime, alightOrNone, blockKey, DAY_LABEL, type DepartureBlock,
 } from './results'
 import { pinEnd } from './pins'
 import { stopLabel } from './stops'
@@ -283,7 +283,7 @@ export default function PlanScreen() {
     [s.conns, leaveAt],
   )
   const shownGroups = only ? groups.filter((g) => g.id === only) : groups
-  const openKey = s.openDep ? `${s.openDep.oi}-${s.openDep.di}` : null
+  const openKey = s.openDep ? blockKey(s.openDep.oi, s.openDep.di) : null
   const openOption = s.openDep ? s.plan?.[s.openDep.oi] : undefined
   const openDeparture = s.openDep ? s.plan?.[s.openDep.oi]?.departures[s.openDep.di] : undefined
 

@@ -15,7 +15,10 @@ import { useState } from 'react'
 import { ArrowUpRight, Check, X } from '@phosphor-icons/react'
 import OperatorLogo from './OperatorLogo'
 import type { DepartureBlock, OperatorGroup } from './results'
-import { bucketByTimeOfDay, journeySpan, spanLabel, travelLabel, DAY_LABEL } from './results'
+import {
+  bucketByTimeOfDay, journeySpan, spanLabel, travelLabel, blockKey, ownsOpenDeparture,
+  DAY_LABEL,
+} from './results'
 import { shortTime, boundIsUseful } from './times'
 import { cashFare } from './money'
 
@@ -177,11 +180,11 @@ function FullDay({ group, shown, onClose, isPlanned, onAdd, onOpen, openKey }: {
             <div className="flex flex-wrap items-stretch gap-2">
               {bucket.blocks.map((b) => (
                 <Block
-                  key={`${b.optionIndex}-${b.departureIndex}`}
+                  key={blockKey(b.optionIndex, b.departureIndex)}
                   block={b}
                   planned={isPlanned(b)}
                   kind={group.kind}
-                  open={openKey === `${b.optionIndex}-${b.departureIndex}`}
+                  open={openKey === blockKey(b.optionIndex, b.departureIndex)}
                   onAdd={() => onAdd(b)}
                   onOpen={() => onOpen(b)}
                 />
@@ -220,6 +223,13 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
 }) {
   const [fullDay, setFullDay] = useState(false)
   /**
+   * Whether the opened departure is one of this operator's.
+   *
+   * Asked against everything still to come rather than the eight in the carousel,
+   * because a departure opened from the full-day sheet is this card's too.
+   */
+  const mine = ownsOpenDeparture(openKey, all)
+  /**
    * The spread across every route this operator runs between these two stops. Kept as a
    * range and never averaged: the wide ones are wide because the routes genuinely differ,
    * and a mean would hide exactly the choice a rider is making.
@@ -252,12 +262,12 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
           square. */}
       <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto py-1">
         {shown.map((b) => (
-          <div className="flex snap-start" key={`${b.optionIndex}-${b.departureIndex}`}>
+          <div className="flex snap-start" key={blockKey(b.optionIndex, b.departureIndex)}>
             <Block
               block={b}
               planned={isPlanned(b)}
               kind={group.kind}
-              open={openKey === `${b.optionIndex}-${b.departureIndex}`}
+              open={openKey === blockKey(b.optionIndex, b.departureIndex)}
               onAdd={() => onAdd(b)}
               onOpen={() => onOpen(b)}
             />
@@ -270,7 +280,10 @@ export default function OperatorCard({ group, shown, all, isPlanned, onAdd, onOp
         )}
       </div>
 
-      {detail && <div className="mt-3">{detail}</div>}
+      {/* Only the operator whose departure is open. Every card was handed the same node
+          and every card drew it, so opening the 04:50 train put an identical train
+          breakdown under Golden Arrow Buses, beneath a heading reading DIRECT BUS. */}
+      {mine && detail && <div className="mt-3">{detail}</div>}
 
       <div className="mt-2 text-right">
         <button
