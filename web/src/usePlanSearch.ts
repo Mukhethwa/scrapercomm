@@ -452,16 +452,28 @@ export function usePlanSearch(operator: string | null = null) {
     const fromLat = from.lat, fromLon = from.lon, kind = operatorKind as 'bus' | 'train'
     let dropped = false
     setReferralLoading(true)
-    getNearestStops(to.lat, to.lon, kind, 20000, 1)
-      .then((r) => {
-        const target = r.stops[0]
-        if (!target) return null
-        return getNearbyOrigins(fromLat, fromLon, target.id, { radius: 20000 })
-          .then((o) => {
-            const best = o.origins[0]
-            return best ? { from: best, toName: target.name, kind } : null
-          })
-      })
+    // Several candidates at the far end, not just the nearest one.
+    //
+    // The nearest bus stop to the middle of Cape Town is BUITENSINGEL STR, a kerb on a
+    // city-centre street that no Kraaifontein bus runs to; the CAPE TOWN terminus, which
+    // 264 of them a day run to, is seventh on the list at 928m. Asking only the nearest
+    // therefore answered "there is no nearby stop that runs one either" about the busiest
+    // journey on the network.
+    //
+    // All at once rather than one after another: each is about 400ms, so eight in
+    // sequence is a three-second wait and eight together is one.
+    getNearestStops(to.lat, to.lon, kind, 20000, 8)
+      .then((r) => Promise.all(
+        r.stops.map((target) =>
+          getNearbyOrigins(fromLat, fromLon, target.id, { radius: 20000 })
+            .then((o) => (o.origins[0]
+              ? { from: o.origins[0], toName: target.name, kind }
+              : null))
+            .catch(() => null))))
+      // The one that starts nearest the rider, which is not necessarily the one whose
+      // destination stop is nearest to theirs.
+      .then((found) => found.filter((x) => x != null)
+        .sort((a, b) => a!.from.distance_m - b!.from.distance_m)[0] ?? null)
       .then((found) => { if (!dropped) setReferral(found ?? null) })
       .catch(() => { if (!dropped) setReferral(null) })
       .finally(() => { if (!dropped) setReferralLoading(false) })

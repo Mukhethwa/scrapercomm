@@ -94,7 +94,7 @@ export default function PlanView() {
     fromHits, toHits, fromOpen, setFromOpen, toOpen, setToOpen,
     plan, setPlan, loading, sel, setSel,
     reachable, setReachable, connecting, setConnecting,
-    conns, connLegs, connLoading, dayAlts, setDayAlts, altDays,
+    conns, connLegs, connLoading, connFrom, dayAlts, setDayAlts, altDays,
     openDep, setOpenDep, tripStops, tripNotes, loadingTrip,
     mapOpen, setMapOpen, armed, setArmed, onMapClick, segment, roadPath, ride,
     pickError, setPickError, stage,
@@ -107,6 +107,15 @@ export default function PlanView() {
   // Bus or train, taken from where the rider is standing - see PlanScreen for why.
   const vehicle = from?.mode === 'train' ? 'train' : 'bus'
   const vehicles = plural(vehicle)
+  /**
+   * What a journey with a change actually runs on.
+   *
+   * `vehicle` reads the ORIGIN, and a place carries no mode at all, so it falls back to
+   * bus - which described two Metrorail trains as "2 buses". No stop here is served by
+   * both networks, so a journey with a change never mixes them and the stop the API
+   * resolved the origin to settles it for the whole journey.
+   */
+  const connVehicles = plural(connFrom?.operator_kind ?? vehicle)
 
   return (
     <div className="planwrap">
@@ -361,11 +370,11 @@ export default function PlanView() {
                       {plan.length === 0
                         ? <><b>No direct {vehicle}</b> from {from!.name} to {to!.name}. You can still get there by taking </>
                         : <>You can also get from {from!.name} to {to!.name} by taking </>}
-                      <b>{connLegs} {vehicles}</b>, changing at <b>{conns[0].change_at.join(' then ')}</b>.
+                      <b>{connLegs} {connVehicles}</b>, changing at <b>{conns[0].change_at.join(' then ')}</b>.
                     </span>
                   </div>
                   <ConnectionsPanel connections={conns} legsRequired={connLegs}
-                    mode={vehicle} />
+                    mode={connFrom?.operator_kind ?? vehicle} />
                 </>
               )}
 

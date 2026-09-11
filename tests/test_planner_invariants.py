@@ -869,3 +869,46 @@ def test_a_place_with_no_station_is_told_where_the_nearest_one_is():
         "a referral must name a station that actually runs the service, and say when")
     # Far enough to be worth saying, which is the whole reason the screen was empty.
     assert first["distance_m"] > 100, "this station is on top of the rider; nothing to refer"
+
+
+def test_a_journey_with_a_change_never_mixes_the_two_networks():
+    """
+    The assumption the operator chip now filters journeys-with-a-change on.
+
+    Choosing Golden Arrow said "No bus goes from KRAAIFONTEIN" and then listed twenty-six
+    Metrorail journeys underneath it, described as "2 buses" - two answers to two
+    different questions on one screen, contradicting each other. The screen now hides a
+    journey whose network is not the one chosen, and names the network from the stop the
+    API resolved the origin to.
+
+    That is only sound while a journey with a change cannot mix the two, which is true for
+    a reason rather than by luck: a connection changes at ONE stop row, and no stop row is
+    served by both a bus route and a train route. If that ever stops being true - the
+    obvious way being a bus/train interchange, which is worth having - this test fails and
+    the chip will need the operator per leg instead of per journey.
+    """
+    from gabs_scraper import db
+
+    try:
+        conn = db.connect()
+    except Exception as e:  # noqa: BLE001
+        pytest.skip(f"Postgres not reachable: {e}")
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT count(*) FROM (
+              SELECT ss.stop_id FROM schedule_stop ss
+              JOIN schedule sc ON sc.id = ss.schedule_id
+              JOIN timetable t ON t.id = sc.timetable_id
+              JOIN route r     ON r.id = t.route_id
+              JOIN operator o  ON o.id = r.operator_id
+              GROUP BY ss.stop_id HAVING count(DISTINCT o.kind) > 1) x
+            """)
+        both = cur.fetchone()[0]
+    finally:
+        conn.close()
+
+    assert both == 0, (
+        f"{both} stops are served by both networks, so a journey with a change can now "
+        f"mix them - the screen decides which chip a whole journey belongs to from one "
+        f"stop, and would label such a journey wrongly")

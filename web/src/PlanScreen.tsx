@@ -278,6 +278,21 @@ export default function PlanScreen() {
   /** The journey-with-changes the map should draw, when there is no direct one. */
   const [chosenConn, setChosenConn] = useState<Connection | null>(null)
   /** Connections whose first bus could still be caught at the chosen time. */
+  /**
+   * Which network the journey-with-a-change runs on, and whether the chip wants it.
+   *
+   * No stop in this database is served by both a bus route and a train route, so a
+   * journey with a change never mixes them: the stop it changes at belongs to one
+   * operator, and so does the whole journey. The API says which stop it resolved the
+   * origin to, and that stop knows whose it is.
+   *
+   * Choosing Golden Arrow used to say "No bus goes from KRAAIFONTEIN" and then list
+   * twenty-six Metrorail journeys underneath it, described as "2 buses". Two answers to
+   * two different questions, on one screen, contradicting each other.
+   */
+  const connKind = s.connFrom?.operator_kind ?? ride
+  const connWanted = !chosen || connKind === chosen
+
   const liveConns = useMemo(
     () => (s.conns ? connectionsFrom(s.conns, leaveAt) : null),
     [s.conns, leaveAt],
@@ -701,7 +716,8 @@ export default function PlanScreen() {
       {/* There is a way there, it just takes changes. The panel prices the whole thing and
           shows the wait between each leg, which is what decides whether a three-bus
           journey is worth making at all. */}
-      {s.plan && !s.loading && !s.connLoading && liveConns && liveConns.length > 0 && (
+      {s.plan && !s.loading && !s.connLoading && connWanted
+        && liveConns && liveConns.length > 0 && (
         <>
           {/* A journey with a change is worth showing even when something runs straight
               through. Kraaifontein to Rosebank has one direct bus and sixteen ways to do
@@ -713,7 +729,11 @@ export default function PlanScreen() {
               ? <><b>No direct {said}</b> from {s.from!.name} to {s.to!.name}. You can still
                   get there by taking{' '}</>
               : <>You can also get from {s.from!.name} to {s.to!.name} by taking{' '}</>}
-            <b>{s.connLegs} {saids}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
+            {/* plural(connKind), not the chip's word: a journey of two trains read
+                "2 buses" whenever the rider had chosen All, because the fallback for
+                "no network chosen" is bus. The journey knows what it is. */}
+            <b>{s.connLegs} {plural(connKind)}</b>, changing at{' '}
+            <b>{liveConns[0].change_at.join(' then ')}</b>.
           </Banner>
           {/* Headed by the journey, not by what the rider typed. A place carries no
               operator and fell through to Golden Arrow, so a connection made entirely of
