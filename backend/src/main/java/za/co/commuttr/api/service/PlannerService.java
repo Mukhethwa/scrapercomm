@@ -678,11 +678,19 @@ public class PlannerService {
         // a journey: they would already have walked further than the whole distance
         // before boarding.
         //
-        // Per end rather than on the two added together, which was tried first and takes
-        // too much: it removed the Rosebank train outright, on a journey where the train
-        // is a fair thing to want. An end further away than the destination itself is
-        // absurd on its own terms; two ordinary walks that happen to sum past it are
-        // merely a poor option, and {@code leastWalk} below already prefers better ones.
+        // BOTH ENDS TOGETHER, and each end on its own.
+        //
+        // The sum was tried, then dropped for taking too much - it removed the Rosebank
+        // train, on a journey where a train seemed a fair thing to want - and dropping it
+        // was wrong. Cape Town to Woodstock is 2,775m and the screen offered "102 to
+        // Civic Centre": walk 1,170m to Adderley, ride three minutes, walk 1,966m from
+        // the Civic Centre. 3,136m of walking to save 700m of it. Each end passes on its
+        // own, and the pair is absurd.
+        //
+        // Somebody would arrive sooner on foot, which is the whole test. It does not ask
+        // whether a rider would rather sit down - it asks whether the ride is a ride at
+        // all, and a journey whose walking exceeds its own length is not one. The 102 in
+        // the other direction, to Salt River, needs 1,646m and is still offered.
         double apart = straightLineBetween(fromEp, toEp);
 
         for (Map.Entry<AnchorKey, List<Anchor>> entry : board.entrySet()) {
@@ -730,6 +738,9 @@ public class PlannerService {
                         continue;
                     }
                     double walk = b.distanceM() + a.distanceM();
+                    if (walk >= apart) {
+                        continue;
+                    }
                     // Ties go to the earliest ends, which is what this did before and
                     // keeps a single-anchor journey answering exactly as it always has.
                     if (best == null || walk < leastWalk - 1e-9

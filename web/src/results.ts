@@ -365,3 +365,24 @@ export function ownsOpenDeparture(
   if (openKey == null) return false
   return blocks.some((b) => blockKey(b.optionIndex, b.departureIndex) === openKey)
 }
+
+/**
+ * The rows belonging to the operator whose chip is pressed.
+ *
+ * Used by the destinations list, which was not filtered at all: choosing MyCiTi and
+ * being shown four hundred Golden Arrow stops and every Metrorail station is the filter
+ * being ignored outright. Mukhethwa, looking at exactly that: "why do i get train
+ * suggestions where else i chose my citi pill".
+ *
+ * By operator code, not by kind, for the reason everything else here is: MyCiTi and
+ * Golden Arrow are both buses and do not serve the same places.
+ *
+ * An absent code means Golden Arrow. Everything loaded before operators existed is
+ * theirs, and a row that has lost its code should not vanish from a list on that account.
+ */
+export function onlyOperator<T extends { operator_code?: string }>(
+  rows: T[], operator: string | null,
+): T[] {
+  if (!operator) return rows
+  return rows.filter((r) => (r.operator_code ?? 'gabs') === operator)
+}

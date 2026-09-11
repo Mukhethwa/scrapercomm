@@ -49,10 +49,10 @@
       "options": 30
     },
     "Cape Town CBD -> Woodstock": {
-      "by_bus": 220,
+      "by_bus": 198,
       "by_train": 8,
       "first": "03:25:00",
-      "options": 228
+      "options": 206
     },
     "Khayelitsha -> Kraaifontein": {
       "by_bus": 3,
@@ -163,7 +163,7 @@
       "direct": 0,
       "fare": null,
       "first": null,
-      "with_a_change": 40
+      "with_a_change": null
     }
   }
 }

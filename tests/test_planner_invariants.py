@@ -987,3 +987,50 @@ def test_the_chip_filters_by_company_and_not_by_kind():
         under_myciti = [r["name"] for r in
                         get("geocode", q=name, operator="myciti")["results"]]
         assert name in under_myciti, f"{name} is not offered under the MyCiTi chip"
+
+
+def test_no_journey_asks_for_more_walking_than_the_trip_is_long():
+    """
+    Cape Town to Woodstock offered "102 to Civic Centre": walk 1,170m to Adderley, ride
+    three minutes, walk 1,966m from the Civic Centre. 3,136m of walking on a 2,775m
+    journey, to save 700m of it.
+
+    Both ends passed on their own - each was nearer than the destination - and the pair
+    was absurd. The rider arrives sooner on foot, which is the test: not whether they
+    would rather sit down, but whether the ride is a ride at all.
+
+    This rule was written, then dropped for taking too much, then put back when Mukhethwa
+    found the answer it had been preventing. So it is asserted rather than remembered.
+    """
+    for name, origin, destination in (
+            ("Cape Town to Woodstock", (-33.9288301, 18.4172197), WOODSTOCK),
+            ("Rosebank to Mowbray", ROSEBANK, MOWBRAY)):
+        plan = get("plan", from_lat=origin[0], from_lon=origin[1],
+                   to_lat=destination[0], to_lon=destination[1])
+        apart = metres(origin, destination)
+        greedy = []
+        for o in plan["options"]:
+            walk = (o["board_away_m"] or 0) + (o["alight_away_m"] or 0)
+            if walk >= apart:
+                greedy.append(f"{o['route_label']}: {round(walk)}m of walking on a "
+                              f"{round(apart)}m journey, boarding {o['board_label']}")
+        assert not greedy, (f"{name} offers journeys that are longer on foot than the "
+                            f"walk they replace:\n  " + "\n  ".join(greedy[:6]))
+
+
+def test_a_short_journey_still_has_answers():
+    """
+    The other half of the rule above, which is what makes it safe to apply.
+
+    A cap on walking can empty a screen, and an empty screen is the worst answer the app
+    has. Cape Town to Woodstock keeps two hundred journeys after it, so the rule removes
+    the absurd ones and not the question.
+    """
+    plan = get("plan", from_lat=-33.9288301, from_lon=18.4172197,
+               to_lat=WOODSTOCK[0], to_lon=WOODSTOCK[1])
+    assert len(plan["options"]) > 50, (
+        f"only {len(plan['options'])} journeys survive the walking cap on a journey the "
+        f"whole network runs; the cap is taking too much")
+    codes = {o["operator_code"] for o in plan["options"]}
+    assert {"gabs", "myciti", "metrorail"} <= codes, (
+        f"the cap has removed an operator entirely: only {sorted(codes)} answer")

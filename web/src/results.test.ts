@@ -13,7 +13,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { blockKey, ownsOpenDeparture, type DepartureBlock } from './results.ts'
+import {
+  blockKey, onlyOperator, ownsOpenDeparture, type DepartureBlock,
+} from './results.ts'
 
 /** Just the two fields identity is made of; the rest of a block is not consulted. */
 function block(optionIndex: number, departureIndex: number): DepartureBlock {
@@ -62,4 +64,28 @@ test('option and departure index are not interchangeable', () => {
   assert.equal(ownsOpenDeparture('0-1', BUSES), false)
   assert.equal(ownsOpenDeparture('1-0', BUSES), true)
   assert.equal(ownsOpenDeparture('1-0', TRAINS), false)
+})
+
+test('a list of stops narrows to the operator whose chip is pressed', () => {
+  // The destinations list showed all 417 stops whatever chip was pressed - four hundred
+  // Golden Arrow stops and every Metrorail station, under MyCiTi.
+  const rows = [
+    { operator_code: 'gabs', name: 'BELLVILLE' },
+    { operator_code: 'myciti', name: 'Civic Centre' },
+    { operator_code: 'metrorail', name: 'AKASIA PARK' },
+    { operator_code: 'myciti', name: 'Adderley' },
+  ]
+  assert.deepEqual(onlyOperator(rows, 'myciti').map((r) => r.name),
+                   ['Civic Centre', 'Adderley'])
+  assert.deepEqual(onlyOperator(rows, 'metrorail').map((r) => r.name), ['AKASIA PARK'])
+  // No chip means all of them: "All" is not a filter.
+  assert.equal(onlyOperator(rows, null).length, 4)
+})
+
+test('a row with no operator on it counts as Golden Arrow', () => {
+  // Everything loaded before operators existed is theirs, and a row that has lost its
+  // code should not vanish from a list on that account.
+  const rows = [{ name: 'CAPE TOWN' }, { operator_code: 'myciti', name: 'Adderley' }]
+  assert.deepEqual(onlyOperator(rows, 'gabs').map((r) => r.name), ['CAPE TOWN'])
+  assert.deepEqual(onlyOperator(rows, 'myciti').map((r) => r.name), ['Adderley'])
 })

@@ -18,6 +18,7 @@ import {
   type Connection,
 } from './api'
 import { MODES, useModes } from './modes'
+import { onlyOperator } from './results'
 import { buildJourney, usePlanner } from './planner'
 
 /** A suggestion in either endpoint field: a real stop, a geocoded place, or an area. */
@@ -394,16 +395,21 @@ export function usePlanSearch(operator: string | null = null) {
   const modes = useModes()
 
   /*
-   * Everywhere this origin reaches, unfiltered.
+   * Everywhere this origin reaches, narrowed to the operator whose chip is pressed.
    *
-   * It used to be narrowed by whatever was in the destination box, which turned free text
-   * into a search over a list it has nothing to do with: the box offers places and this
-   * list holds stops. Typing "random place" emptied it and the screen then said "You can
-   * reach 0 stops from Cape Town" and "No direct bus or train goes to random place" -
-   * two statements about the network, neither of them true, both caused by a word nobody
-   * had chosen.
+   * NOT narrowed by the destination box, which is a different thing and was the old bug:
+   * free text turned into a search over a list it has nothing to do with - the box offers
+   * places and this list holds stops - so typing "random place" emptied it and the screen
+   * said "You can reach 0 stops from Cape Town", a statement about the network caused by
+   * a word nobody had chosen.
+   *
+   * The chip is not that. Choosing MyCiTi and being shown four hundred Golden Arrow stops
+   * and every Metrorail station is the filter being ignored outright: Mukhethwa, looking
+   * at exactly that, asked "why do i get train suggestions where else i chose my citi
+   * pill". A filter has to narrow what it is pointed at.
    */
-  const filteredReach = reachable ?? []
+  const filteredReach = useMemo(
+    () => onlyOperator(reachable ?? [], operator), [reachable, operator])
 
   /**
    * Places near the chosen destination that CAN be reached from here.
@@ -505,7 +511,9 @@ export function usePlanSearch(operator: string | null = null) {
     [nearbyAlternatives, bestLegs],
   )
 
-  const filteredConnecting = connecting
+  /** The same, for the stops that need one change. */
+  const filteredConnecting = useMemo(
+    () => onlyOperator(connecting, operator), [connecting, operator])
 
   /**
    * A field holds words that are not a place the app knows.
