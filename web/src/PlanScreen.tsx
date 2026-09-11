@@ -41,6 +41,10 @@ function vehicleSign(routeLabel: string, kind?: string): string {
     const line = routeLabel.replace(/\b(INBOUND|OUTBOUND)\b/i, '').trim()
     return line ? line.replace(/\s+/g, ' ') : routeLabel
   }
+  // "T01 to Civic Centre" already says where it is going, and has no dash to split on.
+  const own = routeLabel.match(/^(\S+) to (.+)$/)
+  if (own) return routeLabel
+
   const parts = routeLabel.split(' - ').map((x) => x.trim()).filter(Boolean)
   return parts[parts.length - 1] ?? routeLabel
 }
@@ -291,7 +295,11 @@ export default function PlanScreen() {
    * two different questions, on one screen, contradicting each other.
    */
   const connKind = s.connFrom?.operator_kind ?? ride
-  const connWanted = !chosen || connKind === chosen
+  // Whose journey it is, compared with whose chip is pressed. By company, not by kind:
+  // MyCiTi and Golden Arrow are both buses, so a kind comparison shows one company's
+  // journeys under the other's chip - which is the contradiction this check was added to
+  // remove, wearing a third face.
+  const connWanted = !only || (s.connFrom?.operator_code ?? 'gabs') === only
 
   const liveConns = useMemo(
     () => (s.conns ? connectionsFrom(s.conns, leaveAt) : null),

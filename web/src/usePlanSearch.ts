@@ -64,8 +64,8 @@ export function useDebounced<T>(v: T, ms: number): T {
  *        places a train reaches. 873 of the 884 places have a bus near them and 584 a
  *        station, so choosing trains genuinely narrows the list rather than decorating it.
  */
-export async function mergedSearch(q: string, kind: string | null = null): Promise<Hit[]> {
-  const g = await getGeocode(q, kind).catch(() => ({ results: [] as GeoHit[] }))
+export async function mergedSearch(q: string, operator: string | null = null): Promise<Hit[]> {
+  const g = await getGeocode(q, operator).catch(() => ({ results: [] as GeoHit[] }))
   return g.results.map((x) => ({
     kind: 'place', name: x.name, lat: x.lat, lon: x.lon, sub: x.full,
   }))
@@ -79,11 +79,15 @@ export async function mergedSearch(q: string, kind: string | null = null): Promi
  */
 export function usePlanSearch(operator: string | null = null) {
   /*
-   * The chip, as a network rather than a company.
+   * The chip, as the company itself.
    *
-   * Places are marked with which networks reach them, not with which operator, because
-   * that is the question a rider is asking: a station is a station whoever runs it. Null
-   * means All, and All offers every place something serves.
+   * This was read as a KIND - bus or train - on the grounds that a station is a station
+   * whoever runs it. That held while one company ran the buses. MyCiTi and Golden Arrow
+   * do not serve the same places: 39 of them are reachable by MyCiTi and by no Golden
+   * Arrow route, so a kind-shaped question offers all 39 under both chips and then finds
+   * no journey under one of them.
+   *
+   * Null still means All, and All offers every place something serves.
    */
   const operatorKind = operator
     ? (MODES.find((m) => m.id === operator)?.kind ?? null)
@@ -237,9 +241,9 @@ export function usePlanSearch(operator: string | null = null) {
       setConns(null); setConnLegs(null); setConnFrom(null)
     }
     if (!debFrom || (from && from.name === debFrom)) { setFromHits([]); return }
-    mergedSearch(debFrom, operatorKind).then(setFromHits)
+    mergedSearch(debFrom, operator).then(setFromHits)
       .catch(() => setFromHits([]))
-  }, [debFrom, operatorKind]) // eslint-disable-line
+  }, [debFrom, operator]) // eslint-disable-line
 
   useEffect(() => {
     if (to && to.name !== debTo) {
@@ -248,9 +252,9 @@ export function usePlanSearch(operator: string | null = null) {
       setOpenDep(null); setTripStops(null); setSel(0)
     }
     if (!from || !debTo || (to && to.name === debTo)) { setToHits([]); return }
-    mergedSearch(debTo, operatorKind).then(setToHits)
+    mergedSearch(debTo, operator).then(setToHits)
       .catch(() => setToHits([]))
-  }, [debTo, from, operatorKind]) // eslint-disable-line
+  }, [debTo, from, operator]) // eslint-disable-line
 
   /** Empty the starting point and everything that depended on it. */
   function clearFrom() {
@@ -444,8 +448,12 @@ export function usePlanSearch(operator: string | null = null) {
    */
   useEffect(() => {
     setReferral(null)
-    if (!operatorKind || !plan || loading) return
-    if (plan.some((o) => (o.operator_kind ?? 'bus') === operatorKind)) return
+    if (!operator || !operatorKind || !plan || loading) return
+    // Whether the CHOSEN COMPANY is in the answer, not whether something of its kind is.
+    // Comparing kinds, a Golden Arrow bus satisfied a MyCiTi chip - so a rider who asked
+    // for MyCiTi and got Golden Arrow saw neither the MyCiTi journey nor the sentence
+    // saying where to catch one.
+    if (plan.some((o) => (o.operator_code ?? 'gabs') === operator)) return
     if (!from || from.lat == null || from.lon == null) return
     if (!to || to.lat == null || to.lon == null) return
 
@@ -478,7 +486,7 @@ export function usePlanSearch(operator: string | null = null) {
       .catch(() => { if (!dropped) setReferral(null) })
       .finally(() => { if (!dropped) setReferralLoading(false) })
     return () => { dropped = true }
-  }, [operatorKind, plan, loading, from, to])
+  }, [operator, operatorKind, plan, loading, from, to])
 
   /** Buses the best answer to what was actually asked needs. */
   const bestLegs = plan && plan.length > 0 ? 1 : (connLegs ?? Infinity)

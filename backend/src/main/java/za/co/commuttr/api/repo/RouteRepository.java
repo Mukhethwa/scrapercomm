@@ -113,4 +113,5 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
             ORDER BY o.name
             """, nativeQuery = true)
     List<Object[]> operatorTotals();
+
 }

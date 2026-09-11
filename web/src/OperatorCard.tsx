@@ -56,10 +56,26 @@ function busTo(routeLabel: string, kind: 'bus' | 'train' = 'bus'): string {
     const line = routeLabel.replace(/\b(INBOUND|OUTBOUND)\b/i, '').trim()
     return line ? line.replace(/\s+/g, ' ') : routeLabel
   }
+  // A label that already names its own destination, which is how MyCiTi writes one.
+  //
+  // Golden Arrow labels a direction by its two ends - "CAPE GATE - TOWN CENTRE" - so the
+  // terminus is the part after the last dash. MyCiTi writes "T01 to Civic Centre", which
+  // has no dash in it, so that rule took the whole string and produced "to T01 to civic
+  // centre". The route number is what is lit up on the front of a MyCiTi bus, so the
+  // label is already the right words and only needs leaving alone.
+  const own = routeLabel.match(/^(\S+) to (.+)$/)
+  if (own) return `${own[1]} to ${sentence(own[2])}`
+
   const parts = routeLabel.split(' - ').map((s) => s.trim()).filter(Boolean)
   const terminus = parts[parts.length - 1] ?? routeLabel
   // Title case: the data shouts, and a small grey line under a time should not.
-  return `to ${terminus.charAt(0)}${terminus.slice(1).toLowerCase()}`
+  return `to ${sentence(terminus)}`
+}
+
+/** "TOWN CENTRE" -> "Town centre". Left alone if it is not already shouting. */
+function sentence(text: string): string {
+  if (text !== text.toUpperCase()) return text
+  return `${text.charAt(0)}${text.slice(1).toLowerCase()}`
 }
 
 function Block({ block, planned, onAdd, onOpen, open, kind }: {

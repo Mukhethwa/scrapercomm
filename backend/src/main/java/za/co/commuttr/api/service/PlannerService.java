@@ -255,8 +255,16 @@ public class PlannerService {
         // of which bus passes this exact point, and where both apply the planner keeps
         // whichever boards earliest on the run.
         Map<Integer, Double> awayByStop = new HashMap<>();
-        for (String kind : new String[] { "train", "bus" }) {
-            for (StopRow near : stops.findNearestOfKind(lat, lon, kind, WALK_M)) {
+        // An allowance per OPERATOR, not per kind.
+        //
+        // The nearest-stop query keeps six nearest and four busiest, because taking all
+        // twenty-seven stops inside the CBD radius turned a search into eleven seconds.
+        // Shared between two bus companies that cap starves one of them: MyCiTi's
+        // stations are dense in the middle of town, and the day they loaded, six Golden
+        // Arrow journeys from the CBD to Woodstock stopped being found. Adding an
+        // operator must add journeys and never remove them.
+        for (String code : operatorCodes()) {
+            for (StopRow near : stops.findNearestOfOperator(lat, lon, code, WALK_M)) {
                 awayByStop.put(near.getId(),
                         GeoUtils.haversineM(lat, lon, near.getLat(), near.getLon()));
             }
@@ -325,6 +333,23 @@ public class PlannerService {
         return anchors;
     }
 
+    /**
+     * Who there is to ask, cached for the life of the service.
+     *
+     * Loading an operator is a deliberate act that restarts the app, so this cannot go
+     * stale in a way that matters, and a plan asks for it several times per search.
+     */
+    private volatile List<String> operatorCodes;
+
+    private List<String> operatorCodes() {
+        List<String> known = operatorCodes;
+        if (known == null) {
+            known = stops.operatorCodesWithStops();
+            operatorCodes = known.isEmpty() ? List.of("gabs") : known;
+        }
+        return operatorCodes;
+    }
+
     /** {@code planner.endpoint_anchors} */
     private Map<AnchorKey, List<Anchor>> endpointAnchors(EndpointRef ep, double thresholdM) {
         return ep.isStop()
@@ -384,16 +409,22 @@ public class PlannerService {
      * whose nearest station is ten kilometres away - the table said no and the fallback,
      * asking a different question, said yes.
      */
-    public boolean isServed(double lat, double lon, String kind) {
-        for (String each : kind == null ? new String[] { "train", "bus" }
-                                        : new String[] { kind }) {
-            if (!stops.findNearestOfKind(lat, lon, each, WALK_M).isEmpty()) {
-                return true;
+    public boolean isServed(double lat, double lon, String operator) {
+        if (operator == null || operator.isBlank()) {
+            for (String code : operatorCodes()) {
+                if (!stops.findAnyOfOperator(lat, lon, code, WALK_M).isEmpty()) {
+                    return true;
+                }
             }
+            return !locatePoint(lat, lon, DEFAULT_THRESHOLD_M).isEmpty();
         }
-        // A road some service drives is a bus answer, so it only counts when buses are
-        // what was asked about.
-        return !"train".equals(kind) && !locatePoint(lat, lon, DEFAULT_THRESHOLD_M).isEmpty();
+        if (!stops.findAnyOfOperator(lat, lon, operator, WALK_M).isEmpty()) {
+            return true;
+        }
+        // A road some service drives is a bus answer, and only Golden Arrow has road
+        // geometry loaded - the leg paths come from their route shapes. So it answers for
+        // them and for nobody else, rather than lending one operator's roads to another.
+        return "gabs".equals(operator) && !locatePoint(lat, lon, DEFAULT_THRESHOLD_M).isEmpty();
     }
 
     /** The JSONB {@code [[lat,lon], ...]} column, decoded defensively. */

@@ -47,9 +47,19 @@ public interface AreaRepository extends JpaRepository<Area, Integer> {
                                             chr(39), ''), '.', ''), '-', '')
                 ) a.*
                 FROM area a
-                WHERE (CASE WHEN :kind = 'bus'   THEN a.served_bus
-                            WHEN :kind = 'train' THEN a.served_train
-                            ELSE a.served END)
+                -- Reachable, and by the operator the rider has chosen.
+                --
+                -- This asked served_bus or served_train, which stopped being the same
+                -- question the day a second bus operator arrived: 39 places that only
+                -- MyCiTi reaches are served_bus, so the Golden Arrow chip offered them
+                -- and then found no journey - which is the exact failure the kind columns
+                -- were added to prevent, one operator later. area_service holds the fact
+                -- as what it is, a place and an operator.
+                WHERE (CASE WHEN :operator = '' THEN a.served
+                            ELSE EXISTS (SELECT 1 FROM area_service x
+                                         JOIN operator o ON o.id = x.operator_id
+                                         WHERE x.area_id = a.id AND o.code = :operator)
+                       END)
                   AND (lower(a.name) LIKE :contains OR a.aliases LIKE :contains)
                 -- A mapped place beats one built from a stop of the same name. Entries
                 -- built from stops exist to fill the gaps OpenStreetMap leaves - BUH REIN
@@ -71,6 +81,6 @@ public interface AreaRepository extends JpaRepository<Area, Integer> {
     List<Area> search(@Param("contains") String contains,
                       @Param("prefix") String prefix,
                       @Param("exact") String exact,
-                      @Param("kind") String kind,
+                      @Param("operator") String operator,
                       @Param("maxRows") int maxRows);
 }

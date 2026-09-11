@@ -308,11 +308,16 @@ def test_the_chip_and_the_suggestions_agree():
     Metro Rail is an invitation to a dead end, its nearest station being ten kilometres
     away. The table said so correctly and the Nominatim fallback, asking whether ANY
     service reached the place, said otherwise - so the filter has to hold on both paths.
+
+    Asked by OPERATOR rather than by kind. The chip names a company, and with MyCiTi and
+    Golden Arrow both running buses, "is there a bus near here" is no longer the question
+    the chip is asking.
     """
     for query, absent in (("hout bay", "Hout Bay"), ("atlantis", "Atlantis")):
-        names = [r["name"] for r in get("geocode", q=query, kind="train")["results"]]
+        names = [r["name"] for r in
+                 get("geocode", q=query, operator="metrorail")["results"]]
         assert absent not in names, (
-            f"{absent} was offered under a train filter and has no station near it")
+            f"{absent} was offered under a Metrorail filter and has no station near it")
 
     # And the same places are there when the rider has not narrowed anything.
     for query, present in (("hout bay", "Hout Bay"), ("atlantis", "Atlantis")):
@@ -912,3 +917,73 @@ def test_a_journey_with_a_change_never_mixes_the_two_networks():
         f"{both} stops are served by both networks, so a journey with a change can now "
         f"mix them - the screen decides which chip a whole journey belongs to from one "
         f"stop, and would label such a journey wrongly")
+
+
+def test_a_new_operator_does_not_crowd_out_an_old_one():
+    """
+    The CBD is where every operator is densest, so it is where one can hide another.
+
+    The nearest-stop query keeps six nearest and four busiest, because taking all
+    twenty-seven stops inside the walking radius turned a CBD search into eleven seconds.
+    That cap was applied per KIND, and MyCiTi and Golden Arrow are both buses - so the day
+    MyCiTi loaded, its dense city stations filled the bus allowance and six Golden Arrow
+    journeys from the CBD to Woodstock stopped being found. The corpus caught it as a
+    LOST line, which is exactly what the corpus is for.
+
+    An allowance each now. Adding an operator must add journeys and never remove them, so
+    this asserts that all three answer at once on the journey where they compete hardest.
+    """
+    plan = get("plan", from_lat=CBD[0], from_lon=CBD[1],
+               to_lat=WOODSTOCK[0], to_lon=WOODSTOCK[1])
+    codes = {o["operator_code"] for o in plan["options"]}
+    loaded = {o["code"] for o in get("operators")["operators"] if o["departures"] > 0}
+    missing = loaded - codes
+    assert not missing, (
+        f"{', '.join(sorted(missing))} has departures loaded but offers nothing from the "
+        f"CBD to Woodstock, where every operator runs - the nearest-stop allowance is "
+        f"being shared rather than given per operator")
+
+
+def test_the_chip_filters_by_company_and_not_by_kind():
+    """
+    Two bus companies do not serve the same places.
+
+    39 places are within walking distance of a MyCiTi stop and of no Golden Arrow stop.
+    Asked as "is there a bus near here" - which is what served_bus answers - all 39 are
+    offered under the Golden Arrow chip and then found to have no journey. It is the
+    failure the kind columns were added to prevent, one operator later, so the question is
+    asked per operator now.
+    """
+    from gabs_scraper import db
+
+    try:
+        conn = db.connect()
+    except Exception as e:  # noqa: BLE001
+        pytest.skip(f"Postgres not reachable: {e}")
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT a.name FROM area a
+            WHERE EXISTS (SELECT 1 FROM area_service x JOIN operator o ON o.id = x.operator_id
+                          WHERE x.area_id = a.id AND o.code = 'myciti')
+              AND NOT EXISTS (SELECT 1 FROM area_service x JOIN operator o ON o.id = x.operator_id
+                              WHERE x.area_id = a.id AND o.code = 'gabs')
+            ORDER BY length(a.name), a.name LIMIT 5
+            """
+        )
+        myciti_only = [r[0] for r in cur.fetchall()]
+    finally:
+        conn.close()
+    if not myciti_only:
+        pytest.skip("every MyCiTi place is also reachable by Golden Arrow")
+
+    for name in myciti_only:
+        under_gabs = [r["name"] for r in
+                      get("geocode", q=name, operator="gabs")["results"]]
+        assert name not in under_gabs, (
+            f"{name} is offered under the Golden Arrow chip and no Golden Arrow stop is "
+            f"within walking distance of it")
+        under_myciti = [r["name"] for r in
+                        get("geocode", q=name, operator="myciti")["results"]]
+        assert name in under_myciti, f"{name} is not offered under the MyCiTi chip"

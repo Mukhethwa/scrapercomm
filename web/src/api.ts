@@ -304,9 +304,15 @@ export interface PlanOption {
  * @param kind "bus" or "train" to be offered only places that network reaches. A rider
  *        who has chosen Metro Rail should not be shown somewhere with no station.
  */
-export const getGeocode = (q: string, kind?: string | null) =>
+/**
+ * @param operator the operator chip in force - "gabs", "myciti", "metrorail" - so the
+ *        suggestions cannot offer somewhere that operator does not reach. This passed a
+ *        kind, which was the same thing until a second bus company arrived.
+ */
+export const getGeocode = (q: string, operator?: string | null) =>
   getJSON<{ results: GeoHit[] }>(
-    `${API}/geocode?q=${encodeURIComponent(q)}` + (kind ? `&kind=${kind}` : ''))
+    `${API}/geocode?q=${encodeURIComponent(q)}`
+    + (operator ? `&operator=${operator}` : ''))
 
 export const getAreas = () =>
   getJSON<{ areas: string[]; railAreas?: string[] }>(`${API}/areas`)

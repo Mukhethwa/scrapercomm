@@ -156,6 +156,59 @@ def served(cur, lat: float, lon: float) -> tuple[bool, bool]:
     return bool(bus), bool(train)
 
 
+def mark_served(cur) -> dict[str, int]:
+    """
+    Which operators reach each place, recomputed from the stops.
+
+    Asked per OPERATOR, not per kind. The kind columns were added so that choosing Metro
+    Rail would not offer Hout Bay, whose nearest station is forty kilometres away - and a
+    second bus operator breaks them in exactly the way they were built to prevent. A place
+    in Atlantis that only MyCiTi reaches is served_bus, so the Golden Arrow chip offers it
+    and then finds no journey; and the other way round for the whole Golden Arrow network.
+
+    The kind columns are kept and derived from this, because /api/areas and the loaders
+    still read them, and because "is there a bus near here at all" remains a real question
+    even once the answer no longer says whose.
+    """
+    cur.execute("DELETE FROM area_service")
+    cur.execute(
+        """
+        INSERT INTO area_service (area_id, operator_id)
+        SELECT DISTINCT a.id, s.operator_id
+        FROM area a
+        JOIN stop s ON s.lat IS NOT NULL
+          AND 6371000 * acos(least(1,
+                cos(radians(a.lat)) * cos(radians(s.lat))
+                  * cos(radians(s.lon) - radians(a.lon))
+              + sin(radians(a.lat)) * sin(radians(s.lat)))) <= %s
+        ON CONFLICT DO NOTHING
+        """,
+        (WALK_M,),
+    )
+    written = cur.rowcount
+    cur.execute(
+        """
+        UPDATE area a SET
+            served_bus = EXISTS (SELECT 1 FROM area_service x
+                                 JOIN operator o ON o.id = x.operator_id
+                                 WHERE x.area_id = a.id AND o.kind = 'bus'),
+            served_train = EXISTS (SELECT 1 FROM area_service x
+                                   JOIN operator o ON o.id = x.operator_id
+                                   WHERE x.area_id = a.id AND o.kind = 'train'),
+            served = EXISTS (SELECT 1 FROM area_service x WHERE x.area_id = a.id)
+        """
+    )
+    cur.execute(
+        """
+        SELECT o.code, count(*) FROM area_service x
+        JOIN operator o ON o.id = x.operator_id GROUP BY o.code ORDER BY 2 DESC
+        """
+    )
+    by_operator = dict(cur.fetchall())
+    by_operator["_rows"] = written
+    return by_operator
+
+
 def add_stop_names(cur) -> list[str]:
     """
     Every name the operators print that OSM does not have as a place.

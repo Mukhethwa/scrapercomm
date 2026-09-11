@@ -88,3 +88,22 @@ CREATE INDEX IF NOT EXISTS route_operator_idx ON route (operator_id);
 -- platform indicator wants it. Golden Arrow trips carry no equivalent, so this is null
 -- for every bus and the planner simply shows nothing where there is nothing.
 ALTER TABLE trip ADD COLUMN IF NOT EXISTS label TEXT;
+
+-- Which networks actually reach a place, by operator rather than by kind.
+--
+-- The search box narrows its suggestions to the operator a rider has chosen, and until
+-- now that question was answered per KIND: served_bus and served_train. Two bus operators
+-- make that answer wrong in both directions. A place in Atlantis that only MyCiTi reaches
+-- is served_bus, so choosing Golden Arrow offers it and then finds no journey; a place
+-- only Golden Arrow reaches is offered under MyCiTi for the same reason. It is the fault
+-- the kind columns were added to prevent, reappearing one operator later.
+--
+-- So the fact is stored as what it is: this place, that operator. The kind columns stay,
+-- derived from this, because /api/areas and the loaders still read them.
+CREATE TABLE IF NOT EXISTS area_service (
+    area_id     INTEGER NOT NULL REFERENCES area(id) ON DELETE CASCADE,
+    operator_id INTEGER NOT NULL REFERENCES operator(id) ON DELETE CASCADE,
+    PRIMARY KEY (area_id, operator_id)
+);
+
+CREATE INDEX IF NOT EXISTS area_service_operator_idx ON area_service (operator_id);

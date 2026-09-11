@@ -4,10 +4,15 @@ import { getOperators } from './api'
 /**
  * The transport a journey can use.
  *
- * Only Golden Arrow is carried today - every timetable, stop and fare in the database
- * came from them - so the others are listed but cannot be chosen. They are shown rather
- * than hidden because a rider looking for a train needs to know the app does not have
- * one yet, not be left wondering whether they searched wrongly.
+ * Three are carried: Golden Arrow, Metrorail and MyCiTi. The rest are listed but cannot
+ * be chosen - shown rather than hidden, because somebody in Gqeberha looking for Algoa
+ * needs to know the app does not have it yet, not be left wondering whether they searched
+ * wrongly.
+ *
+ * `available` is only the static fallback. What a chip can actually do is decided by
+ * useLoadedOperators below, which asks the API what has departures behind it - so a clone
+ * of this repository with no MyCiTi data greys the chip out without anyone editing this
+ * list.
  */
 export interface Mode {
   id: string
@@ -24,9 +29,9 @@ export const MODES: Mode[] = [
   // Cape Town
   { id: 'gabs', name: 'Golden Arrow', available: true, region: 'Cape Town',
     kind: 'bus', note: 'Buses across Cape Town' },
-  { id: 'myciti', name: 'MyCiTi', available: false, region: 'Cape Town',
-    kind: 'bus', note: 'Cape Town buses' },
-  { id: 'metrorail', name: 'Metro Rail', available: false, region: 'National',
+  { id: 'myciti', name: 'MyCiTi', available: true, region: 'Cape Town',
+    kind: 'bus', note: 'Cape Town bus rapid transit' },
+  { id: 'metrorail', name: 'Metro Rail', available: true, region: 'National',
     kind: 'train', note: 'Passenger trains' },
   // The rest of the Western Cape
   { id: 'gogeorge', name: 'Go George', available: false, region: 'George',

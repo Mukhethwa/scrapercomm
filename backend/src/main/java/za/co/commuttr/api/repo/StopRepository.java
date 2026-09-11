@@ -102,9 +102,97 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
             FROM eligible e JOIN chosen c ON c.id = e.id
             ORDER BY e.away
             """, nativeQuery = true)
+
     List<StopRow> findNearestOfKind(@Param("lat") double lat,
                                     @Param("lon") double lon,
                                     @Param("kind") String kind,
+                                    @Param("withinM") double withinM);
+
+    /**
+     * The same, for ONE OPERATOR rather than one kind.
+     *
+     * The cap above is what makes this necessary. Six nearest and four busiest is a
+     * sensible number of stops to consider from one point - taking all twenty-seven in
+     * the CBD turned a search into eleven seconds - but shared between two bus companies
+     * it starves one of them. MyCiTi's stations are dense in the middle of town, so they
+     * filled the bus allowance and six Golden Arrow journeys from the CBD to Woodstock
+     * stopped being found the day MyCiTi was loaded.
+     *
+     * An allowance each, so a new operator adds journeys and never removes them.
+     */
+    @Query(value = """
+            WITH within AS (
+                SELECT s.id, s.name, s.lat, s.lon, o.code, o.kind,
+                       6371000 * acos(least(1,
+                           cos(radians(s.lat)) * cos(radians(CAST(:lat AS double precision)))
+                             * cos(radians(CAST(:lon AS double precision)) - radians(s.lon))
+                         + sin(radians(s.lat))
+                             * sin(radians(CAST(:lat AS double precision))))) AS away,
+                       (SELECT count(*) FROM schedule_stop ss WHERE ss.stop_id = s.id) AS calls
+                FROM stop s
+                JOIN operator o ON o.id = s.operator_id AND o.code = :operator
+                WHERE s.lat IS NOT NULL
+            ),
+            eligible AS (
+                SELECT * FROM within WHERE away <= CAST(:withinM AS double precision)
+            ),
+            chosen AS (
+                (SELECT id FROM eligible ORDER BY away LIMIT 6)
+                UNION
+                (SELECT id FROM eligible ORDER BY calls DESC, away LIMIT 4)
+            )
+            SELECT e.id AS "id", e.name AS "name", e.lat AS "lat", e.lon AS "lon",
+                   e.code AS "operatorCode", e.kind AS "operatorKind"
+            FROM eligible e JOIN chosen c ON c.id = e.id
+            ORDER BY e.away
+            """, nativeQuery = true)
+    List<StopRow> findNearestOfOperator(@Param("lat") double lat,
+                                        @Param("lon") double lon,
+                                        @Param("operator") String operator,
+                                        @Param("withinM") double withinM);
+
+    /**
+     * Every operator code with stops behind it, nearest-stop searches first.
+     *
+     * The planner walks a rider to whatever is near them, and does it one operator at a
+     * time so that each gets its own allowance of nearby stops - see
+     * {@link StopRepository#findNearestOfOperator}. It therefore has to know who there is
+     * to ask, and asking the database beats a list in the code that a new operator can be
+     * loaded without anybody remembering to edit.
+     */
+    @Query(value = """
+            SELECT o.code FROM operator o
+            WHERE EXISTS (SELECT 1 FROM stop s
+                          WHERE s.operator_id = o.id AND s.lat IS NOT NULL)
+            ORDER BY o.id
+            """, nativeQuery = true)
+    List<String> operatorCodesWithStops();
+
+    /**
+     * The same question asked of one operator rather than one kind.
+     *
+     * Two bus operators do not serve the same places, so "is there a bus near here" stops
+     * being the question the moment there is more than one bus company. Used by the
+     * Nominatim fallback, which is the one path that cannot read area_service because the
+     * place it is asking about is not in the table yet.
+     */
+    @Query(value = """
+            SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
+                   o.code AS "operatorCode", o.kind AS "operatorKind"
+            FROM stop s
+            JOIN operator o ON o.id = s.operator_id AND o.code = :operator
+            WHERE s.lat IS NOT NULL
+              AND 6371000 * acos(least(1,
+                    cos(radians(s.lat)) * cos(radians(CAST(:lat AS double precision)))
+                      * cos(radians(CAST(:lon AS double precision)) - radians(s.lon))
+                  + sin(radians(s.lat))
+                      * sin(radians(CAST(:lat AS double precision)))))
+                  <= CAST(:withinM AS double precision)
+            LIMIT 1
+            """, nativeQuery = true)
+    List<StopRow> findAnyOfOperator(@Param("lat") double lat,
+                                    @Param("lon") double lon,
+                                    @Param("operator") String operator,
                                     @Param("withinM") double withinM);
 
     @Query(value = """

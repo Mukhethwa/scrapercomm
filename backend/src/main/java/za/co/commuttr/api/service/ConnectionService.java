@@ -72,12 +72,14 @@ public class ConnectionService {
     private static final double WALK_M = PlannerService.WALK_M;
 
     /**
-     * How many nearby stops of EACH kind to try for a place, nearest first.
+     * How many nearby stops of EACH OPERATOR to try for a place, nearest first.
      *
-     * Per kind, because the two lists are gathered one after the other. A flat cap across
-     * both took the first six of trains-then-buses, so a place with six stations inside
-     * the radius considered no bus stop at all - and a rider reaches this list precisely
-     * when the direct search found nothing, which is when the other network matters most.
+     * Per operator, because the lists are gathered one after another and a flat cap
+     * across them starves whoever is gathered last. It was per kind, which was the same
+     * thing until MyCiTi arrived: two bus companies then shared one bus allowance, and
+     * MyCiTi's dense city stations pushed Golden Arrow's out of it. A rider reaches this
+     * list precisely when the direct search found nothing, which is when the operator
+     * being crowded out matters most.
      */
     private static final int NEAR_TRIED = 5;
 
@@ -117,8 +119,8 @@ public class ConnectionService {
             return List.of();
         }
         List<StopRow> near = new ArrayList<>();
-        for (String kind : new String[] { "train", "bus" }) {
-            near.addAll(stops.findNearestOfKind(lat, lon, kind, WALK_M).stream()
+        for (String code : stops.operatorCodesWithStops()) {
+            near.addAll(stops.findNearestOfOperator(lat, lon, code, WALK_M).stream()
                     .limit(NEAR_TRIED).toList());
         }
         // Nearest first ACROSS both kinds, not trains and then buses.

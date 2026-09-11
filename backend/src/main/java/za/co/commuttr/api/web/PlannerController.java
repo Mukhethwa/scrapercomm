@@ -119,13 +119,16 @@ public class PlannerController {
 
     /** Geocode a place/address via OpenStreetMap Nominatim (no key). For pin input. */
     /**
-     * @param kind "bus" or "train" to offer only places that network reaches. The search
-     *             box passes whatever operator chip the rider has chosen, so the
-     *             suggestions and the results can no longer disagree.
+     * @param operator the operator chip the rider has chosen - "gabs", "myciti",
+     *        "metrorail" - so the suggestions and the results cannot disagree. Absent
+     *        means all of them.
+     *
+     *        This took a kind, "bus" or "train", which was the same thing while there was
+     *        one bus company and stopped being so when there were two.
      */
     @GetMapping("/geocode")
     public GeocodeResponse geocode(@RequestParam String q,
-                                   @RequestParam(required = false) String kind) {
-        return geocodeService.geocode(q, kind);
+                                   @RequestParam(required = false) String operator) {
+        return geocodeService.geocode(q, operator);
     }
 }

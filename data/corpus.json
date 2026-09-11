@@ -31,10 +31,10 @@
       "options": 28
     },
     "Cape Town CBD -> Khayelitsha": {
-      "by_bus": 21,
+      "by_bus": 27,
       "by_train": 2,
       "first": "03:50:00",
-      "options": 23
+      "options": 29
     },
     "Cape Town CBD -> Kraaifontein": {
       "by_bus": 10,
@@ -43,16 +43,16 @@
       "options": 11
     },
     "Cape Town CBD -> Mitchells Plain": {
-      "by_bus": 24,
+      "by_bus": 28,
       "by_train": 2,
       "first": "03:25:00",
-      "options": 26
+      "options": 30
     },
     "Cape Town CBD -> Woodstock": {
-      "by_bus": 169,
+      "by_bus": 220,
       "by_train": 8,
       "first": "03:25:00",
-      "options": 177
+      "options": 228
     },
     "Khayelitsha -> Kraaifontein": {
       "by_bus": 3,
@@ -67,10 +67,10 @@
       "options": 5
     },
     "Khayelitsha -> Woodstock": {
-      "by_bus": 16,
+      "by_bus": 22,
       "by_train": 2,
       "first": "04:30",
-      "options": 18
+      "options": 24
     },
     "Kraaifontein -> Mitchells Plain": {
       "by_bus": 1,
@@ -85,10 +85,10 @@
       "options": 6
     },
     "Mitchells Plain -> Woodstock": {
-      "by_bus": 40,
+      "by_bus": 44,
       "by_train": 2,
       "first": "04:10",
-      "options": 42
+      "options": 46
     }
   },
   "searches": {
@@ -163,7 +163,7 @@
       "direct": 0,
       "fare": null,
       "first": null,
-      "with_a_change": null
+      "with_a_change": 40
     }
   }
 }
