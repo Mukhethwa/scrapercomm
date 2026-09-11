@@ -808,3 +808,22 @@ def test_a_fare_stating_no_transfer_allowance_is_common_enough_to_matter():
     assert unstated > 0, (
         "every fare now states a transfer allowance, which would make the null-key crash "
         "unreachable - check whether TransferAllowanceTest still guards anything real")
+
+
+def test_a_place_is_offered_once_however_it_is_spelt():
+    """
+    The whole point of dropping bus/train/place: one line per place.
+
+    Spelling brought the duplication back by another door. OpenStreetMap maps Fir Grove
+    and Firgrove as separate nodes, Golden Arrow prints FIRGROVE, and the list showed all
+    three - a choice with nothing to choose between the lines, which is exactly what the
+    three kinds used to be. Smartie Town and Sybrand Park were the same.
+
+    A space is not a different place, so the search collapses on the name with the
+    punctuation taken out, the same spelling it matches aliases against.
+    """
+    for typed in ("firgrove", "smartietown", "sybrandpark", "mitchellsplain", "capegate"):
+        names = [x["name"] for x in get("geocode", q=typed)["results"]]
+        squashed = ["".join(c for c in n.lower() if c.isalnum()) for n in names]
+        assert len(squashed) == len(set(squashed)), (
+            f"{typed!r} offers the same place more than once: {names}")

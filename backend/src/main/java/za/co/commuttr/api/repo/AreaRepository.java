@@ -37,7 +37,15 @@ public interface AreaRepository extends JpaRepository<Area, Integer> {
                 -- One row per name, chosen inside. DISTINCT ON has to be ordered by the
                 -- thing it distinguishes, which is not the order a rider should read, so
                 -- the ranking happens outside where it is free to.
-                SELECT DISTINCT ON (lower(a.name)) a.*
+                SELECT DISTINCT ON (
+                    -- One row per place, judged with the punctuation out. Keyed on
+                    -- lower(name) this kept Fir Grove beside Firgrove beside FIRGROVE,
+                    -- and Smartie Town beside Smartietown: one place, listed two or
+                    -- three times, with nothing to choose between the lines. A space is
+                    -- not a different place.
+                    replace(replace(replace(replace(lower(a.name), ' ', ''),
+                                            chr(39), ''), '.', ''), '-', '')
+                ) a.*
                 FROM area a
                 WHERE (CASE WHEN :kind = 'bus'   THEN a.served_bus
                             WHEN :kind = 'train' THEN a.served_train
@@ -49,7 +57,9 @@ public interface AreaRepository extends JpaRepository<Area, Integer> {
                 -- centre is what somebody typing the name means. This was a.kind, which
                 -- ranked the stop kind ahead of suburb and town by the alphabet alone, so
                 -- "bellville" started answering with the station rather than the town.
-                ORDER BY lower(a.name), (a.kind = 'stop'), a.id
+                ORDER BY replace(replace(replace(replace(lower(a.name), ' ', ''),
+                                                 chr(39), ''), '.', ''), '-', ''),
+                         (a.kind = 'stop'), a.id
             ) d
             ORDER BY
                 (lower(d.name) = :exact) DESC,
