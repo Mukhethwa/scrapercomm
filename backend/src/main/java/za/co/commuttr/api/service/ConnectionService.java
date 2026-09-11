@@ -17,6 +17,7 @@ import za.co.commuttr.api.web.ApiException;
 
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -120,6 +121,19 @@ public class ConnectionService {
             near.addAll(stops.findNearestOfKind(lat, lon, kind, WALK_M).stream()
                     .limit(NEAR_TRIED).toList());
         }
+        // Nearest first ACROSS both kinds, not trains and then buses.
+        //
+        // The two lists are gathered one after the other so that a cap cannot spend
+        // itself on one network, which is right - but the order they were gathered in
+        // then decided the journey, because the first pair that connects wins. Gaylee to
+        // Tuscany Glen started at BLACKHEATH station, 1,359m away, with a bus stop at
+        // 558m; it ended at MELTON ROSE, 1,767m off, with one at 963m. The rider asked
+        // for neither station and was walking to both because rail is gathered first.
+        //
+        // Which is the same fault the direct planner had, reached by a different road:
+        // an end chosen by something that is not how near it is to what was searched.
+        near.sort(Comparator.comparingDouble(
+                s -> GeoUtils.haversineM(lat, lon, s.getLat(), s.getLon())));
         return near;
     }
 
@@ -173,6 +187,26 @@ public class ConnectionService {
     private static final Map<String, Integer> TRANSFERS =
             Map.of("Zero", 0, "One", 1, "Two", 2);
 
+    /**
+     * How many changes this fare's transfer allowance covers, where it states one.
+     *
+     * A fare need not say. 9,273 of the 23,805 in this database - every Metrorail one,
+     * priced by distance band, and a good many of Golden Arrow's - leave the column null,
+     * and a null cannot be looked up in a Map.of at all: it throws rather than missing.
+     * So a journey with a change whose two ends happened to have a through fare of that
+     * kind answered 500 and the screen showed nothing, which is how a bus pair 558m away
+     * came to look worse than a station 1,359m away.
+     *
+     * Saying nothing about transfers is not the same as allowing one. A fare that does
+     * not cover the change is priced a leg at a time, which is what the rider is charged.
+     */
+    static int changesCovered(FareDto fare) {
+        if (fare == null || fare.transfers() == null) {
+            return 0;
+        }
+        return TRANSFERS.getOrDefault(fare.transfers(), 0);
+    }
+
     /** {@code planner.journey_fare} — the same precomputed table the planner reads. */
     private FareDto fareFor(Integer fromId, Integer toId) {
         if (fromId == null || toId == null) {
@@ -211,7 +245,7 @@ public class ConnectionService {
         FareDto through = fareFor(fromId, toId);
         int changes = legs.size() - 1;
         if (through != null && through.perRideCents() != null
-                && TRANSFERS.getOrDefault(through.transfers(), 0) >= changes) {
+                && changesCovered(through) >= changes) {
             return new ConnectionFareDto("through", 1, through.perRideCents(),
                     through.fiveRideCents(), through.weeklyCents(), through.monthlyCents(),
                     through.code(), through.transfers(), through.basis(),

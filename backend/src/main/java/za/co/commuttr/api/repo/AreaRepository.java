@@ -43,7 +43,13 @@ public interface AreaRepository extends JpaRepository<Area, Integer> {
                             WHEN :kind = 'train' THEN a.served_train
                             ELSE a.served END)
                   AND (lower(a.name) LIKE :contains OR a.aliases LIKE :contains)
-                ORDER BY lower(a.name), a.kind, a.id
+                -- A mapped place beats one built from a stop of the same name. Entries
+                -- built from stops exist to fill the gaps OpenStreetMap leaves - BUH REIN
+                -- and four hundred others - and where OSM does have the place, its own
+                -- centre is what somebody typing the name means. This was a.kind, which
+                -- ranked the stop kind ahead of suburb and town by the alphabet alone, so
+                -- "bellville" started answering with the station rather than the town.
+                ORDER BY lower(a.name), (a.kind = 'stop'), a.id
             ) d
             ORDER BY
                 (lower(d.name) = :exact) DESC,

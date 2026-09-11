@@ -525,19 +525,28 @@ export default function PlanScreen() {
         />
       )}
 
-      {s.plan && !s.loading && s.plan.length === 0 && s.connLoading && (
+      {s.plan && !s.loading && s.connLoading && (
         <Banner tone="info" icon={Info}>
-          No direct {said}. Looking for a journey with a change...
+          {s.plan.length === 0 ? <>No direct {said}. Looking</> : <>Also looking</>} for a
+          journey with a change...
         </Banner>
       )}
 
       {/* There is a way there, it just takes changes. The panel prices the whole thing and
           shows the wait between each leg, which is what decides whether a three-bus
           journey is worth making at all. */}
-      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && liveConns && liveConns.length > 0 && (
+      {s.plan && !s.loading && !s.connLoading && liveConns && liveConns.length > 0 && (
         <>
-          <Banner tone="warn" icon={Warning}>
-            <b>No direct {said}</b> from {s.from!.name} to {s.to!.name}. You can still get there by taking{' '}
+          {/* A journey with a change is worth showing even when something runs straight
+              through. Kraaifontein to Rosebank has one direct bus and sixteen ways to do
+              it by train, and hiding all sixteen behind the one bus told a rider looking
+              for the train that there wasn't one. */}
+          <Banner tone={s.plan.length === 0 ? 'warn' : 'info'}
+            icon={s.plan.length === 0 ? Warning : Info}>
+            {s.plan.length === 0
+              ? <><b>No direct {said}</b> from {s.from!.name} to {s.to!.name}. You can still
+                  get there by taking{' '}</>
+              : <>You can also get from {s.from!.name} to {s.to!.name} by taking{' '}</>}
             <b>{s.connLegs} {saids}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
           </Banner>
           {/* Headed by the journey, not by what the rider typed. A place carries no

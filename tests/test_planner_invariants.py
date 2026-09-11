@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import math
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -687,3 +688,123 @@ def test_a_journey_gets_on_and_off_where_the_rider_asked(name, origin, destinati
     wrong = ends_that_miss_a_nearer_stop(plan, origin, destination, trip_stops)
     assert not wrong, (f"{name} answers with ends the rider did not ask for:\n  "
                        + "\n  ".join(sorted(set(wrong))[:12]))
+
+
+# ---------------------------------------------------------------------------
+# Being able to ask, and being answered.
+# ---------------------------------------------------------------------------
+
+def test_every_name_an_operator_prints_can_be_typed_into_the_search():
+    """
+    Mukhethwa typed "buhrein" and got nothing.
+
+    BUH REIN is a bus stop in Kraaifontein serving a development of that name, and no
+    place node in OpenStreetMap carries it. When the search box stopped offering stops -
+    rightly, to end the bus/train/place triplicates - 416 of the 584 names the operators
+    print went with them, ADDERLEY STR and AKASIA PARK station among them. A rider cannot
+    plan to somewhere they cannot name.
+
+    The database question, not the API one, because it is about coverage rather than
+    ranking: is every printed name reachable by typing it.
+    """
+    from gabs_scraper import db
+
+    try:
+        conn = db.connect()
+    except Exception as e:  # noqa: BLE001
+        pytest.skip(f"Postgres not reachable: {e}")
+    try:
+        cur = conn.cursor()
+        # Compared with the punctuation out, the way the search matches its aliases.
+        squash = ("replace(replace(replace(replace(lower({0}),' ',''),chr(39),''),"
+                  "'.',''),'-','')")
+        cur.execute(f"""
+            SELECT DISTINCT s.name FROM stop s
+            WHERE s.lat IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM area a
+                              WHERE {squash.format('a.name')} = {squash.format('s.name')})
+            ORDER BY s.name
+            """)
+        missing = [r[0] for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    assert not missing, (f"{len(missing)} names an operator prints that nobody can search "
+                         f"for: " + ", ".join(missing[:15]))
+
+
+def test_a_name_typed_as_one_word_still_finds_it():
+    """
+    "buhrein" is one word to a rider and two to Golden Arrow.
+
+    The search matches on a substring, so the space made the name unfindable rather than
+    merely awkward. Every place carries its squashed spelling as an alias.
+    """
+    for typed, expected in (("buhrein", "BUH REIN"),
+                            ("mitchellsplain", "Mitchells Plain"),
+                            ("capegate", "CAPE GATE"),
+                            ("saltriver", "Salt River")):
+        names = [x["name"] for x in get("geocode", q=typed)["results"]]
+        assert expected in names, f"{typed!r} does not find {expected}: {names[:5]}"
+
+
+def test_a_journey_with_a_change_is_offered_even_when_something_runs_direct():
+    """
+    Kraaifontein to Rosebank: one direct bus, and sixteen ways to do it by train.
+
+    The screen asked for journeys with a change only when the direct search came back
+    empty, so the one bus was enough to stop it ever asking - and a rider looking for the
+    train was told, in effect, that there isn't one. A direct journey existing does not
+    make it the journey they want.
+    """
+    plan = get("plan", from_lat=KRAAIFONTEIN[0], from_lon=KRAAIFONTEIN[1],
+               to_lat=ROSEBANK[0], to_lon=ROSEBANK[1])
+    conns = get("connections", from_lat=KRAAIFONTEIN[0], from_lon=KRAAIFONTEIN[1],
+                to_lat=ROSEBANK[0], to_lon=ROSEBANK[1])["connections"]
+    assert plan["options"], "expected at least one direct journey on this pair"
+    assert conns, ("Kraaifontein to Rosebank has journeys with a change and the API must "
+                   "say so whether or not something runs straight through")
+    # And the train is among them, which is what he could not find.
+    kinds = {leg["route_label"] for c in conns for leg in c["legs"]}
+    assert any("Line" in k for k in kinds), f"no train among the changes: {sorted(kinds)[:6]}"
+
+
+def test_a_fare_stating_no_transfer_allowance_is_common_enough_to_matter():
+    """
+    The count behind TransferAllowanceTest, which is where the rule itself is checked.
+
+    A null transfer column is not a miss: Map.of throws on a null key rather than
+    returning the default, so a journey with a change whose two ends happened to have a
+    through fare of that kind answered 500 and the screen showed nothing at all.
+
+    The rule is tested in Java, instantly and without a database. What cannot be tested
+    there is how much of this data walks into it, and the answer decides whether the rule
+    is worth having: a handful would be an edge, and nine thousand is the common case. So
+    the count lives here, and it fails if the shape of the data changes enough to make the
+    Java test about nothing.
+
+    Asserted rather than swept against the API on purpose. Every pair that reaches this
+    path is a slow connections query - all three sampled took over four minutes - and a
+    test that takes a quarter of an hour to skip guards nothing at all.
+    """
+    from gabs_scraper import db
+
+    try:
+        conn = db.connect()
+    except Exception as e:  # noqa: BLE001
+        pytest.skip(f"Postgres not reachable: {e}")
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT count(*) FILTER (WHERE transfers IS NULL), count(*)
+            FROM journey_fare WHERE per_ride_cents IS NOT NULL
+            """)
+        unstated, total = cur.fetchone()
+    finally:
+        conn.close()
+
+    if total == 0:
+        pytest.skip("no priced journeys in this database")
+    assert unstated > 0, (
+        "every fare now states a transfer allowance, which would make the null-key crash "
+        "unreachable - check whether TransferAllowanceTest still guards anything real")

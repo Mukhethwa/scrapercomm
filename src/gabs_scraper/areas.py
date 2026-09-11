@@ -45,6 +45,25 @@ KINDS = ("city", "town", "borough", "suburb", "quarter", "neighbourhood",
 # nothing comes within this distance of is not somewhere a journey can start.
 WALK_M = 2500.0
 
+
+def squash(name: str) -> str:
+    """
+    A name with the spaces and punctuation taken out.
+
+    Nobody types a place the way an operator prints it. "buhrein" is one word to the
+    person searching and two to Golden Arrow - BUH REIN - and the search matches on a
+    substring, so "buhrein" found nothing while "buh" found it. The squashed spelling is
+    kept as an alias, which the search already looks at, so this costs no query time.
+    """
+    return "".join(c for c in name.lower() if c.isalnum())
+
+
+# The same thing in SQL, for the rows built straight from the stop table. Spaces, the
+# apostrophe in SIMON'S TOWN, full stops in A.D.E. and the hyphens in double-barrelled
+# street names.
+SQUASH_SQL = ("replace(replace(replace(replace(lower({0}), ' ', ''), "
+              "chr(39), ''), '.', ''), '-', '')")
+
 # Spellings a rider may type that OSM and Golden Arrow do not use. Kept here rather than
 # guessed, because a wrong alias silently sends somebody to the wrong township.
 ALIASES = {
@@ -87,6 +106,8 @@ def fetch() -> list[dict]:
                 (tags.get("alt_name", "") + ";" + tags.get("old_name", "")).split(";")
                 if a.strip()]
         alts += [a.lower() for a in ALIASES.get(name, [])]
+        # "mitchellsplain", "saltriver", "capegate" - the way a rider types them.
+        alts.append(squash(name))
         out.append({
             "name": name,
             "kind": tags.get("place", ""),
@@ -135,46 +156,106 @@ def served(cur, lat: float, lon: float) -> tuple[bool, bool]:
     return bool(bus), bool(train)
 
 
-def add_orphan_stops(cur) -> list[str]:
+def add_stop_names(cur) -> list[str]:
     """
-    Stops that are places nobody mapped.
+    Every name the operators print that OSM does not have as a place.
 
-    The search box offers areas and nothing else now, so a stop with no area near it is a
-    destination a rider cannot ask for. Eight are like that even after reading outlines as
-    well as points: FALSE BAY, FISANTEKRAAL, KALBASKRAAL, DASSENBERG and a few streets on
-    the Mitchells Plain side.
+    The search box offers areas and nothing else, which is what was asked for: one entry
+    per place, rather than the same suburb listed three times over as a bus, a train and a
+    place. What it cost was every name that only the operators use. Mukhethwa typed
+    "buhrein" and got nothing - BUH REIN is a bus stop in Kraaifontein serving a
+    development of that name, and no place node in OSM carries it. 416 of the 584 stop
+    names in this database were unreachable from the search box the same way, ADDERLEY
+    STR and AKASIA PARK station among them.
 
-    They are added from the stop itself, which is honest rather than invented - the
-    operator prints the name, a service calls there, and the coordinate is the one the app
-    already plans with. Their osm_id is the negative stop id, which cannot collide with a
-    real one, and their kind says plainly where they came from.
+    The rule was geographic before - add a stop only where no mapped place lies within
+    walking distance - which kept the list short and answered the wrong question. Whether
+    a rider can find a name is not about what else is nearby: Kraaifontein is 1.5km from
+    BUH REIN and does not help somebody who typed BUH REIN.
+
+    So the test is the NAME. A stop whose name is already a place adds nothing and is
+    skipped, which is what keeps this from undoing the single-entry rule; a stop whose
+    name appears nowhere becomes a place, once, carrying whichever networks call there.
+
+    One row per name, not per stop, because CAPE TOWN is a station and a bus terminus and
+    a rider typing it means the place. It takes the position of the lowest-numbered stop
+    of that name rather than averaging, which would put the entry between them and at
+    neither.
     """
     cur.execute(
         """
+        WITH named AS (
+            SELECT s.name,
+                   min(s.id)                  AS pick,
+                   bool_or(o.kind = 'bus')    AS by_bus,
+                   bool_or(o.kind = 'train')  AS by_train
+            FROM stop s
+            JOIN operator o ON o.id = s.operator_id
+            WHERE s.lat IS NOT NULL
+              -- Same name AND same place. Both halves are needed.
+              --
+              -- The spelling is compared with the punctuation taken out, because the two
+              -- sources write one place differently: OSM has Simon's Town and Mitchells
+              -- Plain where Golden Arrow prints SIMONSTOWN and MITCHELL'S PLAIN, and
+              -- matched literally each pair survives as two entries of one place.
+              --
+              -- But a shared name is not a shared place. The village of Kalbaskraal sits
+              -- 16.7km from the bus stop called KALBASKRAAL, and dropping the stop on the
+              -- strength of the name left the nearest place to it 10.4km away - so a
+              -- rider typing Kalbaskraal was sent somewhere no service reaches, and the
+              -- stop could no longer be asked for at all.
+              AND NOT EXISTS (
+                SELECT 1 FROM area a
+                WHERE a.kind <> 'stop' AND SQUASHED_AREA = SQUASHED_STOP
+                  AND 6371000 * acos(least(1,
+                        cos(radians(a.lat)) * cos(radians(s.lat))
+                          * cos(radians(s.lon) - radians(a.lon))
+                      + sin(radians(a.lat)) * sin(radians(s.lat)))) <= WALKING)
+            GROUP BY s.name
+        )
         INSERT INTO area (name, kind, lat, lon, full_name, aliases, served,
                           served_bus, served_train, osm_id)
-        SELECT s.name, 'stop', s.lat, s.lon,
-               s.name || ', Cape Town, South Africa', '', TRUE,
-               bool_or(o.kind = 'bus'), bool_or(o.kind = 'train'), -s.id
-        FROM stop s
-        JOIN operator o ON o.id = s.operator_id
-        WHERE s.lat IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM area a
-            WHERE a.served AND a.kind <> 'stop'
-              AND 6371000 * acos(least(1,
-                    cos(radians(a.lat)) * cos(radians(s.lat))
-                      * cos(radians(s.lon) - radians(a.lon))
-                  + sin(radians(a.lat)) * sin(radians(s.lat)))) <= %s)
-        GROUP BY s.id, s.name, s.lat, s.lon
+        SELECT n.name, 'stop', s.lat, s.lon,
+               n.name || ', Cape Town, South Africa',
+               SQUASHED_NAME, TRUE,
+               n.by_bus, n.by_train, -n.pick
+        FROM named n
+        JOIN stop s ON s.id = n.pick
         ON CONFLICT (osm_id) DO UPDATE SET
-            lat = EXCLUDED.lat, lon = EXCLUDED.lon,
+            name = EXCLUDED.name, lat = EXCLUDED.lat, lon = EXCLUDED.lon,
+            aliases = EXCLUDED.aliases,
             served_bus = EXCLUDED.served_bus, served_train = EXCLUDED.served_train
         RETURNING name
-        """,
-        (WALK_M,),
+        """.replace("SQUASHED_NAME", SQUASH_SQL.format("n.name"))
+             .replace("SQUASHED_AREA", SQUASH_SQL.format("a.name"))
+             .replace("SQUASHED_STOP", SQUASH_SQL.format("s.name"))
+             .replace("WALKING", str(WALK_M))
     )
     return [r[0] for r in cur.fetchall()]
+
+
+def drop_stale_stop_names(cur) -> int:
+    """
+    Stop-derived entries whose name has since been mapped as a real place.
+
+    Left behind they are a second copy of the same suburb, which is the duplication the
+    single-entry rule exists to prevent.
+    """
+    cur.execute(
+        """
+        DELETE FROM area a
+        WHERE a.kind = 'stop'
+          AND EXISTS (SELECT 1 FROM area b
+                      WHERE b.kind <> 'stop' AND SQUASHED_B = SQUASHED_A
+                        AND 6371000 * acos(least(1,
+                              cos(radians(b.lat)) * cos(radians(a.lat))
+                                * cos(radians(a.lon) - radians(b.lon))
+                            + sin(radians(b.lat)) * sin(radians(a.lat)))) <= WALKING)
+        """.replace("SQUASHED_B", SQUASH_SQL.format("b.name"))
+             .replace("SQUASHED_A", SQUASH_SQL.format("a.name"))
+             .replace("WALKING", str(WALK_M))
+    )
+    return cur.rowcount
 
 
 def main() -> None:
@@ -233,11 +314,15 @@ def main() -> None:
         conn.commit()
         print(f"\n{len(places)} places stored")
 
-        added = add_orphan_stops(cur)
+        stale = drop_stale_stop_names(cur)
+        added = add_stop_names(cur)
         conn.commit()
+        if stale:
+            print(f"{stale} stop entries dropped, now mapped as places in their own right")
         if added:
-            print(f"{len(added)} stops added as places, having none mapped near them: "
-                  + ", ".join(sorted(added)))
+            print(f"{len(added)} operator names added as places, having none mapped "
+                  f"under that name")
+            print("  e.g. " + ", ".join(sorted(added)[:8]))
     finally:
         conn.close()
 

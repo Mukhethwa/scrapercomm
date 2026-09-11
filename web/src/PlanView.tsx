@@ -338,20 +338,30 @@ export default function PlanView() {
                 </div>
               )}
 
-              {plan && !loading && plan.length === 0 && connLoading && (
+              {plan && !loading && connLoading && (
                 <div className="banner info">
                   <Info size={16} aria-hidden="true" />
-                  <span>No direct {vehicle}. Looking for a journey with a change…</span>
+                  <span>
+                    {plan.length === 0 ? `No direct ${vehicle}. Looking` : 'Also looking'}
+                    {' '}for a journey with a change…
+                  </span>
                 </div>
               )}
 
-              {plan && !loading && plan.length === 0 && !connLoading && conns && conns.length > 0 && (
+              {/* Shown whether or not something runs straight through: one direct bus
+                  used to hide every journey with a change, so a rider after the train
+                  from Kraaifontein to Rosebank was told there wasn't one. */}
+              {plan && !loading && !connLoading && conns && conns.length > 0 && (
                 <>
-                  <div className="banner warn">
-                    <TriangleAlert size={16} aria-hidden="true" />
+                  <div className={plan.length === 0 ? 'banner warn' : 'banner info'}>
+                    {plan.length === 0
+                      ? <TriangleAlert size={16} aria-hidden="true" />
+                      : <Info size={16} aria-hidden="true" />}
                     <span>
-                      <b>No direct {vehicle}</b> from {from!.name} to {to!.name}. You can still get there
-                      by taking <b>{connLegs} {vehicles}</b>, changing at <b>{conns[0].change_at.join(' then ')}</b>.
+                      {plan.length === 0
+                        ? <><b>No direct {vehicle}</b> from {from!.name} to {to!.name}. You can still get there by taking </>
+                        : <>You can also get from {from!.name} to {to!.name} by taking </>}
+                      <b>{connLegs} {vehicles}</b>, changing at <b>{conns[0].change_at.join(' then ')}</b>.
                     </span>
                   </div>
                   <ConnectionsPanel connections={conns} legsRequired={connLegs}

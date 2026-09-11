@@ -264,21 +264,30 @@ export function usePlanSearch(operator: string | null = null) {
     getPlan(f, t)
       .then((r) => {
         setPlan(r.options)
-        // Nothing direct. Look for a journey with a change.
+        // Journeys with a change, whether or not something runs straight through.
         //
         // Asked for whatever the endpoints are now. This used to be skipped unless both
         // were named stops, so a rider who searched a place was told a journey with a
         // change could not be worked out - a statement about the endpoint, not about the
         // network. They walk to a stop like anybody else.
-        if (r.options.length === 0) {
-          setConnLoading(true)
-          getConnections(f, t)
-            .then((c) => {
-              setConns(c.connections); setConnLegs(c.legs_required); setConnFrom(c.from)
-            })
-            .catch(() => { setConns([]); setConnLegs(null); setConnFrom(null) })
-            .finally(() => setConnLoading(false))
-        }
+        //
+        // And it used to be skipped whenever ANYTHING ran direct, which hid the answer
+        // behind the wrong question. Kraaifontein to Rosebank has one direct bus and
+        // sixteen ways to do it by train changing at Woodstock or Cape Town, and the one
+        // bus was enough to stop the app ever asking - so a rider looking for the train
+        // was told, in effect, that there isn't one. A direct journey being available
+        // does not make it the journey they want.
+        //
+        // It runs alongside the plan rather than after it: the direct answer is on screen
+        // while this is still working, which matters because it is slow. See the note on
+        // getConnections.
+        setConnLoading(true)
+        getConnections(f, t)
+          .then((c) => {
+            setConns(c.connections); setConnLegs(c.legs_required); setConnFrom(c.from)
+          })
+          .catch(() => { setConns([]); setConnLegs(null); setConnFrom(null) })
+          .finally(() => setConnLoading(false))
         // The "on other days" suggestions are distance-based, so they need a located
         // origin. Without one the plan still stands; only this extra is skipped.
         if (t.kind === 'stop' && f.lat != null && f.lon != null) {

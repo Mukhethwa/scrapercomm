@@ -71,8 +71,9 @@ export interface TimetableDetail {
 
 const API = '/api'
 
-async function getJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url)
+async function getJSON<T>(url: string, timeoutMs?: number): Promise<T> {
+  const stop = timeoutMs == null ? null : AbortSignal.timeout(timeoutMs)
+  const res = await fetch(url, stop ? { signal: stop } : undefined)
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${url}`)
   return res.json() as Promise<T>
 }
@@ -410,6 +411,22 @@ export interface ConnectionsResponse {
 }
 
 /**
+ * How long to wait for a journey with a change before giving up on it.
+ *
+ * These queries are not fast and their range is enormous. Measured over twelve place
+ * pairs: a median of 6s, Kraaifontein to Rosebank in 0.75s, the CBD to Woodstock in 59s,
+ * North Quay to Abbotsdale in 91s, and two that had not answered after 200. It is a
+ * property of the query rather than of the number of stops tried - one named stop to one
+ * named stop, a single pass, took 172s between DASSENBERG and KALBASKRAAL.
+ *
+ * The plan renders without waiting for this, so the cost of a slow one is a section of
+ * the page that keeps working; but a section that never resolves is a spinner a rider
+ * watches forever. Thirty seconds covers the median several times over and turns the
+ * worst case into a sentence instead.
+ */
+const CONNECTIONS_TIMEOUT_MS = 30_000
+
+/**
  * A journey with a change, between two endpoints of any kind.
  *
  * A stop goes as its id and a dropped point as its coordinates, the same way /api/plan
@@ -417,7 +434,8 @@ export interface ConnectionsResponse {
  */
 export const getConnections = (from: Endpoint, to: Endpoint) =>
   getJSON<ConnectionsResponse>(
-    `${API}/connections?${epParams('from', from)}&${epParams('to', to)}`)
+    `${API}/connections?${epParams('from', from)}&${epParams('to', to)}`,
+    CONNECTIONS_TIMEOUT_MS)
 
 /** Whose timetables these are, and when they were last read. */
 export interface AboutResponse {

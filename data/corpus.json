@@ -94,7 +94,8 @@
   "searches": {
     "bellville": [
       "Bellville",
-      "Bellville South"
+      "Bellville South",
+      "BELLVILLE (SANLAM)"
     ],
     "cape town": [
       "Cape Town"
@@ -104,6 +105,7 @@
     ],
     "kraaifontein": [
       "Kraaifontein",
+      "KRAAIFONTEIN IND",
       "Kraaifontein East"
     ],
     "obs": [
