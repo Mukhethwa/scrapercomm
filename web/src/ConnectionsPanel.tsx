@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowRight, Check, ChevronDown, Plus, TriangleAlert } from 'lucide-react'
 import { getTripStops, type Connection, type ConnectionLeg, type TripNote, type TripStop } from './api'
 import { rands } from './money'
+import { howLong } from './times'
 import { rideKey, usePlanner, type SavedJourney } from './planner'
 import TripStrip from './TripStrip'
 import FarePanel from './FarePanel'
@@ -11,13 +12,9 @@ const DAY_LABEL: Record<string, string> = {
   PUBLIC_HOLIDAY: 'Public Holiday', OTHER: 'Other',
 }
 
-/** "3 h 40" reads better than "220 minutes" for a journey this long. */
+/** "1h 20m", the way every other duration in the app is written. */
 function duration(minutes: number | null): string {
-  if (minutes == null) return 'time not published'
-  if (minutes < 60) return `${minutes} min`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m === 0 ? `${h} h` : `${h} h ${m}`
+  return howLong(minutes) ?? 'time not published'
 }
 
 export function legToJourney(leg: ConnectionLeg, dayType: string, dayLabel: string): SavedJourney {

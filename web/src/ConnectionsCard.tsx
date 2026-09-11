@@ -20,17 +20,13 @@ import { getTripStops, type Connection, type TripNote, type TripStop } from './a
 import { legToJourney } from './ConnectionsPanel'
 import { DAY_LABEL, latestBoard } from './results'
 import { rands } from './money'
-import { clockFace, isBound, shortTime } from './times'
+import { clockFace, isBound, shortTime, howLong } from './times'
 import { usePlanner } from './planner'
 import TripStrip from './TripStrip'
 
-/** "8 h 35" reads better than "515 minutes" for a wait this long. */
+/** "1h 20m", the way every other duration in the app is written. */
 function duration(minutes: number | null): string {
-  if (minutes == null) return 'time not published'
-  if (minutes < 60) return `${minutes} min`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m === 0 ? `${h} h` : `${h} h ${m}`
+  return howLong(minutes) ?? 'time not published'
 }
 
 /**

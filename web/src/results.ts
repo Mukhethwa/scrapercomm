@@ -13,7 +13,7 @@
  * Every block therefore carries its option's index home again.
  */
 import type { Fare, PlanDeparture, PlanOption } from './api'
-import { NO_TIME, boundIsUseful } from './times.ts'
+import { NO_TIME, boundIsUseful, howLong } from './times.ts'
 
 /** One departure, lifted out of its route and ready to stand on its own. */
 export interface DepartureBlock {
@@ -146,7 +146,10 @@ export function travelRange(blocks: DepartureBlock[]): TravelRange | null {
  */
 export function travelLabel(range: TravelRange | null): string | null {
   if (!range) return null
-  return range.min === range.max ? `${range.min} min` : `${range.min} to ${range.max} min`
+  // Hours here too. This said "66 to 81 min" over a list of departures each labelled
+  // "1h 6m", so the card disagreed with its own contents about the same journey.
+  if (range.min === range.max) return howLong(range.min)
+  return `${howLong(range.min)} to ${howLong(range.max)}`
 }
 
 /**
@@ -321,12 +324,7 @@ export function journeySpan(b: DepartureBlock): Span | null {
  */
 export function spanLabel(span: Span | null): string | null {
   if (!span) return null
-  const { minutes, approx } = span
-  const tilde = approx ? '~' : ''
-  if (minutes < 60) return `${tilde}${minutes} min`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m === 0 ? `${tilde}${h}h` : `${tilde}${h}h ${m}m`
+  return howLong(span.minutes, span.approx)
 }
 
 /** How many of these leave at or after the chosen time, for "nothing left today". */

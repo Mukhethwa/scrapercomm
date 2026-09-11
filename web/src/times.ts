@@ -135,3 +135,24 @@ export function boundIsUseful(
   if (bound == null || boardMinutes == null) return true
   return bound > boardMinutes
 }
+
+/**
+ * How long something takes, as a rider would say it.
+ *
+ * One formatter, because there were three and they disagreed. A departure said "1h 6m",
+ * a journey with a change said "1 h 20" - which reads as the decimal 1.20 rather than an
+ * hour and twenty - and a card header said "115 min" and never reached for hours at all.
+ * Mukhethwa: "i dont like the decimal times 1h20mins wouldve sufficed".
+ *
+ * Under an hour stays in minutes, because "0h 40m" is worse than "40 min". On the hour
+ * drops the minutes, because "2h 0m" is not how anybody says it.
+ */
+export function howLong(minutes: number | null | undefined,
+                        approx = false): string | null {
+  if (minutes == null || minutes < 0) return null
+  const tilde = approx ? '~' : ''
+  if (minutes < 60) return `${tilde}${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest === 0 ? `${tilde}${hours}h` : `${tilde}${hours}h ${rest}m`
+}

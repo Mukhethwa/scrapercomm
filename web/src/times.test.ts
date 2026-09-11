@@ -19,7 +19,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { longTime, shortTime, boundIsUseful, clockFace, isBound, NO_TIME } from './times.ts'
+import {
+  longTime, shortTime, boundIsUseful, clockFace, howLong, isBound, NO_TIME,
+} from './times.ts'
 
 test('a published time is printed as it stands', () => {
   assert.deepEqual(longTime('05:10', false), { text: '05:10', approx: false })
@@ -88,4 +90,38 @@ test('a bound that only repeats the boarding time is not worth showing', () => {
   assert.equal(boundIsUseful(321, true, 320), true)
   // A published time is always worth showing, however close to the boarding time.
   assert.equal(boundIsUseful(320, false, 320), true)
+})
+
+test('a duration reads as a duration, not as a decimal', () => {
+  // "1 h 20" reads as 1.20. Three formatters disagreed about the same journey: a
+  // departure said "1h 6m", a journey with a change said "1 h 20", a card header said
+  // "115 min" and never reached for hours at all.
+  assert.equal(howLong(80), '1h 20m')
+  assert.equal(howLong(66), '1h 6m')
+  assert.equal(howLong(115), '1h 55m')
+  assert.equal(howLong(175), '2h 55m')
+})
+
+test('under an hour stays in minutes, and a whole hour drops them', () => {
+  // "0h 40m" is worse than "40 min", and "2h 0m" is not how anybody says it.
+  assert.equal(howLong(40), '40 min')
+  assert.equal(howLong(59), '59 min')
+  assert.equal(howLong(60), '1h')
+  assert.equal(howLong(120), '2h')
+  assert.equal(howLong(1), '1 min')
+})
+
+test('an approximate duration carries the same tilde as an approximate time', () => {
+  assert.equal(howLong(80, true), '~1h 20m')
+  assert.equal(howLong(40, true), '~40 min')
+  assert.equal(howLong(60, true), '~1h')
+})
+
+test('nothing to say is null, not a zero', () => {
+  // The connection views turn this into "time not published"; a bare "0 min" there would
+  // read as a journey that takes no time at all.
+  assert.equal(howLong(null), null)
+  assert.equal(howLong(undefined), null)
+  assert.equal(howLong(-5), null)
+  assert.equal(howLong(0), '0 min')
 })
