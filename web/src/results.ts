@@ -386,3 +386,40 @@ export function onlyOperator<T extends { operator_code?: string }>(
   if (!operator) return rows
   return rows.filter((r) => (r.operator_code ?? 'gabs') === operator)
 }
+
+/** An operator that runs this journey, and how many departures it has on it. */
+export interface OperatorWithOptions {
+  code: string
+  departures: number
+}
+
+/**
+ * Who runs this journey, when the operator whose chip is pressed does not.
+ *
+ * Upper Long to Camps Bay under Golden Arrow: no Golden Arrow bus goes, and MyCiTi runs
+ * it. The screen sent the rider hunting for the nearest stop with a bus - and, asking for
+ * the nearest stop of KIND bus, every stop it offered was MyCiTi's. Tap one and the same
+ * sentence came back naming another MyCiTi stop, then another. Mukhethwa: "its an endless
+ * loop, rather suggest another operator".
+ *
+ * It costs nothing to answer properly. The plan already holds every operator's journeys,
+ * because the chip filters what is drawn rather than what is asked for, so the name of
+ * somebody who does run it is already on hand - and it is one tap instead of a walk.
+ *
+ * Empty when the chosen operator has its own answer, and empty when nobody does: the
+ * first needs no help and the second is a different sentence.
+ */
+export function operatorsWithOptions(
+  plan: PlanOption[] | null, operator: string | null,
+): OperatorWithOptions[] {
+  if (!operator || !plan || plan.length === 0) return []
+  if (plan.some((o) => (o.operator_code ?? 'gabs') === operator)) return []
+  const counted = new Map<string, number>()
+  for (const o of plan) {
+    const code = o.operator_code ?? 'gabs'
+    counted.set(code, (counted.get(code) ?? 0) + o.departures.length)
+  }
+  return [...counted.entries()]
+    .map(([code, departures]) => ({ code, departures }))
+    .sort((a, b) => b.departures - a.departures)
+}

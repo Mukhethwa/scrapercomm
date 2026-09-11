@@ -34,7 +34,10 @@ public class StopController {
     /**
      * The nearest stops of one kind to a point, however far away they are.
      *
-     * @param kind "bus" or "train"
+     * @param operator the operator code - "gabs", "myciti", "metrorail". Not a kind:
+     *        two bus companies do not share stops, and answering "the nearest bus stop"
+     *        under one chip with the other's stations is how a referral came to point at
+     *        somewhere the chosen operator does not go.
      * @param radius metres to look within. Wide by default: this is asked when the rider
      *               has chosen a network with nothing near them, so the useful answer is
      *               beyond walking distance by definition.
@@ -42,10 +45,10 @@ public class StopController {
     @GetMapping("/nearest_stops")
     public NearestStopsResponse nearestStops(@RequestParam double lat,
                                              @RequestParam double lon,
-                                             @RequestParam String kind,
+                                             @RequestParam String operator,
                                              @RequestParam(defaultValue = "20000") double radius,
                                              @RequestParam(defaultValue = "3") int limit) {
-        return stops.nearest(lat, lon, kind, radius, limit);
+        return stops.nearest(lat, lon, operator, radius, limit);
     }
 
     /** Stops reachable from this one on a SINGLE bus (a trip serves both, in order). */

@@ -49,11 +49,17 @@ public class StopService {
      * A wide radius on purpose. Everything else in the app asks what a rider can walk to;
      * this asks where the nearest one IS, which is only interesting once the answer is
      * further than anybody would walk.
+     *
+     * By OPERATOR, not by kind. Asked for "the nearest bus stop" under the Golden Arrow
+     * chip, this returned MyCiTi stations - Quebec, Lower Kloof, Ludwigs Garden - so the
+     * screen said "No bus goes from Upper Long, the nearest stop with one is Lower
+     * Kloof", a rider tapped it, and the same sentence came back naming another MyCiTi
+     * stop. An endless loop made of suggestions that were never Golden Arrow's.
      */
-    public NearestStopsResponse nearest(double lat, double lon, String kind,
+    public NearestStopsResponse nearest(double lat, double lon, String operator,
                                         double radiusM, int limit) {
         return new NearestStopsResponse(
-                stops.findNearestOfKind(lat, lon, kind, radiusM).stream()
+                stops.findNearestOfOperator(lat, lon, operator, radiusM).stream()
                         .filter(r -> r.getLat() != null && r.getLon() != null)
                         .map(r -> new NearestStopDto(
                                 r.getId(), r.getName(), r.getLat(), r.getLon(),

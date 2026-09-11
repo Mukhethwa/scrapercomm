@@ -18,7 +18,7 @@ import {
   type Connection,
 } from './api'
 import { MODES, useModes } from './modes'
-import { onlyOperator } from './results'
+import { onlyOperator, operatorsWithOptions } from './results'
 import { buildJourney, usePlanner } from './planner'
 
 /** A suggestion in either endpoint field: a real stop, a geocoded place, or an area. */
@@ -460,10 +460,13 @@ export function usePlanSearch(operator: string | null = null) {
     // for MyCiTi and got Golden Arrow saw neither the MyCiTi journey nor the sentence
     // saying where to catch one.
     if (plan.some((o) => (o.operator_code ?? 'gabs') === operator)) return
+    // Somebody else runs it. Then the answer is their name, not a walk: see
+    // `otherOperators` below, which the screen shows instead of this.
+    if (plan.length > 0) return
     if (!from || from.lat == null || from.lon == null) return
     if (!to || to.lat == null || to.lon == null) return
 
-    const fromLat = from.lat, fromLon = from.lon, kind = operatorKind as 'bus' | 'train'
+    const fromLat = from.lat, fromLon = from.lon, code = operator
     let dropped = false
     setReferralLoading(true)
     // Several candidates at the far end, not just the nearest one.
@@ -476,12 +479,13 @@ export function usePlanSearch(operator: string | null = null) {
     //
     // All at once rather than one after another: each is about 400ms, so eight in
     // sequence is a three-second wait and eight together is one.
-    getNearestStops(to.lat, to.lon, kind, 20000, 8)
+    getNearestStops(to.lat, to.lon, code, 20000, 8)
       .then((r) => Promise.all(
         r.stops.map((target) =>
           getNearbyOrigins(fromLat, fromLon, target.id, { radius: 20000 })
             .then((o) => (o.origins[0]
-              ? { from: o.origins[0], toName: target.name, kind }
+              ? { from: o.origins[0], toName: target.name,
+                  kind: operatorKind as 'bus' | 'train' }
               : null))
             .catch(() => null))))
       // The one that starts nearest the rider, which is not necessarily the one whose
@@ -493,6 +497,10 @@ export function usePlanSearch(operator: string | null = null) {
       .finally(() => { if (!dropped) setReferralLoading(false) })
     return () => { dropped = true }
   }, [operator, operatorKind, plan, loading, from, to])
+
+  /** Who runs this journey when the chosen operator does not. See results.ts. */
+  const otherOperators = useMemo(
+    () => operatorsWithOptions(plan, operator), [plan, operator])
 
   /** Buses the best answer to what was actually asked needs. */
   const bestLegs = plan && plan.length > 0 ? 1 : (connLegs ?? Infinity)
@@ -570,7 +578,7 @@ export function usePlanSearch(operator: string | null = null) {
     plan, setPlan, loading, sel, setSel,
     reachable, setReachable, connecting, setConnecting,
     conns, connLegs, connLoading, connFrom,
-    referral, referralLoading,
+    referral, referralLoading, otherOperators,
     dayAlts, setDayAlts, altDays,
     // the open departure and its trip breakdown
     openDep, setOpenDep, tripStops, tripNotes, loadingTrip,

@@ -558,7 +558,47 @@ export default function PlanScreen() {
           The nearest station is named, with what it actually runs, and tapping it plans
           from there. It is the same answer the destination list already gives for the
           other end of a journey. */}
-      {s.plan && !s.loading && only && shownGroups.length === 0 && (
+      {/* Somebody else runs it, so say who.
+          
+          Upper Long to Camps Bay under Golden Arrow: no Golden Arrow bus goes, and
+          MyCiTi runs it. The screen sent the rider hunting for a Golden Arrow stop
+          instead - and, asking for the nearest stop of KIND bus, offered MyCiTi's. Tap
+          it and the same sentence returned about another MyCiTi stop, and another.
+          
+          The plan already holds every operator's answer, because the chip filters what
+          is drawn and not what is asked for, so this costs nothing to say and is the
+          answer a rider can act on in one tap. */}
+      {s.plan && !s.loading && only && shownGroups.length === 0
+        && s.otherOperators.length > 0 && (
+        <div className="bg-accent p-4 text-white">
+          <div className="mb-3 flex items-start gap-2 text-[13px]">
+            <Lightbulb size={16} weight="fill" aria-hidden="true" className="mt-px shrink-0" />
+            <span>
+              <b>{operators.nameOf(only)} does not run {s.from!.name} to {s.to!.name}.</b>
+              {s.otherOperators.length === 1 ? <> This one does:</> : <> These do:</>}
+            </span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {s.otherOperators.map((x) => (
+              <button
+                key={x.code}
+                className="flex cursor-pointer flex-col items-start gap-0.5 bg-panel px-3 py-2.5 text-left hover:ring-1 hover:ring-accent"
+                onClick={() => setOnly(x.code)}
+              >
+                <span className="text-[13px] font-bold text-ink">
+                  {operators.nameOf(x.code)}
+                </span>
+                <span className="text-[11px] text-sub">
+                  {x.departures} {x.departures === 1 ? 'departure' : 'departures'} - direct
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {s.plan && !s.loading && only && shownGroups.length === 0
+        && s.otherOperators.length === 0 && (
         s.referralLoading ? (
           <Banner tone="info" icon={Info}>
             No {said} from {s.from!.name}. Looking for the nearest one…
@@ -568,9 +608,12 @@ export default function PlanScreen() {
             tone="suggest"
             vehicle={s.referral.kind}
             title={<>
+              {/* "to Camps Bay", not "to Quebec". toName is the stop the check used
+                  to prove the service exists, which is an implementation detail the
+                  rider never typed and cannot place. */}
               <b>No {said} goes from {s.from!.name}.</b> The nearest{' '}
               {s.referral.kind === 'train' ? 'station' : 'stop'} with one to{' '}
-              {s.referral.toName} is <b>{s.referral.from.name}</b>,{' '}
+              {s.to!.name} is <b>{s.referral.from.name}</b>,{' '}
               {away(s.referral.from.distance_m / 1000)} away
               {s.referral.from.earliest && <> — {s.referral.from.trip_count}{' '}
                 {s.referral.kind === 'train' ? 'trains' : 'buses'} a day, first{' '}

@@ -460,11 +460,17 @@ export interface NearestStop {
   distance_m: number
 }
 
+/**
+ * @param operator the operator code, not a kind. Asked for "the nearest bus stop" under
+ *        the Golden Arrow chip, this answered with MyCiTi stations - so a referral sent
+ *        riders to a stop belonging to a company they had not chosen, and tapping it
+ *        produced the same sentence again about another one.
+ */
 export const getNearestStops = (
-  lat: number, lon: number, kind: 'bus' | 'train', radius = 20000, limit = 3,
+  lat: number, lon: number, operator: string, radius = 20000, limit = 3,
 ) =>
   getJSON<{ stops: NearestStop[] }>(
-    `${API}/nearest_stops?lat=${lat}&lon=${lon}&kind=${kind}`
+    `${API}/nearest_stops?lat=${lat}&lon=${lon}&operator=${operator}`
     + `&radius=${radius}&limit=${limit}`)
 
 /** Whose timetables these are, and when they were last read. */

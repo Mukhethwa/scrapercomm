@@ -163,7 +163,7 @@
       "direct": 0,
       "fare": null,
       "first": null,
-      "with_a_change": null
+      "with_a_change": 40
     }
   }
 }

@@ -861,7 +861,7 @@ def test_a_place_with_no_station_is_told_where_the_nearest_one_is():
     assert not [x for x in plan["options"] if x["operator_kind"] == "train"], (
         "BUH REIN now has a train of its own; this test needs a place that does not")
 
-    near = get("nearest_stops", lat=d["lat"], lon=d["lon"], kind="train",
+    near = get("nearest_stops", lat=d["lat"], lon=d["lon"], operator="metrorail",
                radius=20000, limit=1)["stops"]
     assert near, "no station within 20km of the destination"
 
@@ -1034,3 +1034,58 @@ def test_a_short_journey_still_has_answers():
     codes = {o["operator_code"] for o in plan["options"]}
     assert {"gabs", "myciti", "metrorail"} <= codes, (
         f"the cap has removed an operator entirely: only {sorted(codes)} answer")
+
+
+def test_a_suggested_stop_belongs_to_the_operator_that_was_asked_for():
+    """
+    The endless loop, and what caused it.
+
+    Upper Long to Camps Bay under Golden Arrow: no Golden Arrow bus goes. The screen
+    offered the nearest stop "with a bus" - and asked for it by KIND, so it answered with
+    MyCiTi stations: Quebec, Lower Kloof, Ludwigs Garden. A rider tapped Lower Kloof, and
+    the same sentence came back naming Ludwigs Garden, and would have gone on forever,
+    because no Golden Arrow journey was ever going to appear from a MyCiTi stop.
+
+    Nothing about the suggestion looked wrong - the stops are real, near, and busy. They
+    were simply somebody else's.
+    """
+    d = get("geocode", q="camps bay")["results"]
+    if not d:
+        pytest.skip("Camps Bay is not in this database")
+    point = d[0]
+
+    stops = get("stops", q="", limit=5000)["stops"]
+    owner = {s["name"]: s["operator_code"] for s in stops}
+    for code in ("gabs", "myciti", "metrorail"):
+        near = get("nearest_stops", lat=point["lat"], lon=point["lon"],
+                   operator=code, radius=20000, limit=5)["stops"]
+        if not near:
+            continue
+        wrong = [s["name"] for s in near if s["operator_code"] != code]
+        assert not wrong, (f"asked for {code}, offered {', '.join(wrong)} - which belong "
+                           f"to somebody else, so a referral to one can never answer")
+
+
+def test_when_one_operator_cannot_do_it_the_plan_shows_who_can():
+    """
+    The answer that replaced the loop, and the fact it rests on.
+
+    The plan is not filtered by the chip - the chip narrows what is DRAWN - so every
+    operator's journeys are already in hand when one of them has none. That is what makes
+    "Golden Arrow does not run this; MyCiTi does" free to say and one tap to act on.
+
+    If the API ever started filtering server-side, this would fail and the screen would
+    quietly go back to having nothing better to offer than a walk.
+    """
+    o = get("geocode", q="upper long")["results"]
+    d = get("geocode", q="camps bay")["results"]
+    if not o or not d:
+        pytest.skip("sample places not in this database")
+    plan = get("plan", from_lat=o[0]["lat"], from_lon=o[0]["lon"],
+               to_lat=d[0]["lat"], to_lon=d[0]["lon"])
+    codes = {x["operator_code"] for x in plan["options"]}
+    assert codes, "no operator runs Upper Long to Camps Bay; pick another sample"
+    assert "gabs" not in codes, (
+        "Golden Arrow now runs this journey, so it no longer demonstrates the case - "
+        "find a pair where one operator answers and another does not")
+    assert "myciti" in codes, "MyCiTi runs Upper Long to Camps Bay and must be offered"

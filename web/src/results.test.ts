@@ -14,7 +14,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  blockKey, onlyOperator, ownsOpenDeparture, type DepartureBlock,
+  blockKey, onlyOperator, operatorsWithOptions, ownsOpenDeparture,
+  type DepartureBlock,
 } from './results.ts'
 
 /** Just the two fields identity is made of; the rest of a block is not consulted. */
@@ -88,4 +89,35 @@ test('a row with no operator on it counts as Golden Arrow', () => {
   const rows = [{ name: 'CAPE TOWN' }, { operator_code: 'myciti', name: 'Adderley' }]
   assert.deepEqual(onlyOperator(rows, 'gabs').map((r) => r.name), ['CAPE TOWN'])
   assert.deepEqual(onlyOperator(rows, 'myciti').map((r) => r.name), ['Adderley'])
+})
+
+test('when the chosen operator cannot, the one that can is named', () => {
+  // Upper Long to Camps Bay: no Golden Arrow bus goes, MyCiTi runs it. The screen used
+  // to send the rider hunting for a stop instead - and offered MyCiTi's stops to do it.
+  const plan = [
+    { operator_code: 'myciti', departures: [1, 2, 3] },
+    { operator_code: 'myciti', departures: [4] },
+    { operator_code: 'metrorail', departures: [5, 6] },
+  ] as unknown as Parameters<typeof operatorsWithOptions>[0]
+  const found = operatorsWithOptions(plan, 'gabs')
+  // Most departures first: the likeliest answer leads.
+  assert.deepEqual(found, [{ code: 'myciti', departures: 4 },
+                           { code: 'metrorail', departures: 2 }])
+})
+
+test('and says nothing when the chosen operator has its own answer', () => {
+  const plan = [
+    { operator_code: 'gabs', departures: [1] },
+    { operator_code: 'myciti', departures: [2, 3] },
+  ] as unknown as Parameters<typeof operatorsWithOptions>[0]
+  assert.deepEqual(operatorsWithOptions(plan, 'gabs'), [])
+})
+
+test('and says nothing when nobody runs it, because that is a different sentence', () => {
+  assert.deepEqual(operatorsWithOptions([], 'gabs'), [])
+  assert.deepEqual(operatorsWithOptions(null, 'gabs'), [])
+  // No chip pressed is not a question about operators at all.
+  const plan = [{ operator_code: 'myciti', departures: [1] }] as unknown as
+    Parameters<typeof operatorsWithOptions>[0]
+  assert.deepEqual(operatorsWithOptions(plan, null), [])
 })
