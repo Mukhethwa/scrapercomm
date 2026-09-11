@@ -437,6 +437,30 @@ export const getConnections = (from: Endpoint, to: Endpoint) =>
     `${API}/connections?${epParams('from', from)}&${epParams('to', to)}`,
     CONNECTIONS_TIMEOUT_MS)
 
+/**
+ * The nearest stops of one kind to a point, however far off they are.
+ *
+ * Everything else here asks what a rider can walk to. This asks where the nearest one IS,
+ * which only becomes interesting once the answer is further than anybody would walk:
+ * BUH REIN has no station, and the useful reply is Kraaifontein rather than silence.
+ */
+export interface NearestStop {
+  id: number
+  name: string
+  lat: number
+  lon: number
+  operator_code: string
+  operator_kind: 'bus' | 'train'
+  distance_m: number
+}
+
+export const getNearestStops = (
+  lat: number, lon: number, kind: 'bus' | 'train', radius = 20000, limit = 3,
+) =>
+  getJSON<{ stops: NearestStop[] }>(
+    `${API}/nearest_stops?lat=${lat}&lon=${lon}&kind=${kind}`
+    + `&radius=${radius}&limit=${limit}`)
+
 /** Whose timetables these are, and when they were last read. */
 export interface AboutResponse {
   operators: { code: string; name: string; kind: string; routes: number; timetables: number }[]

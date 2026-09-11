@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import za.co.commuttr.api.dto.StopDtos.ReachablePointResponse;
 import za.co.commuttr.api.dto.StopDtos.ReachableResponse;
+import za.co.commuttr.api.dto.StopDtos.NearestStopsResponse;
 import za.co.commuttr.api.dto.StopDtos.StopsResponse;
 import za.co.commuttr.api.service.PlannerService;
 import za.co.commuttr.api.service.StopService;
@@ -28,6 +29,23 @@ public class StopController {
     public StopsResponse listStops(@RequestParam(required = false) String q,
                                    @RequestParam(defaultValue = "20") int limit) {
         return stops.listStops(q, limit);
+    }
+
+    /**
+     * The nearest stops of one kind to a point, however far away they are.
+     *
+     * @param kind "bus" or "train"
+     * @param radius metres to look within. Wide by default: this is asked when the rider
+     *               has chosen a network with nothing near them, so the useful answer is
+     *               beyond walking distance by definition.
+     */
+    @GetMapping("/nearest_stops")
+    public NearestStopsResponse nearestStops(@RequestParam double lat,
+                                             @RequestParam double lon,
+                                             @RequestParam String kind,
+                                             @RequestParam(defaultValue = "20000") double radius,
+                                             @RequestParam(defaultValue = "3") int limit) {
+        return stops.nearest(lat, lon, kind, radius, limit);
     }
 
     /** Stops reachable from this one on a SINGLE bus (a trip serves both, in order). */

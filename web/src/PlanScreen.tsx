@@ -525,78 +525,53 @@ export default function PlanScreen() {
         />
       )}
 
-      {s.plan && !s.loading && s.connLoading && (
-        <Banner tone="info" icon={Info}>
-          {s.plan.length === 0 ? <>No direct {said}. Looking</> : <>Also looking</>} for a
-          journey with a change...
-        </Banner>
-      )}
-
-      {/* There is a way there, it just takes changes. The panel prices the whole thing and
-          shows the wait between each leg, which is what decides whether a three-bus
-          journey is worth making at all. */}
-      {s.plan && !s.loading && !s.connLoading && liveConns && liveConns.length > 0 && (
-        <>
-          {/* A journey with a change is worth showing even when something runs straight
-              through. Kraaifontein to Rosebank has one direct bus and sixteen ways to do
-              it by train, and hiding all sixteen behind the one bus told a rider looking
-              for the train that there wasn't one. */}
-          <Banner tone={s.plan.length === 0 ? 'warn' : 'info'}
-            icon={s.plan.length === 0 ? Warning : Info}>
-            {s.plan.length === 0
-              ? <><b>No direct {said}</b> from {s.from!.name} to {s.to!.name}. You can still
-                  get there by taking{' '}</>
-              : <>You can also get from {s.from!.name} to {s.to!.name} by taking{' '}</>}
-            <b>{s.connLegs} {saids}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
+      {/* The chosen network does not come near here, so say where it does.
+          
+          BUH REIN to CAPE TOWN under Metro Rail drew nothing whatever: no station is
+          within walking distance of BUH REIN, so the plan held only buses, the chip hid
+          those, and the banners below all ask whether the plan is empty - which it was
+          not. A blank screen reads as broken rather than as "not from here".
+          
+          The nearest station is named, with what it actually runs, and tapping it plans
+          from there. It is the same answer the destination list already gives for the
+          other end of a journey. */}
+      {s.plan && !s.loading && only && shownGroups.length === 0 && (
+        s.referralLoading ? (
+          <Banner tone="info" icon={Info}>
+            No {said} from {s.from!.name}. Looking for the nearest one…
           </Banner>
-          {/* Headed by the journey, not by what the rider typed. A place carries no
-              operator and fell through to Golden Arrow, so a connection made entirely of
-              trains was headed Golden Arrow Buses. The API says which stop it resolved
-              the place to, and that stop knows whose it is. */}
-          <ConnectionsCard connections={liveConns} onChoose={setChosenConn}
-            kind={s.connFrom?.operator_kind ?? ride}
-            operator={s.connFrom?.operator_code ?? s.from?.operator ?? 'gabs'}
-            operatorName={operators.nameOf(
-              s.connFrom?.operator_code ?? s.from?.operator ?? 'gabs')} />
-        </>
-      )}
-
-      {/* There is a way there, but not any more today. Saying so beats both an empty
-          screen and a journey whose first bus finished this morning. */}
-      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading
-        && s.conns && s.conns.length > 0 && liveConns && liveConns.length === 0 && (
-        <Banner tone="warn" icon={Warning}>
-          <b>No direct {said}</b> from {s.from!.name} to {s.to!.name}, and the {s.connLegs}-leg
-          journey through <b>{s.conns[0].change_at.join(' then ')}</b> has finished for today.
-          Choose an earlier time, or “Any time”, to see how it runs.
-        </Banner>
-      )}
-
-      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns && s.conns.length === 0 && (
-        <Banner tone="bad" icon={XCircle}>
-          <b>No way to get there by {said}.</b> There is no direct service from {s.from!.name} to{' '}
-          {s.to!.name}, and no combination of up to three {saids} connects them either.
-        </Banner>
-      )}
-
-      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns
-        && s.conns.length === 0 && s.nearbyAlternatives.length > 0 && (
-        <NearbyBox
-          tone="plain"
-          title={<>You can reach these stops near <b>{s.to!.name}</b></>}
-          stops={s.nearbyAlternatives as unknown as NearStop[]}
-          vehicle={ride}
-          onPick={(r) => s.pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}
-        />
-      )}
-
-      {/* A dropped pin has no stop id, and the connections engine can only join named
-          stops - so this is a limit of the question, not of the network. */}
-      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns === null && (
-        <Banner tone="bad" icon={XCircle}>
-          <b>No direct {said}.</b> Journeys with a change can only be worked out between named
-          stops, not dropped pins.
-        </Banner>
+        ) : s.referral ? (
+          <NearbyBox
+            tone="suggest"
+            vehicle={s.referral.kind}
+            title={<>
+              <b>No {said} goes from {s.from!.name}.</b> The nearest{' '}
+              {s.referral.kind === 'train' ? 'station' : 'stop'} with one to{' '}
+              {s.referral.toName} is <b>{s.referral.from.name}</b>,{' '}
+              {away(s.referral.from.distance_m / 1000)} away
+              {s.referral.from.earliest && <> — {s.referral.from.trip_count}{' '}
+                {s.referral.kind === 'train' ? 'trains' : 'buses'} a day, first{' '}
+                {s.referral.from.earliest}</>}. Tap it to plan from there.
+            </>}
+            stops={[{
+              id: s.referral.from.id, name: s.referral.from.name,
+              km: s.referral.from.distance_m / 1000, change: false,
+              lat: s.referral.from.lat, lon: s.referral.from.lon,
+            }]}
+            /* useAlt, not pickFrom: the destination is the half the rider still wants.
+               pickFrom clears it, which is right when somebody starts again from
+               somewhere else and wrong here - they would have to retype CAPE TOWN to
+               see the journey they had just been offered. */
+            onPick={() => s.useAlt(s.referral!.from)}
+          />
+        ) : (
+          <Banner tone="bad" icon={XCircle}>
+            <b>No {said} goes from {s.from!.name} to {s.to!.name}</b>, and there is
+            no {s.plan.length > 0 ? 'nearby ' : ''}
+            {chosen === 'train' ? 'station' : 'stop'} that runs one either. Choose
+            All to see what does.
+          </Banner>
+        )
       )}
 
       {shownGroups.map((g) => {
@@ -711,6 +686,85 @@ export default function PlanScreen() {
           </div>
         )
       })}
+
+      {/* Below the direct journeys, not above them. Something running straight
+          through is the better answer and should be read first; a change is the
+          alternative, and reading as though it were the only option was the
+          previous fault wearing the other face. */}
+      {s.plan && !s.loading && s.connLoading && (
+        <Banner tone="info" icon={Info}>
+          {s.plan.length === 0 ? <>No direct {said}. Looking</> : <>Also looking</>} for a
+          journey with a change...
+        </Banner>
+      )}
+
+      {/* There is a way there, it just takes changes. The panel prices the whole thing and
+          shows the wait between each leg, which is what decides whether a three-bus
+          journey is worth making at all. */}
+      {s.plan && !s.loading && !s.connLoading && liveConns && liveConns.length > 0 && (
+        <>
+          {/* A journey with a change is worth showing even when something runs straight
+              through. Kraaifontein to Rosebank has one direct bus and sixteen ways to do
+              it by train, and hiding all sixteen behind the one bus told a rider looking
+              for the train that there wasn't one. */}
+          <Banner tone={s.plan.length === 0 ? 'warn' : 'info'}
+            icon={s.plan.length === 0 ? Warning : Info}>
+            {s.plan.length === 0
+              ? <><b>No direct {said}</b> from {s.from!.name} to {s.to!.name}. You can still
+                  get there by taking{' '}</>
+              : <>You can also get from {s.from!.name} to {s.to!.name} by taking{' '}</>}
+            <b>{s.connLegs} {saids}</b>, changing at <b>{liveConns[0].change_at.join(' then ')}</b>.
+          </Banner>
+          {/* Headed by the journey, not by what the rider typed. A place carries no
+              operator and fell through to Golden Arrow, so a connection made entirely of
+              trains was headed Golden Arrow Buses. The API says which stop it resolved
+              the place to, and that stop knows whose it is. */}
+          <ConnectionsCard connections={liveConns} onChoose={setChosenConn}
+            kind={s.connFrom?.operator_kind ?? ride}
+            operator={s.connFrom?.operator_code ?? s.from?.operator ?? 'gabs'}
+            operatorName={operators.nameOf(
+              s.connFrom?.operator_code ?? s.from?.operator ?? 'gabs')} />
+        </>
+      )}
+
+      {/* There is a way there, but not any more today. Saying so beats both an empty
+          screen and a journey whose first bus finished this morning. */}
+      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading
+        && s.conns && s.conns.length > 0 && liveConns && liveConns.length === 0 && (
+        <Banner tone="warn" icon={Warning}>
+          <b>No direct {said}</b> from {s.from!.name} to {s.to!.name}, and the {s.connLegs}-leg
+          journey through <b>{s.conns[0].change_at.join(' then ')}</b> has finished for today.
+          Choose an earlier time, or “Any time”, to see how it runs.
+        </Banner>
+      )}
+
+      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns && s.conns.length === 0 && (
+        <Banner tone="bad" icon={XCircle}>
+          <b>No way to get there by {said}.</b> There is no direct service from {s.from!.name} to{' '}
+          {s.to!.name}, and no combination of up to three {saids} connects them either.
+        </Banner>
+      )}
+
+      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns
+        && s.conns.length === 0 && s.nearbyAlternatives.length > 0 && (
+        <NearbyBox
+          tone="plain"
+          title={<>You can reach these stops near <b>{s.to!.name}</b></>}
+          stops={s.nearbyAlternatives as unknown as NearStop[]}
+          vehicle={ride}
+          onPick={(r) => s.pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}
+        />
+      )}
+
+      {/* A dropped pin has no stop id, and the connections engine can only join named
+          stops - so this is a limit of the question, not of the network. */}
+      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns === null && (
+        <Banner tone="bad" icon={XCircle}>
+          <b>No direct {said}.</b> Journeys with a change can only be worked out between named
+          stops, not dropped pins.
+        </Banner>
+      )}
+
 
       {/* Nothing runs today, but something runs on Saturday - or from a stop up the road.
           Worth saying: the alternative is a rider concluding the journey is impossible. */}

@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   getStops, getGeocode, getAreas, reachableFor, connectingFor, getPlan, getTripStops,
-  getNearbyOrigins, getConnections,
+  getNearbyOrigins, getConnections, getNearestStops,
   type StopHit, type GeoHit, type ReachableStop, type ConnectingStop, type Endpoint,
   type PlanOption, type PlanDeparture, type TripStop, type TripNote, type NearbyOrigin,
   type Connection,
@@ -177,6 +177,26 @@ export function usePlanSearch(operator: string | null = null) {
   const planner = usePlanner()
 
   // Connections are only consulted once a direct search comes back empty.
+  /**
+   * Where to catch the network the rider chose, when it does not come near them.
+   *
+   * BUH REIN to CAPE TOWN under Metro Rail drew nothing at all: there is no station
+   * within walking distance of BUH REIN, so the plan held only buses, the chip hid those,
+   * and the screen was blank. A blank screen is the app's worst answer - it reads as
+   * broken rather than as "not from here".
+   *
+   * The honest reply is the one the destination list already gives for the other end:
+   * name the nearest place this does work from. KRAAIFONTEIN is 3.5km away and runs 18
+   * trains a day to Cape Town, and that is worth saying.
+   *
+   * Verified, not guessed. It is the nearest station with a DIRECT service to the
+   * station nearest the destination, because an offer the app withdraws when taken up is
+   * worse than no offer at all.
+   */
+  const [referral, setReferral] = useState<
+    { from: NearbyOrigin; toName: string; kind: 'bus' | 'train' } | null>(null)
+  const [referralLoading, setReferralLoading] = useState(false)
+
   const [conns, setConns] = useState<Connection[] | null>(null)
   const [connLegs, setConnLegs] = useState<number | null>(null)
   /*
@@ -415,6 +435,39 @@ export function usePlanSearch(operator: string | null = null) {
       .slice(0, 6)
   }, [to, reachable, connecting])
 
+  /**
+   * Look up where to catch the chosen network, when the plan offers none of it.
+   *
+   * Only then: with All selected, or with the chip matching something the plan already
+   * has, there is a real answer on screen and this would be noise. Two requests, made
+   * once per search that needs them.
+   */
+  useEffect(() => {
+    setReferral(null)
+    if (!operatorKind || !plan || loading) return
+    if (plan.some((o) => (o.operator_kind ?? 'bus') === operatorKind)) return
+    if (!from || from.lat == null || from.lon == null) return
+    if (!to || to.lat == null || to.lon == null) return
+
+    const fromLat = from.lat, fromLon = from.lon, kind = operatorKind as 'bus' | 'train'
+    let dropped = false
+    setReferralLoading(true)
+    getNearestStops(to.lat, to.lon, kind, 20000, 1)
+      .then((r) => {
+        const target = r.stops[0]
+        if (!target) return null
+        return getNearbyOrigins(fromLat, fromLon, target.id, { radius: 20000 })
+          .then((o) => {
+            const best = o.origins[0]
+            return best ? { from: best, toName: target.name, kind } : null
+          })
+      })
+      .then((found) => { if (!dropped) setReferral(found ?? null) })
+      .catch(() => { if (!dropped) setReferral(null) })
+      .finally(() => { if (!dropped) setReferralLoading(false) })
+    return () => { dropped = true }
+  }, [operatorKind, plan, loading, from, to])
+
   /** Buses the best answer to what was actually asked needs. */
   const bestLegs = plan && plan.length > 0 ? 1 : (connLegs ?? Infinity)
 
@@ -489,6 +542,7 @@ export function usePlanSearch(operator: string | null = null) {
     plan, setPlan, loading, sel, setSel,
     reachable, setReachable, connecting, setConnecting,
     conns, connLegs, connLoading, connFrom,
+    referral, referralLoading,
     dayAlts, setDayAlts, altDays,
     // the open departure and its trip breakdown
     openDep, setOpenDep, tripStops, tripNotes, loadingTrip,

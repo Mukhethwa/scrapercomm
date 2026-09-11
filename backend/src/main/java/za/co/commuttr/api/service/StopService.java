@@ -6,6 +6,8 @@ import za.co.commuttr.api.dto.StopDtos.ReachableResponse;
 import za.co.commuttr.api.dto.StopDtos.ConnectingStopDto;
 import za.co.commuttr.api.dto.StopDtos.ReachableStopDto;
 import za.co.commuttr.api.dto.StopDtos.StopDto;
+import za.co.commuttr.api.dto.StopDtos.NearestStopDto;
+import za.co.commuttr.api.dto.StopDtos.NearestStopsResponse;
 import za.co.commuttr.api.dto.StopDtos.StopsResponse;
 import za.co.commuttr.api.repo.StopRepository;
 import za.co.commuttr.api.repo.StopTimeRepository;
@@ -34,6 +36,33 @@ public class StopService {
                 : stops.searchByName("%" + q + "%",
                         "%" + q.replace(" ", "") + "%", q + "%", limit);
         return new StopsResponse(rows.stream().map(StopService::toDto).toList());
+    }
+
+    /**
+     * GET /api/nearest_stops — the nearest stops of one kind to a point, and how far.
+     *
+     * Asked when the rider has chosen a network that does not come near them. Under Metro
+     * Rail, BUH REIN to CAPE TOWN showed a blank screen: there is no station within
+     * walking distance of BUH REIN, so the plan held only buses, the chip hid those, and
+     * nothing was left to draw. The honest answer is not silence, it is Kraaifontein.
+     *
+     * A wide radius on purpose. Everything else in the app asks what a rider can walk to;
+     * this asks where the nearest one IS, which is only interesting once the answer is
+     * further than anybody would walk.
+     */
+    public NearestStopsResponse nearest(double lat, double lon, String kind,
+                                        double radiusM, int limit) {
+        return new NearestStopsResponse(
+                stops.findNearestOfKind(lat, lon, kind, radiusM).stream()
+                        .filter(r -> r.getLat() != null && r.getLon() != null)
+                        .map(r -> new NearestStopDto(
+                                r.getId(), r.getName(), r.getLat(), r.getLon(),
+                                r.getOperatorCode() == null ? "gabs" : r.getOperatorCode(),
+                                r.getOperatorKind() == null ? "bus" : r.getOperatorKind(),
+                                Math.round(GeoUtils.haversineM(lat, lon, r.getLat(), r.getLon()))))
+                        .sorted(java.util.Comparator.comparingLong(NearestStopDto::distanceM))
+                        .limit(limit)
+                        .toList());
     }
 
     /** GET /api/stops/{stop_id}/reachable — on one bus, plus what one change adds. */

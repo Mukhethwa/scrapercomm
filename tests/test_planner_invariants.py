@@ -827,3 +827,45 @@ def test_a_place_is_offered_once_however_it_is_spelt():
         squashed = ["".join(c for c in n.lower() if c.isalnum()) for n in names]
         assert len(squashed) == len(set(squashed)), (
             f"{typed!r} offers the same place more than once: {names}")
+
+
+def test_a_place_with_no_station_is_told_where_the_nearest_one_is():
+    """
+    BUH REIN to CAPE TOWN under Metro Rail drew a blank screen.
+
+    No station is within walking distance of BUH REIN, so the plan held only buses, the
+    chip hid those, and every "nothing found" banner asks whether the PLAN is empty -
+    which it was not. A blank screen is the worst answer the app has: it reads as broken
+    rather than as "not from here".
+
+    The reply is the one the destination list already gives for the other end of a
+    journey - name the nearest place this does work from - and it has to be verified
+    rather than guessed, because an offer the app withdraws when taken up is worse than
+    no offer at all. So: the nearest station to the rider, which actually runs a direct
+    train to the station nearest their destination.
+    """
+    origin = get("geocode", q="buh rein")["results"]
+    dest = get("geocode", q="cape town")["results"]
+    if not origin or not dest:
+        pytest.skip("sample places not in this database")
+    o, d = origin[0], dest[0]
+
+    # There is indeed no station near BUH REIN, which is why the screen had nothing.
+    plan = get("plan", from_lat=o["lat"], from_lon=o["lon"],
+               to_lat=d["lat"], to_lon=d["lon"])
+    assert not [x for x in plan["options"] if x["operator_kind"] == "train"], (
+        "BUH REIN now has a train of its own; this test needs a place that does not")
+
+    near = get("nearest_stops", lat=d["lat"], lon=d["lon"], kind="train",
+               radius=20000, limit=1)["stops"]
+    assert near, "no station within 20km of the destination"
+
+    origins = get("nearby_origins", lat=o["lat"], lon=o["lon"],
+                  to=near[0]["id"], radius=20000)["origins"]
+    assert origins, (f"nothing to point a rider at: no station near {o['name']} runs a "
+                     f"train to {near[0]['name']}")
+    first = origins[0]
+    assert first["trip_count"] > 0 and first["earliest"], (
+        "a referral must name a station that actually runs the service, and say when")
+    # Far enough to be worth saying, which is the whole reason the screen was empty.
+    assert first["distance_m"] > 100, "this station is on top of the rider; nothing to refer"

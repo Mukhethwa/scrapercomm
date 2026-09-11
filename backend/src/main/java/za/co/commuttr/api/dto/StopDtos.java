@@ -21,6 +21,20 @@ public final class StopDtos {
     public record StopsResponse(List<StopDto> stops) { }
 
     /**
+     * GET /api/nearest_stops row: a stop of one kind, and how far it is.
+     *
+     * The walking radius is not the question here. This answers "where is the nearest
+     * station", which is worth saying precisely when there is none near enough to walk
+     * to - BUH REIN has no station and the screen went blank rather than pointing at
+     * Kraaifontein.
+     */
+    public record NearestStopDto(Integer id, String name, Double lat, Double lon,
+                                 String operatorCode, String operatorKind,
+                                 Long distanceM) { }
+
+    public record NearestStopsResponse(List<NearestStopDto> stops) { }
+
+    /**
      * GET /api/stops/{id}/reachable row.
      *
      * Carries its operator for the same reason StopDto does: a destination list can hold
