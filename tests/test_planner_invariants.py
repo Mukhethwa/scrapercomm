@@ -1139,3 +1139,36 @@ def test_a_rider_who_wants_one_operator_is_told_where_to_catch_it(code):
     assert departures > 0, "an offered stop must have departures on the journey"
     assert stop["operator_code"] == code, (
         f"offered {stop['name']}, which belongs to {stop['operator_code']} - the loop")
+
+
+def test_an_operator_that_cannot_reach_the_far_end_says_so():
+    """
+    Swept across the network, 16 of 29 dead ends are blocked at the DESTINATION.
+
+    The referral only ever varies where a rider gets on, so nothing it offers can help
+    when the far end is the problem: there is no station near Mamre, and no boarding point
+    changes that. The screen used to answer both cases with one sentence - "no stop of
+    theirs nearby has one either" - which leaves a rider hunting for a stop that was never
+    going to exist.
+
+    This pins the fact the message reads from: the operator has nothing within walking
+    distance of the destination, while somebody else runs the journey.
+    """
+    o = get("geocode", q="century city")["results"]
+    d = get("geocode", q="mamre")["results"]
+    if not o or not d:
+        pytest.skip("sample places not in this database")
+    origin = o[0]
+    dest = next((x for x in d if x["name"].lower() == "mamre"), d[0])
+
+    near = get("nearest_stops", lat=dest["lat"], lon=dest["lon"],
+               operator="metrorail", radius=2500, limit=1)["stops"]
+    assert not near, (f"a station is now within walking distance of {dest['name']}; "
+                      f"this pair no longer shows the case")
+
+    plan = get("plan", from_lat=origin["lat"], from_lon=origin["lon"],
+               to_lat=dest["lat"], to_lon=dest["lon"])
+    codes = {x["operator_code"] for x in plan["options"]}
+    assert "metrorail" not in codes, "no train can reach a place with no station near it"
+    assert codes, (f"nobody runs {origin['name']} to {dest['name']}, so there is no "
+                   f"alternative to name either - pick another sample")

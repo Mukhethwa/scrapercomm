@@ -607,10 +607,19 @@ export default function PlanScreen() {
                see the journey they had just been offered. */
             onPick={() => s.useAlt(s.referral!.from)}
           />
+        ) : s.reachesDestination === false ? (
+          /* The far end is the blocker, and no boarding point can fix it. Saying which
+             end stops a rider hunting for a stop that would not have helped. */
+          <Banner tone="bad" icon={XCircle}>
+            <b>{brand(only)} does not reach {s.to!.name}.</b> There is no{' '}
+            {chosen === 'train' ? 'station' : 'stop'} of theirs within walking distance of
+            it, so no {said} of theirs gets you there from anywhere.
+            {s.otherOperators.length === 0 && <> Choose All to see what does.</>}
+          </Banner>
         ) : s.otherOperators.length === 0 ? (
           <Banner tone="bad" icon={XCircle}>
             <b>No {brand(only)} {said} goes from {s.from!.name} to {s.to!.name}</b>,
-            and no {chosen === 'train' ? 'station' : 'stop'} of theirs nearby has one
+            and no {chosen === 'train' ? 'station' : 'stop'} of theirs near you has one
             either. Choose All to see what does.
           </Banner>
         ) : null
@@ -624,13 +633,17 @@ export default function PlanScreen() {
           what is asked for, so this costs nothing to say and is one tap to act on. */}
       {s.plan && !s.loading && only && shownGroups.length === 0
         && s.otherOperators.length > 0 && (
-        <div className={s.referral ? 'bg-panel p-4 shadow-sm' : 'bg-accent p-4 text-white'}>
+        <div className={s.referral || s.reachesDestination === false
+          ? 'bg-panel p-4 shadow-sm' : 'bg-accent p-4 text-white'}>
           <div className="mb-3 flex items-start gap-2 text-[13px]">
-            {!s.referral && (
+            {!s.referral && s.reachesDestination !== false && (
               <Lightbulb size={16} weight="fill" aria-hidden="true" className="mt-px shrink-0" />
             )}
             <span>
-              {s.referral
+              {/* The sentence above has already said the chosen operator cannot, either
+                  by naming where to catch it or by naming the end it does not reach.
+                  Repeating it here made the screen say it twice in a row. */}
+              {s.referral || s.reachesDestination === false
                 ? <>Or go direct from {s.from!.name} with{' '}
                     {s.otherOperators.length === 1 ? 'this operator' : 'one of these'}:</>
                 : <><b>{operators.nameOf(only)} does not run {s.from!.name} to {s.to!.name}.</b>
@@ -642,7 +655,7 @@ export default function PlanScreen() {
               <button
                 key={x.code}
                 className={`flex cursor-pointer flex-col items-start gap-0.5 bg-panel px-3 py-2.5 text-left hover:ring-1 hover:ring-accent ${
-                  s.referral ? 'border border-line' : ''}`}
+                  s.referral || s.reachesDestination === false ? 'border border-line' : ''}`}
                 onClick={() => setOnly(x.code)}
               >
                 <span className="text-[13px] font-bold text-ink">

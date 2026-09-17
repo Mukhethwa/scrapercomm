@@ -201,6 +201,18 @@ export function usePlanSearch(operator: string | null = null) {
   const [referral, setReferral] = useState<
     { from: NearbyOrigin; toName: string; kind: 'bus' | 'train' } | null>(null)
   const [referralLoading, setReferralLoading] = useState(false)
+  /**
+   * Whether the chosen operator reaches the DESTINATION at all, on foot.
+   *
+   * The referral only ever varies where a rider gets on. Swept across the network, 16 of
+   * the 29 dead ends are blocked at the far end instead - there is no station near Mamre,
+   * and no MyCiTi stop near Abbotsdale - and no boarding point on earth fixes those. The
+   * screen said "no stop of theirs nearby has one either", which is true of both cases
+   * and tells a rider nothing about which one they are in, so they go on hunting.
+   *
+   * Null while unknown, so the message waits rather than guessing.
+   */
+  const [reachesDestination, setReachesDestination] = useState<boolean | null>(null)
 
   const [conns, setConns] = useState<Connection[] | null>(null)
   const [connLegs, setConnLegs] = useState<number | null>(null)
@@ -455,6 +467,7 @@ export function usePlanSearch(operator: string | null = null) {
   useEffect(() => {
     setReferral(null)
     setReferralLoading(false)
+    setReachesDestination(null)
     if (!operator || !operatorKind || !plan || loading) return
     // Whether the CHOSEN COMPANY is in the answer, not whether something of its kind is.
     // Comparing kinds, a Golden Arrow bus satisfied a MyCiTi chip - so a rider who asked
@@ -471,8 +484,14 @@ export function usePlanSearch(operator: string | null = null) {
     const dest = to
     const fromId = from.kind === 'stop' ? from.id : undefined
     const kind = operatorKind as 'bus' | 'train'
+    const toLat = to.lat, toLon = to.lon
     let dropped = false
     setReferralLoading(true)
+    // Can they reach the far end at all? Asked at walking distance, which is the question
+    // the planner itself asks before it can build a journey from a place.
+    getNearestStops(toLat, toLon, operator, 2500, 1)
+      .then((r) => { if (!dropped) setReachesDestination(r.stops.length > 0) })
+      .catch(() => { if (!dropped) setReachesDestination(null) })
     // The candidates are this operator's stops nearest the RIDER, and each is checked by
     // running the very plan a tap on it would run.
     //
@@ -602,7 +621,7 @@ export function usePlanSearch(operator: string | null = null) {
     plan, setPlan, loading, sel, setSel,
     reachable, setReachable, connecting, setConnecting,
     conns, connLegs, connLoading, connFrom,
-    referral, referralLoading, otherOperators,
+    referral, referralLoading, reachesDestination, otherOperators,
     dayAlts, setDayAlts, altDays,
     // the open departure and its trip breakdown
     openDep, setOpenDep, tripStops, tripNotes, loadingTrip,
