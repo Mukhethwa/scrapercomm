@@ -228,6 +228,14 @@ export default function PlanScreen() {
    * turn it on, and nothing offers a rider a filter that returns an empty screen.
    */
   const operators = useLoadedOperators()
+  /**
+   * An operator's name as it reads in front of its own vehicle.
+   *
+   * "No Metrorail train", "No MyCiTi bus" - and "No Golden Arrow bus", not "No Golden
+   * Arrow Buses bus", which is what the registered name gives when the sentence adds the
+   * noun a second time.
+   */
+  const brand = (code: string) => operators.nameOf(code).replace(/\s+Buses$/i, '')
 
   /**
    * Bus or train, in the app's own sentences.
@@ -558,65 +566,34 @@ export default function PlanScreen() {
           The nearest station is named, with what it actually runs, and tapping it plans
           from there. It is the same answer the destination list already gives for the
           other end of a journey. */}
-      {/* Somebody else runs it, so say who.
+      {/* The chosen operator does not run this from here. Say where it can be caught,
+          and - as an alternative, not instead - who runs it directly.
           
-          Upper Long to Camps Bay under Golden Arrow: no Golden Arrow bus goes, and
-          MyCiTi runs it. The screen sent the rider hunting for a Golden Arrow stop
-          instead - and, asking for the nearest stop of KIND bus, offered MyCiTi's. Tap
-          it and the same sentence returned about another MyCiTi stop, and another.
-          
-          The plan already holds every operator's answer, because the chip filters what
-          is drawn and not what is asked for, so this costs nothing to say and is the
-          answer a rider can act on in one tap. */}
-      {s.plan && !s.loading && only && shownGroups.length === 0
-        && s.otherOperators.length > 0 && (
-        <div className="bg-accent p-4 text-white">
-          <div className="mb-3 flex items-start gap-2 text-[13px]">
-            <Lightbulb size={16} weight="fill" aria-hidden="true" className="mt-px shrink-0" />
-            <span>
-              <b>{operators.nameOf(only)} does not run {s.from!.name} to {s.to!.name}.</b>
-              {s.otherOperators.length === 1 ? <> This one does:</> : <> These do:</>}
-            </span>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {s.otherOperators.map((x) => (
-              <button
-                key={x.code}
-                className="flex cursor-pointer flex-col items-start gap-0.5 bg-panel px-3 py-2.5 text-left hover:ring-1 hover:ring-accent"
-                onClick={() => setOnly(x.code)}
-              >
-                <span className="text-[13px] font-bold text-ink">
-                  {operators.nameOf(x.code)}
-                </span>
-                <span className="text-[11px] text-sub">
-                  {x.departures} {x.departures === 1 ? 'departure' : 'departures'} - direct
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {s.plan && !s.loading && only && shownGroups.length === 0
-        && s.otherOperators.length === 0 && (
+          Both, in that order. A rider who pressed Metro Rail asked about trains: BUH REIN
+          to CAPE TOWN used to answer only "Golden Arrow does, 4 departures", which is
+          true and does not tell them Kraaifontein station is 3.5km away with trains to
+          Cape Town all day. The other operator stays underneath, one tap away, for the
+          rider who would rather just take the bus. */}
+      {s.plan && !s.loading && only && shownGroups.length === 0 && (
         s.referralLoading ? (
           <Banner tone="info" icon={Info}>
-            No {said} from {s.from!.name}. Looking for the nearest one…
+            No {brand(only)} {said} from {s.from!.name}. Looking for the nearest{' '}
+            {chosen === 'train' ? 'station' : 'stop'} that gets you to {s.to!.name}…
           </Banner>
         ) : s.referral ? (
           <NearbyBox
             tone="suggest"
             vehicle={s.referral.kind}
             title={<>
-              {/* "to Camps Bay", not "to Quebec". toName is the stop the check used
-                  to prove the service exists, which is an implementation detail the
-                  rider never typed and cannot place. */}
-              <b>No {said} goes from {s.from!.name}.</b> The nearest{' '}
-              {s.referral.kind === 'train' ? 'station' : 'stop'} with one to{' '}
+              {/* "to Camps Bay", not "to Quebec": the place the rider typed. The count
+                  is departures across the week's timetables rather than "a day", which
+                  is what it actually adds up. */}
+              <b>No {brand(only)} {said} goes from {s.from!.name}.</b> The
+              nearest {s.referral.kind === 'train' ? 'station' : 'stop'} with one to{' '}
               {s.to!.name} is <b>{s.referral.from.name}</b>,{' '}
               {away(s.referral.from.distance_m / 1000)} away
               {s.referral.from.earliest && <> — {s.referral.from.trip_count}{' '}
-                {s.referral.kind === 'train' ? 'trains' : 'buses'} a day, first{' '}
+                {s.referral.from.trip_count === 1 ? 'departure' : 'departures'}, first{' '}
                 {s.referral.from.earliest}</>}. Tap it to plan from there.
             </>}
             stops={[{
@@ -630,14 +607,54 @@ export default function PlanScreen() {
                see the journey they had just been offered. */
             onPick={() => s.useAlt(s.referral!.from)}
           />
-        ) : (
+        ) : s.otherOperators.length === 0 ? (
           <Banner tone="bad" icon={XCircle}>
-            <b>No {said} goes from {s.from!.name} to {s.to!.name}</b>, and there is
-            no {s.plan.length > 0 ? 'nearby ' : ''}
-            {chosen === 'train' ? 'station' : 'stop'} that runs one either. Choose
-            All to see what does.
+            <b>No {brand(only)} {said} goes from {s.from!.name} to {s.to!.name}</b>,
+            and no {chosen === 'train' ? 'station' : 'stop'} of theirs nearby has one
+            either. Choose All to see what does.
           </Banner>
-        )
+        ) : null
+      )}
+
+      {/* Somebody else runs it directly, so say who - underneath the nearest stop of the
+          operator that was asked for, as the other way to go.
+          
+          Upper Long to Camps Bay under Golden Arrow: MyCiTi runs it. The plan already
+          holds every operator's answer, because the chip filters what is drawn and not
+          what is asked for, so this costs nothing to say and is one tap to act on. */}
+      {s.plan && !s.loading && only && shownGroups.length === 0
+        && s.otherOperators.length > 0 && (
+        <div className={s.referral ? 'bg-panel p-4 shadow-sm' : 'bg-accent p-4 text-white'}>
+          <div className="mb-3 flex items-start gap-2 text-[13px]">
+            {!s.referral && (
+              <Lightbulb size={16} weight="fill" aria-hidden="true" className="mt-px shrink-0" />
+            )}
+            <span>
+              {s.referral
+                ? <>Or go direct from {s.from!.name} with{' '}
+                    {s.otherOperators.length === 1 ? 'this operator' : 'one of these'}:</>
+                : <><b>{operators.nameOf(only)} does not run {s.from!.name} to {s.to!.name}.</b>
+                    {s.otherOperators.length === 1 ? <> This one does:</> : <> These do:</>}</>}
+            </span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {s.otherOperators.map((x) => (
+              <button
+                key={x.code}
+                className={`flex cursor-pointer flex-col items-start gap-0.5 bg-panel px-3 py-2.5 text-left hover:ring-1 hover:ring-accent ${
+                  s.referral ? 'border border-line' : ''}`}
+                onClick={() => setOnly(x.code)}
+              >
+                <span className="text-[13px] font-bold text-ink">
+                  {operators.nameOf(x.code)}
+                </span>
+                <span className="text-[11px] text-sub">
+                  {x.departures} {x.departures === 1 ? 'departure' : 'departures'} - direct
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {shownGroups.map((g) => {

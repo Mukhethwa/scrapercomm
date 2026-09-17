@@ -1089,3 +1089,53 @@ def test_when_one_operator_cannot_do_it_the_plan_shows_who_can():
         "Golden Arrow now runs this journey, so it no longer demonstrates the case - "
         "find a pair where one operator answers and another does not")
     assert "myciti" in codes, "MyCiTi runs Upper Long to Camps Bay and must be offered"
+
+
+@pytest.mark.parametrize("code", ["metrorail", "myciti"])
+def test_a_rider_who_wants_one_operator_is_told_where_to_catch_it(code):
+    """
+    BUH REIN to CAPE TOWN, with Metro Rail pressed, said only "Golden Arrow does, 4
+    departures". True, and not what was asked: Kraaifontein station is 3.5km away with
+    trains to Cape Town all day, and the screen never mentioned it.
+
+    So the nearest stop of the CHOSEN operator is offered as well as the operator that
+    runs it directly. Which means the offer has to be real, and the only honest test of
+    that is the query a tap actually runs - planning from that stop to the destination.
+    Checking something cheaper is what produced the endless loop: the old referral asked
+    whether a stop had a direct service to one of the few stops nearest the destination,
+    which is a different question. Under Golden Arrow it offered stops that then planned
+    to nothing; under MyCiTi from BUH REIN it found nothing at all, because the stops
+    nearest the middle of Cape Town are Upper Long, Michaelis and Roeland while the D05
+    from Dunoon runs to Civic Centre.
+    """
+    o = get("geocode", q="buh rein")["results"]
+    d = get("geocode", q="cape town")["results"]
+    if not o or not d:
+        pytest.skip("sample places not in this database")
+    origin, dest = o[0], d[0]
+
+    plan = get("plan", from_lat=origin["lat"], from_lon=origin["lon"],
+               to_lat=dest["lat"], to_lon=dest["lon"])
+    assert not [x for x in plan["options"] if x["operator_code"] == code], (
+        f"{code} now runs this journey directly, so it no longer shows the case")
+
+    # The candidates the screen offers, nearest the rider first.
+    near = get("nearest_stops", lat=origin["lat"], lon=origin["lon"],
+               operator=code, radius=50000, limit=10)["stops"]
+    assert near, f"no {code} stop within 50km of {origin['name']}"
+
+    verified = []
+    for stop in near:
+        from_it = get("plan", **{"from": stop["id"],
+                                 "to_lat": dest["lat"], "to_lon": dest["lon"]})
+        mine = [x for x in from_it["options"] if x["operator_code"] == code]
+        if mine:
+            verified.append((stop, sum(len(x["departures"]) for x in mine)))
+
+    assert verified, (f"nothing to offer a rider who wants {code}: none of the "
+                      f"{len(near)} nearest stops can be planned from to "
+                      f"{dest['name']}")
+    stop, departures = verified[0]
+    assert departures > 0, "an offered stop must have departures on the journey"
+    assert stop["operator_code"] == code, (
+        f"offered {stop['name']}, which belongs to {stop['operator_code']} - the loop")

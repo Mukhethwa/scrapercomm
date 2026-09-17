@@ -454,42 +454,66 @@ export function usePlanSearch(operator: string | null = null) {
    */
   useEffect(() => {
     setReferral(null)
+    setReferralLoading(false)
     if (!operator || !operatorKind || !plan || loading) return
     // Whether the CHOSEN COMPANY is in the answer, not whether something of its kind is.
     // Comparing kinds, a Golden Arrow bus satisfied a MyCiTi chip - so a rider who asked
     // for MyCiTi and got Golden Arrow saw neither the MyCiTi journey nor the sentence
     // saying where to catch one.
     if (plan.some((o) => (o.operator_code ?? 'gabs') === operator)) return
-    // Somebody else runs it. Then the answer is their name, not a walk: see
-    // `otherOperators` below, which the screen shows instead of this.
-    if (plan.length > 0) return
+    // Asked even when another operator runs it directly. That answer is shown too, but a
+    // rider who pressed Metro Rail wants to know where to get the train - BUH REIN to
+    // CAPE TOWN offered only "Golden Arrow does, 4 departures" and never said that
+    // Kraaifontein station is 3.5km away with trains to Cape Town all day.
     if (!from || from.lat == null || from.lon == null) return
     if (!to || to.lat == null || to.lon == null) return
 
-    const fromLat = from.lat, fromLon = from.lon, code = operator
+    const dest = to
+    const fromId = from.kind === 'stop' ? from.id : undefined
+    const kind = operatorKind as 'bus' | 'train'
     let dropped = false
     setReferralLoading(true)
-    // Several candidates at the far end, not just the nearest one.
+    // The candidates are this operator's stops nearest the RIDER, and each is checked by
+    // running the very plan a tap on it would run.
     //
-    // The nearest bus stop to the middle of Cape Town is BUITENSINGEL STR, a kerb on a
-    // city-centre street that no Kraaifontein bus runs to; the CAPE TOWN terminus, which
-    // 264 of them a day run to, is seventh on the list at 928m. Asking only the nearest
-    // therefore answered "there is no nearby stop that runs one either" about the busiest
-    // journey on the network.
+    // It used to check something cheaper: whether the stop had a direct service to one of
+    // the few stops nearest the destination. That is a different question, and the gap
+    // between them is where both failures lived. Asked about Golden Arrow it offered
+    // stops that could not then be planned from, so tapping one produced another, and
+    // another. Asked about MyCiTi from BUH REIN it found nothing at all, because the
+    // stops nearest the middle of Cape Town are Upper Long, Michaelis and Roeland, and
+    // the D05 from Dunoon goes to Civic Centre - while planning from Dunoon to Cape Town
+    // returns five MyCiTi journeys.
     //
-    // All at once rather than one after another: each is about 400ms, so eight in
-    // sequence is a three-second wait and eight together is one.
-    getNearestStops(to.lat, to.lon, code, 20000, 8)
+    // Checked with the real plan, an offered stop cannot fail to answer when tapped.
+    // Wide, because this is asked precisely when the operator does not come near: the
+    // nearest MyCiTi stop to BUH REIN is 16km off. Up to ten stops, in parallel.
+    getNearestStops(from.lat, from.lon, operator, 50000, 10)
       .then((r) => Promise.all(
-        r.stops.map((target) =>
-          getNearbyOrigins(fromLat, fromLon, target.id, { radius: 20000 })
-            .then((o) => (o.origins[0]
-              ? { from: o.origins[0], toName: target.name,
-                  kind: operatorKind as 'bus' | 'train' }
-              : null))
-            .catch(() => null))))
-      // The one that starts nearest the rider, which is not necessarily the one whose
-      // destination stop is nearest to theirs.
+        r.stops
+          .filter((stop) => stop.id !== fromId)
+          .map((stop) =>
+            getPlan({ kind: 'stop', id: stop.id, name: stop.name, lat: stop.lat, lon: stop.lon,
+                      mode: stop.operator_kind, operator: stop.operator_code }, dest)
+              .then((p) => {
+                const mine = p.options.filter((o) => (o.operator_code ?? 'gabs') === operator)
+                const departures = mine.flatMap((o) => o.departures)
+                if (departures.length === 0) return null
+                const first = departures
+                  .map((d) => d.board_minutes)
+                  .filter((m): m is number => m != null)
+                  .sort((a, b) => a - b)[0]
+                const origin: NearbyOrigin = {
+                  id: stop.id, name: stop.name, lat: stop.lat, lon: stop.lon,
+                  distance_m: stop.distance_m,
+                  trip_count: departures.length,
+                  earliest: first == null ? null
+                    : `${String(Math.floor(Math.round(first) / 60) % 24).padStart(2, '0')}:`
+                      + `${String(Math.round(first) % 60).padStart(2, '0')}`,
+                }
+                return { from: origin, toName: dest.name, kind }
+              })
+              .catch(() => null))))
       .then((found) => found.filter((x) => x != null)
         .sort((a, b) => a!.from.distance_m - b!.from.distance_m)[0] ?? null)
       .then((found) => { if (!dropped) setReferral(found ?? null) })
