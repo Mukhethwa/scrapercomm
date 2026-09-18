@@ -438,9 +438,15 @@ const CONNECTIONS_TIMEOUT_MS = 30_000
  * A stop goes as its id and a dropped point as its coordinates, the same way /api/plan
  * takes them - the engine walks a point to the nearest stop that can make the journey.
  */
-export const getConnections = (from: Endpoint, to: Endpoint) =>
+/**
+ * @param operator when set, only that operator's stops are tried at either end - so a
+ *        rider who pressed Metro Rail gets journeys with a change on the trains, rather
+ *        than the first two buses the search happened to find nearest.
+ */
+export const getConnections = (from: Endpoint, to: Endpoint, operator?: string | null) =>
   getJSON<ConnectionsResponse>(
-    `${API}/connections?${epParams('from', from)}&${epParams('to', to)}`,
+    `${API}/connections?${epParams('from', from)}&${epParams('to', to)}`
+    + (operator ? `&operator=${encodeURIComponent(operator)}` : ''),
     CONNECTIONS_TIMEOUT_MS)
 
 /**

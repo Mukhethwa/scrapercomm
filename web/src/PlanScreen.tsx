@@ -308,6 +308,16 @@ export default function PlanScreen() {
   // journeys under the other's chip - which is the contradiction this check was added to
   // remove, wearing a third face.
   const connWanted = !only || (s.connFrom?.operator_code ?? 'gabs') === only
+  /**
+   * The chosen operator has no stop within walking distance of the destination.
+   *
+   * Then the suggestion above - the nearest stop of theirs, and that it stops short - is
+   * the whole answer, and the general "nothing runs direct" blocks below only repeat it:
+   * Mowbray to BUH REIN under Metro Rail showed the Kraaifontein suggestion, then "No way
+   * to get there by train", then Kraaifontein again under "You can reach these stops
+   * near BUH REIN", then "No stop within 8 km has a direct train there either".
+   */
+  const destinationBlocked = !!only && s.reachesDestination === false
 
   const liveConns = useMemo(
     () => (s.conns ? connectionsFrom(s.conns, leaveAt) : null),
@@ -545,7 +555,11 @@ export default function PlanScreen() {
 
       {/* Above the results, not below them. A shorter journey is only useful before the
           rider has read and chosen from the long one. */}
-      {!s.loading && !s.connLoading && s.betterNearby.length > 0 && s.bestLegs < Infinity && (
+      {/* Not under a chip whose operator cannot reach the destination: the suggestion
+          below names the nearest stop of theirs and says plainly that it stops short,
+          which this box does not. */}
+      {!s.loading && !s.connLoading && s.betterNearby.length > 0 && s.bestLegs < Infinity
+        && !(only && s.reachesDestination === false) && (
         <NearbyBox
           tone="suggest"
           title={<><b>Suggestion.</b> {s.to!.name} needs {s.bestLegs} leg
@@ -574,6 +588,17 @@ export default function PlanScreen() {
           true and does not tell them Kraaifontein station is 3.5km away with trains to
           Cape Town all day. The other operator stays underneath, one tap away, for the
           rider who would rather just take the bus. */}
+      {/* After taking a destination-side suggestion. The journey below is real, and
+          it does not reach where the rider asked to go - so the screen keeps saying so
+          for as long as it is showing it. */}
+      {s.shortOf && s.to && (
+        <Banner tone="warn" icon={Warning}>
+          <b>This stops short of {s.shortOf.name}.</b> {s.to.name} is{' '}
+          {away(s.shortOf.distance_m / 1000)} from it, and you will need to walk or take
+          something else for that last part.
+        </Banner>
+      )}
+
       {s.plan && !s.loading && only && shownGroups.length === 0 && (
         s.referralLoading ? (
           <Banner tone="info" icon={Info}>
@@ -608,14 +633,57 @@ export default function PlanScreen() {
             onPick={() => s.useAlt(s.referral!.from)}
           />
         ) : s.reachesDestination === false ? (
-          /* The far end is the blocker, and no boarding point can fix it. Saying which
-             end stops a rider hunting for a stop that would not have helped. */
-          <Banner tone="bad" icon={XCircle}>
-            <b>{brand(only)} does not reach {s.to!.name}.</b> There is no{' '}
-            {chosen === 'train' ? 'station' : 'stop'} of theirs within walking distance of
-            it, so no {said} of theirs gets you there from anywhere.
-            {s.otherOperators.length === 0 && <> Choose All to see what does.</>}
-          </Banner>
+          /* The far end is the blocker, so no boarding point can fix it - but the stop
+             of theirs NEAREST the far end can be reached, and that is worth saying.
+             Mukhethwa: "yes trains do not reach buh rein but id like recommendations for
+             the nearest stop to reach there ... so long as for each there is a sign that
+             you wont directly reach your destination but nearest stop". The sign is the
+             first sentence, and it stays on the results after the tap. */
+          s.destReferralLoading ? (
+            <Banner tone="info" icon={Info}>
+              <b>{brand(only)} does not reach {s.to!.name}.</b> Looking for the{' '}
+              {chosen === 'train' ? 'station' : 'stop'} of theirs nearest to it…
+            </Banner>
+          ) : s.destReferral ? (
+            <div className="bg-accent p-4 text-white">
+              <div className="mb-3 flex items-start gap-2 text-[13px]">
+                <Lightbulb size={16} weight="fill" aria-hidden="true" className="mt-px shrink-0" />
+                <span>
+                  <b>{brand(only)} does not reach {s.to!.name}.</b> The nearest{' '}
+                  {chosen === 'train' ? 'station' : 'stop'} to it is{' '}
+                  <b>{s.destReferral.stop.name}</b>,{' '}
+                  {away(s.destReferral.stop.distance_m / 1000)} from {s.to!.name}, and you
+                  can get there by {said}{' '}
+                  {s.destReferral.how === 'direct' ? 'directly' : 'with a change'} from{' '}
+                  {s.from!.name}. You would still have{' '}
+                  {away(s.destReferral.stop.distance_m / 1000)} to cover at the end.
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  className="flex cursor-pointer flex-col items-start gap-0.5 bg-panel px-3 py-2.5 text-left hover:ring-1 hover:ring-accent"
+                  onClick={() => s.useAltTo()}
+                >
+                  <span className="text-[13px] font-bold text-ink">
+                    {s.destReferral.stop.name}
+                  </span>
+                  <span className="text-[11px] text-sub">
+                    {away(s.destReferral.stop.distance_m / 1000)} short of {s.to!.name} -{' '}
+                    {s.destReferral.how === 'direct'
+                      ? `${s.destReferral.departures} direct`
+                      : `${s.destReferral.departures} with a change`}
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <Banner tone="bad" icon={XCircle}>
+              <b>{brand(only)} does not reach {s.to!.name}.</b> There is no{' '}
+              {chosen === 'train' ? 'station' : 'stop'} of theirs within walking distance
+              of it, and none near it can be reached from {s.from!.name} on {brand(only)}.
+              {s.otherOperators.length === 0 && <> Choose All to see what does.</>}
+            </Banner>
+          )
         ) : s.otherOperators.length === 0 ? (
           <Banner tone="bad" icon={XCircle}>
             <b>No {brand(only)} {said} goes from {s.from!.name} to {s.to!.name}</b>,
@@ -839,14 +907,14 @@ export default function PlanScreen() {
         </Banner>
       )}
 
-      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns && s.conns.length === 0 && (
+      {s.plan && !s.loading && !destinationBlocked && s.plan.length === 0 && !s.connLoading && s.conns && s.conns.length === 0 && (
         <Banner tone="bad" icon={XCircle}>
           <b>No way to get there by {said}.</b> There is no direct service from {s.from!.name} to{' '}
           {s.to!.name}, and no combination of up to three {saids} connects them either.
         </Banner>
       )}
 
-      {s.plan && !s.loading && s.plan.length === 0 && !s.connLoading && s.conns
+      {s.plan && !s.loading && !destinationBlocked && s.plan.length === 0 && !s.connLoading && s.conns
         && s.conns.length === 0 && s.nearbyAlternatives.length > 0 && (
         <NearbyBox
           tone="plain"
@@ -901,7 +969,7 @@ export default function PlanScreen() {
         </div>
       )}
 
-      {s.plan && !s.loading && s.plan.length === 0 && s.altDays.length === 0 && !s.connLoading && (
+      {s.plan && !s.loading && !destinationBlocked && s.plan.length === 0 && s.altDays.length === 0 && !s.connLoading && (
         <div className="px-1 text-[12px] text-sub">
           No stop within 8 km has a direct {said} there either.
         </div>

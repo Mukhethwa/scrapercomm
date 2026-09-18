@@ -15,7 +15,7 @@ import {
   getNearbyOrigins, getConnections, getNearestStops,
   type StopHit, type GeoHit, type ReachableStop, type ConnectingStop, type Endpoint,
   type PlanOption, type PlanDeparture, type TripStop, type TripNote, type NearbyOrigin,
-  type Connection,
+  type Connection, type NearestStop,
 } from './api'
 import { MODES, useModes } from './modes'
 import { onlyOperator, operatorsWithOptions } from './results'
@@ -271,6 +271,7 @@ export function usePlanSearch(operator: string | null = null) {
 
   /** Empty the starting point and everything that depended on it. */
   function clearFrom() {
+    setShortOf(null)
     setFrom(null); setFromText(''); setFromHits([]); setArmed(null); setPickError(null)
     setTo(null); setToText(''); setToHits([])
     setPlan(null); setReachable(null); setConnecting([]); setDayAlts({})
@@ -280,6 +281,7 @@ export function usePlanSearch(operator: string | null = null) {
 
   /** Empty the destination. The starting point, and what it can reach, stay. */
   function clearTo() {
+    setShortOf(null)
     setTo(null); setToText(''); setToHits([]); setArmed(null); setPickError(null)
     setPlan(null); setDayAlts({}); setConns(null); setConnLegs(null)
     setConnFrom(null)
@@ -287,6 +289,7 @@ export function usePlanSearch(operator: string | null = null) {
   }
 
   function pickFrom(ep: Endpoint) {
+    setShortOf(null)
     setFrom(ep); setFromText(ep.name); setFromHits([]); setArmed(null)
     setTo(null); setToText(''); setPlan(null); setReachable(null); setConnecting([]); setDayAlts({})
     setOpenDep(null); setTripStops(null)
@@ -318,13 +321,8 @@ export function usePlanSearch(operator: string | null = null) {
         // It runs alongside the plan rather than after it: the direct answer is on screen
         // while this is still working, which matters because it is slow. See the note on
         // getConnections.
-        setConnLoading(true)
-        getConnections(f, t)
-          .then((c) => {
-            setConns(c.connections); setConnLegs(c.legs_required); setConnFrom(c.from)
-          })
-          .catch(() => { setConns([]); setConnLegs(null); setConnFrom(null) })
-          .finally(() => setConnLoading(false))
+        // Journeys with a change are fetched by the effect below, which also re-asks
+        // when the operator chip changes.
         // The "on other days" suggestions are distance-based, so they need a located
         // origin. Without one the plan still stands; only this extra is skipped.
         if (t.kind === 'stop' && f.lat != null && f.lon != null) {
@@ -355,6 +353,7 @@ export function usePlanSearch(operator: string | null = null) {
    * edit and an empty one above it.
    */
   function swapEnds() {
+    setShortOf(null)
     if (!from || !to) return
     const nextFrom = to
     const nextTo = from
@@ -377,6 +376,7 @@ export function usePlanSearch(operator: string | null = null) {
   }
 
   function pickTo(ep: Endpoint) {
+    setShortOf(null)
     setTo(ep); setToText(ep.name); setToHits([]); setArmed(null); setSel(0)
     runPlan(from!, ep)
   }
@@ -443,9 +443,11 @@ export function usePlanSearch(operator: string | null = null) {
     }
     const here = { lat: to.lat, lon: to.lon }
     const seen = new Set<number>()
+    // Only the chosen operator's stops. Under Metro Rail this listed CAPE GATE,
+    // VREDEKLOOF and DURBANVILLE - Golden Arrow stops - as places "quicker to reach".
     return [
-      ...(reachable ?? []).map((r) => ({ ...r, change: false })),
-      ...connecting.map((r) => ({ ...r, change: true })),
+      ...onlyOperator(reachable ?? [], operator).map((r) => ({ ...r, change: false })),
+      ...onlyOperator(connecting, operator).map((r) => ({ ...r, change: true })),
     ]
       .filter((r) => {
         if (r.id === to.id || r.lat == null || r.lon == null || seen.has(r.id)) return false
@@ -455,7 +457,7 @@ export function usePlanSearch(operator: string | null = null) {
       .map((r) => ({ ...r, km: km(here, { lat: r.lat!, lon: r.lon! }) }))
       .sort((a, b) => a.km - b.km)
       .slice(0, 6)
-  }, [to, reachable, connecting])
+  }, [to, reachable, connecting, operator])
 
   /**
    * Look up where to catch the chosen network, when the plan offers none of it.
@@ -541,6 +543,110 @@ export function usePlanSearch(operator: string | null = null) {
     return () => { dropped = true }
   }, [operator, operatorKind, plan, loading, from, to])
 
+  /**
+   * Journeys with a change, on the operator the chip names.
+   *
+   * The search takes the first pair of stops that connects, nearest first, across every
+   * operator - so from Mowbray it found two Golden Arrow buses and stopped, and a rider
+   * who pressed Metro Rail or MyCiTi was never shown a change on the network they asked
+   * about. Mukhethwa: "the results do not show multi legged journeys for other modes
+   * instead of buses". Asked per operator, Mowbray to Kraaifontein is the Southern Line
+   * in and the Northern Line out, and Mowbray to Dunoon is the 102 and then the T01.
+   *
+   * So it is re-asked when the chip changes, rather than answered once for All and then
+   * filtered down to nothing.
+   */
+  const planReady = plan != null
+  useEffect(() => {
+    if (!from || !to || !planReady) return
+    let dropped = false
+    setConns(null); setConnLegs(null); setConnFrom(null); setConnLoading(true)
+    getConnections(from, to, operator)
+      .then((c) => {
+        if (dropped) return
+        setConns(c.connections); setConnLegs(c.legs_required); setConnFrom(c.from)
+      })
+      .catch(() => { if (!dropped) { setConns([]); setConnLegs(null); setConnFrom(null) } })
+      .finally(() => { if (!dropped) setConnLoading(false) })
+    return () => { dropped = true }
+  }, [from, to, operator, planReady]) // eslint-disable-line
+
+  /**
+   * The chosen operator's stop nearest the DESTINATION, when it does not reach the
+   * destination itself - and a way to get there on that operator.
+   *
+   * Mowbray to BUH REIN under Metro Rail said, rightly, that no train reaches BUH REIN,
+   * and stopped. Mukhethwa: "yes trains do not reach buh rein but id like
+   * recommendations for the nearest stop to reach there in this case kraaifontein being
+   * the closest station, same as for my citi, so long as for each there is a sign that
+   * you wont directly reach your destination but nearest stop".
+   *
+   * Verified the way the origin-side referral is: by running the plan a tap would run.
+   * Direct first, because it is quick and usually there; a journey with a change only
+   * for the nearest candidates if nothing goes direct, because that search is slow.
+   */
+  const [destReferral, setDestReferral] = useState<{
+    stop: NearestStop; how: 'direct' | 'change'; departures: number; toName: string
+  } | null>(null)
+  const [destReferralLoading, setDestReferralLoading] = useState(false)
+  useEffect(() => {
+    setDestReferral(null)
+    setDestReferralLoading(false)
+    if (!operator || !plan || loading || reachesDestination !== false) return
+    if (plan.some((o) => (o.operator_code ?? 'gabs') === operator)) return
+    if (!from || !to || to.lat == null || to.lon == null) return
+    const origin = from, dest = to, code = operator
+    let dropped = false
+    setDestReferralLoading(true)
+    ;(async () => {
+      const near = (await getNearestStops(dest.lat!, dest.lon!, code, 50000, 6)).stops
+      // Nearest the destination first: that is the point of the suggestion.
+      const direct = await Promise.all(near.map((stop) =>
+        getPlan(origin, { kind: 'stop', id: stop.id, name: stop.name, lat: stop.lat,
+                          lon: stop.lon, mode: stop.operator_kind,
+                          operator: stop.operator_code })
+          .then((p) => p.options
+            .filter((o) => (o.operator_code ?? 'gabs') === code)
+            .reduce((n, o) => n + o.departures.length, 0))
+          .catch(() => 0)))
+      const i = direct.findIndex((n) => n > 0)
+      if (i >= 0) return { stop: near[i], how: 'direct' as const, departures: direct[i] }
+      for (const stop of near.slice(0, 2)) {
+        if (dropped) return null
+        const c = await getConnections(origin,
+          { kind: 'stop', id: stop.id, name: stop.name, lat: stop.lat, lon: stop.lon,
+            mode: stop.operator_kind, operator: stop.operator_code }, code)
+          .catch(() => null)
+        if (c && c.connections.length > 0) {
+          return { stop, how: 'change' as const, departures: c.connections.length }
+        }
+      }
+      return null
+    })()
+      .then((found) => { if (!dropped) setDestReferral(found ? { ...found, toName: dest.name } : null) })
+      .catch(() => { if (!dropped) setDestReferral(null) })
+      .finally(() => { if (!dropped) setDestReferralLoading(false) })
+    return () => { dropped = true }
+  }, [operator, plan, loading, reachesDestination, from, to])
+
+  /**
+   * Set when the rider has taken a destination-side suggestion, so the results can keep
+   * saying that this journey stops short of where they asked to go.
+   */
+  const [shortOf, setShortOf] = useState<{ name: string; distance_m: number } | null>(null)
+
+  /** Plan to the chosen operator's stop nearest the destination, remembering the rest. */
+  function useAltTo() {
+    if (!destReferral || !from) return
+    const stop = destReferral.stop
+    const t: Endpoint = { kind: 'stop', id: stop.id, name: stop.name, lat: stop.lat,
+                          lon: stop.lon, mode: stop.operator_kind,
+                          operator: stop.operator_code }
+    setShortOf({ name: destReferral.toName, distance_m: stop.distance_m })
+    setTo(t); setToText(stop.name); setToHits([]); setArmed(null); setSel(0)
+    runPlan(from, t)
+  }
+
   /** Who runs this journey when the chosen operator does not. See results.ts. */
   const otherOperators = useMemo(
     () => operatorsWithOptions(plan, operator), [plan, operator])
@@ -622,6 +728,7 @@ export function usePlanSearch(operator: string | null = null) {
     reachable, setReachable, connecting, setConnecting,
     conns, connLegs, connLoading, connFrom,
     referral, referralLoading, reachesDestination, otherOperators,
+    destReferral, destReferralLoading, shortOf, useAltTo,
     dayAlts, setDayAlts, altDays,
     // the open departure and its trip breakdown
     openDep, setOpenDep, tripStops, tripNotes, loadingTrip,

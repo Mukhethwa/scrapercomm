@@ -84,8 +84,10 @@ public class PlannerController {
             @RequestParam(value = "from_lon", required = false) Double fromLon,
             @RequestParam(value = "to", required = false) Integer to,
             @RequestParam(value = "to_lat", required = false) Double toLat,
-            @RequestParam(value = "to_lon", required = false) Double toLon) {
-        return connectionService.connections(from, fromLat, fromLon, to, toLat, toLon);
+            @RequestParam(value = "to_lon", required = false) Double toLon,
+            @RequestParam(value = "operator", required = false) String operator) {
+        return connectionService.connections(from, fromLat, fromLon, to, toLat, toLon,
+                operator == null || operator.isBlank() ? null : operator);
     }
 
     /** Legs whose real road path passes near a point. */

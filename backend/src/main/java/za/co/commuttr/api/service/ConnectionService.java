@@ -85,9 +85,33 @@ public class ConnectionService {
 
     public ConnectionsResponse connections(Integer fromId, Double fromLat, Double fromLon,
                                            Integer toId, Double toLat, Double toLon) {
-        List<StopRow> fromStops = resolve(fromId, fromLat, fromLon);
-        List<StopRow> toStops = resolve(toId, toLat, toLon);
+        return connections(fromId, fromLat, fromLon, toId, toLat, toLon, null);
+    }
+
+    /**
+     * @param operator when not null, only this operator's stops are tried at either end.
+     *
+     * The search takes the first pair of stops that connects, nearest first, across every
+     * operator - so from Mowbray it finds two Golden Arrow buses and stops there, and a
+     * rider who pressed Metro Rail or MyCiTi was never shown a journey with a change on
+     * the network they asked about. Mukhethwa: "the results do not show multi legged
+     * journeys for other modes instead of buses".
+     *
+     * Scoping the ends is enough to scope the journey: a connection changes at one stop
+     * row, and no stop row is served by two operators, so both legs belong to whoever
+     * owns the ends.
+     */
+    public ConnectionsResponse connections(Integer fromId, Double fromLat, Double fromLon,
+                                           Integer toId, Double toLat, Double toLon,
+                                           String operator) {
+        List<StopRow> fromStops = resolve(fromId, fromLat, fromLon, operator);
+        List<StopRow> toStops = resolve(toId, toLat, toLon, operator);
         if (fromStops.isEmpty() || toStops.isEmpty()) {
+            // Scoped to an operator with nothing within walking distance of one end, the
+            // honest answer is "no journey", not "no such stop".
+            if (operator != null) {
+                return new ConnectionsResponse(null, null, null, List.of());
+            }
             throw ApiException.notFound("stop not found");
         }
 
@@ -111,15 +135,19 @@ public class ConnectionService {
     }
 
     /** A stop id as itself, or a point as the stops a rider could walk to. */
-    private List<StopRow> resolve(Integer id, Double lat, Double lon) {
+    private List<StopRow> resolve(Integer id, Double lat, Double lon, String operator) {
         if (id != null) {
-            return stops.findRowById(id).map(List::of).orElseGet(List::of);
+            // A named stop of another operator cannot start or end a journey on this one.
+            return stops.findRowById(id)
+                    .filter(r -> operator == null || operator.equals(r.getOperatorCode()))
+                    .map(List::of).orElseGet(List::of);
         }
         if (lat == null || lon == null) {
             return List.of();
         }
         List<StopRow> near = new ArrayList<>();
-        for (String code : stops.operatorCodesWithStops()) {
+        List<String> codes = operator == null ? stops.operatorCodesWithStops() : List.of(operator);
+        for (String code : codes) {
             near.addAll(stops.findNearestOfOperator(lat, lon, code, WALK_M).stream()
                     .limit(NEAR_TRIED).toList());
         }

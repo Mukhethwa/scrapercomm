@@ -1172,3 +1172,65 @@ def test_an_operator_that_cannot_reach_the_far_end_says_so():
     assert "metrorail" not in codes, "no train can reach a place with no station near it"
     assert codes, (f"nobody runs {origin['name']} to {dest['name']}, so there is no "
                    f"alternative to name either - pick another sample")
+
+
+@pytest.mark.parametrize("code,target", [("metrorail", "KRAAIFONTEIN"),
+                                         ("myciti", "Stables Turnaround")])
+def test_a_journey_with_a_change_is_found_on_the_operator_asked_for(code, target):
+    """
+    "the results do not show multi legged journeys for other modes instead of buses"
+
+    The connection search takes the first pair of stops that connects, nearest first,
+    across every operator - so from Mowbray it found two Golden Arrow buses and stopped,
+    and a rider who pressed Metro Rail or MyCiTi never saw a change on their network.
+    Scoped to the operator, Mowbray to Kraaifontein is the Southern Line in and the
+    Northern Line out, and Mowbray to Dunoon is the 102 and then the T01.
+
+    Checked through the ends: a connection changes at one stop row, and no stop row is
+    served by two operators, so if both ends are the operator's the legs are too.
+    """
+    o = get("geocode", q="mowbray")["results"]
+    if not o:
+        pytest.skip("Mowbray is not in this database")
+    stops = get("stops", q=target, limit=50)["stops"]
+    end = next((s for s in stops if s["name"] == target and s["operator_code"] == code), None)
+    if not end:
+        pytest.skip(f"{target} ({code}) is not in this database")
+
+    c = get("connections", from_lat=o[0]["lat"], from_lon=o[0]["lon"], to=end["id"],
+            operator=code)
+    assert c["connections"], f"no {code} journey with a change from Mowbray to {target}"
+    assert c["from"]["operator_code"] == code, (
+        f"asked for {code}, started from {c['from']['name']} of {c['from']['operator_code']}")
+    assert c["to"]["operator_code"] == code
+
+
+def test_the_nearest_stop_to_an_unreached_destination_can_be_reached():
+    """
+    "yes trains do not reach buh rein but id like recommendations for the nearest stop to
+    reach there in this case kraaifontein being the closest station"
+
+    Mowbray to BUH REIN under Metro Rail stopped at "Metrorail does not reach BUH REIN".
+    True, and a dead end: Kraaifontein station is 3.5km from BUH REIN and a train runs
+    there from Mowbray. The screen now offers it, verified the way a tap would plan it.
+    """
+    o = get("geocode", q="mowbray")["results"]
+    d = get("geocode", q="buh rein")["results"]
+    if not o or not d:
+        pytest.skip("sample places not in this database")
+    origin, dest = o[0], d[0]
+
+    walkable = get("nearest_stops", lat=dest["lat"], lon=dest["lon"],
+                   operator="metrorail", radius=2500, limit=1)["stops"]
+    assert not walkable, "a station is now walkable from BUH REIN; the case has gone"
+
+    near = get("nearest_stops", lat=dest["lat"], lon=dest["lon"],
+               operator="metrorail", radius=50000, limit=6)["stops"]
+    reached = []
+    for stop in near:
+        p = get("plan", from_lat=origin["lat"], from_lon=origin["lon"], to=stop["id"])
+        if any(x["operator_code"] == "metrorail" for x in p["options"]):
+            reached.append(stop)
+    assert reached, "no station near BUH REIN can be reached by train from Mowbray"
+    assert reached[0]["name"] == "KRAAIFONTEIN", (
+        f"expected the nearest reachable station to be KRAAIFONTEIN, got {reached[0]['name']}")
