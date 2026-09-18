@@ -314,7 +314,32 @@ def drop_stale_stop_names(cur) -> int:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Load the named places of Cape Town")
     ap.add_argument("--dry-run", action="store_true", help="fetch and report, write nothing")
+    ap.add_argument("--from-stops", action="store_true",
+                    help="skip Overpass: refresh stop names and who serves each place "
+                         "from what is already loaded")
     args = ap.parse_args()
+
+    # After loading an operator, the places need two things from its stops and nothing
+    # from OpenStreetMap: its stop names added as places, and a record of which places it
+    # reaches. The second is what a chip's search reads - without it, pressing MyCiTi
+    # offers no place at all, because none is recorded as served by MyCiTi. It was run by
+    # hand when MyCiTi arrived and had no command, so a teammate loading from scratch had
+    # no way to know it existed.
+    if args.from_stops:
+        conn = db.connect()
+        try:
+            cur = conn.cursor()
+            stale = drop_stale_stop_names(cur)
+            added = add_stop_names(cur)
+            counts = mark_served(cur)
+            conn.commit()
+            print(f"{stale} stale stop entries dropped, {len(added)} operator names "
+                  f"present as places")
+            print("places each operator reaches: "
+                  + ", ".join(f"{k} {v}" for k, v in counts.items()))
+        finally:
+            conn.close()
+        return
 
     print("asking Overpass for every named place in the metro...", flush=True)
     places = fetch()
@@ -369,6 +394,7 @@ def main() -> None:
 
         stale = drop_stale_stop_names(cur)
         added = add_stop_names(cur)
+        mark_served(cur)
         conn.commit()
         if stale:
             print(f"{stale} stop entries dropped, now mapped as places in their own right")

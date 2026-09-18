@@ -75,7 +75,7 @@ You do **not** need to install PostgreSQL. Docker provides it.
 
 ## Getting it running
 
-Six steps, in order. Steps 1–5 get you a working app; step 6 is only for frontend work.
+Seven steps, in order. Steps 1–6 get you a working app; step 7 is only for frontend work.
 
 ### Step 1 — Start the database
 
@@ -98,10 +98,10 @@ You should see `gabs_pg` and `gabs_pgadmin`, both `Up`.
 The repository ships a snapshot of the fully-loaded database, so you don't have to
 download and parse 1,900 PDFs yourself. **This takes seconds.**
 
-The snapshot carries everything the app needs to be useful: timetables, stop coordinates
-and the fare tables, for both operators - Golden Arrow's buses and Metrorail's trains. You
-do not need to run the scraper, the geocoder, the fare jobs or the OCR to get a working
-app with prices on it.
+The snapshot carries timetables, stop coordinates and the fare tables for **Golden Arrow's
+buses and Metrorail's trains**. It does **not** include MyCiTi - that is Step 3, and it
+only takes a few minutes. You do not need to run the scraper, the geocoder, the fare jobs
+or the OCR to get a working app with prices on it.
 
 ```bash
 docker cp data/gabs_dump.sql.gz gabs_pg:/tmp/dump.sql.gz
@@ -128,12 +128,63 @@ filter is dead without the train timetables:
 docker exec gabs_pg psql -U gabs -d gabs -c "SELECT o.code, count(r.id) FROM operator o LEFT JOIN route r ON r.operator_id = o.id GROUP BY o.code"
 ```
 
-**793** for `gabs` and **13** for `metrorail` is right.
+**793** for `gabs` and **10** for `metrorail` is right. There is no `myciti` row yet -
+that comes next.
 
 > No snapshot in your copy? See [Refreshing the bus timetables](#refreshing-the-bus-timetables) to
 > build the database from the live site instead. That takes about 90 minutes.
 
-### Step 3 — Start the API
+### Step 3 — Add MyCiTi
+
+MyCiTi is loaded from the 47 timetable PDFs in `data/myciti/`, which ship with the
+repository, so this step needs no internet. Run these **in this order**, from the project
+root, with the database running. Each one is safe to run again.
+
+```bash
+# 1. The tables a third operator needs (the snapshot predates them)
+docker exec -i gabs_pg psql -U gabs -d gabs < sql/operators.sql
+
+# 2. The timetables: 47 routes, 521 stops, 151,593 times (~2 minutes)
+PYTHONPATH=src python -m myciti_scraper.pipeline --no-fetch
+
+# 3. Split the one stop name MyCiTi uses for two places ("Highlands")
+PYTHONPATH=src python -m myciti_scraper.split_names
+
+# 4. Put the stops on the map, from OpenStreetMap (uses the cached copy in data/myciti)
+PYTHONPATH=src python -m myciti_scraper.positions
+
+# 5. Make every MyCiTi stop searchable, and record which places MyCiTi serves
+PYTHONPATH=src python -m gabs_scraper.areas --from-stops
+```
+
+**Do not skip steps 3 to 5.** Without step 4 no MyCiTi stop has a position, so no journey
+can start or end at one. Without step 5 the MyCiTi chip offers no places at all, because
+the search only suggests places an operator is recorded as serving.
+
+If the API is already running (Step 4), **stop and restart it** - it caches place searches, so
+MyCiTi places will not appear until it starts fresh.
+
+Confirm it worked:
+
+```bash
+docker exec gabs_pg psql -U gabs -d gabs -c "SELECT o.code, count(r.id) FROM operator o LEFT JOIN route r ON r.operator_id = o.id GROUP BY o.code"
+```
+
+**47** for `myciti` is right, alongside 793 `gabs` and 10 `metrorail`. And that the stops
+have positions:
+
+```bash
+docker exec gabs_pg psql -U gabs -d gabs -c "SELECT count(*) FILTER (WHERE s.lat IS NOT NULL) AS placed, count(*) AS stops FROM stop s JOIN operator o ON o.id = s.operator_id WHERE o.code = 'myciti'"
+```
+
+About **479 placed of 522** is right. The rest are stops OpenStreetMap does not have and
+that could not be placed between their neighbours; the planner simply does not use them.
+
+> **On Windows PowerShell** rather than Git Bash, set the path first and drop the prefix:
+> `$env:PYTHONPATH = "src"` then `python -m myciti_scraper.pipeline --no-fetch`, and so on.
+> Step 1 becomes `Get-Content sql/operators.sql | docker exec -i gabs_pg psql -U gabs -d gabs`.
+
+### Step 4 — Start the API
 
 ```bash
 mvn -f backend/pom.xml spring-boot:run
@@ -147,7 +198,7 @@ Check it's alive:
 curl http://localhost:8000/api/health
 ```
 
-### Step 4 — Build the web app, once
+### Step 5 — Build the web app, once
 
 The built app is **not** stored in the repository, so build it before the first run.
 After that you only repeat this when the frontend changes.
@@ -161,14 +212,14 @@ npm run build
 That writes `web/dist`, which the API serves. **Restart the API afterwards** — it only
 looks for the built app at startup, so a running one will not pick it up.
 
-### Step 5 — Open the app
+### Step 6 — Open the app
 
 **Open <http://localhost:8000>.** That's the whole app.
 
 If you see `{"detail":"Not Found"}` instead, the API started before `web/dist` existed.
 Restart it and reload.
 
-### Step 6 — Only if you're changing the React code
+### Step 7 — Only if you're changing the React code
 
 Skip this unless you're editing the frontend. It gives you hot reload, so you don't have
 to rebuild after every change.
@@ -178,7 +229,7 @@ cd web && npm run dev
 ```
 
 Now use **<http://localhost:5173>** instead. It forwards API calls to port 8000, so
-**leave the API from Step 3 running**.
+**leave the API from Step 4 running**.
 
 ---
 
@@ -618,6 +669,17 @@ PYTHONPATH=src python -m gabs_scraper.fares
 
 # 5. Work out the price of every journey (~1 minute)
 PYTHONPATH=src python -m gabs_scraper.pricing
+```
+
+**MyCiTi** is refreshed separately. Without `--no-fetch` the pipeline checks myciti.org.za
+for the current list and downloads any timetable not already in `data/myciti/` (delete a
+PDF there to force it to be fetched again):
+
+```bash
+PYTHONPATH=src python -m myciti_scraper.pipeline
+PYTHONPATH=src python -m myciti_scraper.split_names
+PYTHONPATH=src python -m myciti_scraper.positions
+PYTHONPATH=src python -m gabs_scraper.areas --from-stops
 ```
 
 Steps 2 to 5 are **not** part of step 1. Skip 2 and new routes work for stop-to-stop

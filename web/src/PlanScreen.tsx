@@ -74,7 +74,12 @@ function Banner({ tone, icon: Icon, children }: {
 }
 
 /** A stop near the destination, and how much easier it is to reach. */
-interface NearStop { id: number; name: string; km: number; change: boolean; lat: number | null; lon: number | null }
+interface NearStop {
+  id: number; name: string; km: number; change: boolean; lat: number | null; lon: number | null
+  /** Whose stop it is. Carried by every row the planner hands over; shown on the card. */
+  operator_code?: string
+  operator_kind?: 'bus' | 'train'
+}
 
 /**
  * Stops near the destination worth going to instead.
@@ -84,13 +89,24 @@ interface NearStop { id: number; name: string; km: number; change: boolean; lat:
  * are all Khayelitsha and one bus away. Answering the letter of the question and hiding
  * the better journey helps nobody.
  */
-function NearbyBox({ title, tone, stops, onPick, vehicle = 'bus' }: {
+function NearbyBox({ title, tone, stops, onPick, vehicle = 'bus', nameOf, place }: {
   title: React.ReactNode
   tone: 'suggest' | 'plain'
   stops: NearStop[]
   onPick: (s: NearStop) => void
   /** Bus or train, so a train rider is not offered "2 buses" to a station. */
   vehicle?: 'bus' | 'train'
+  /**
+   * An operator's name, so each card can say whose stop it is.
+   *
+   * Rosebank to Kraaifontein offered "NY 3A, 4.5 km away, direct" and "MALIBU, 5.9 km
+   * away, direct" under All - two Golden Arrow bus stops, with nothing on the card to say
+   * so, beside a Metrorail card for the same journey. Mukhethwa: "the suggestion above is
+   * vague doesnt show which operator/bus is being refered to".
+   */
+  nameOf?: (code: string) => string
+  /** What the distance is measured from. "4.5 km away" did not say from what. */
+  place?: string
 }) {
   return (
     <div className={`p-4 ${tone === 'suggest' ? 'bg-accent text-white' : 'bg-panel shadow-sm'}`}>
@@ -106,8 +122,15 @@ function NearbyBox({ title, tone, stops, onPick, vehicle = 'bus' }: {
             onClick={() => onPick(r)}
           >
             <span className="text-[13px] font-bold text-ink">{r.name}</span>
+            {nameOf && r.operator_code && (
+              <span className="text-[11px] font-semibold text-ink">
+                {nameOf(r.operator_code).replace(/\s+Buses$/i, '')}{' '}
+                {(r.operator_kind ?? vehicle) === 'train' ? 'train' : 'bus'}
+              </span>
+            )}
             <span className="text-[11px] text-sub">
-              {away(r.km)} away - {r.change ? `2 ${plural(vehicle)}` : 'direct'}
+              {away(r.km)} {place ? `from ${place}` : 'away'} -{' '}
+              {r.change ? `2 ${plural(r.operator_kind ?? vehicle)}` : 'direct'}
             </span>
           </button>
         ))}
@@ -562,10 +585,13 @@ export default function PlanScreen() {
         && !(only && s.reachesDestination === false) && (
         <NearbyBox
           tone="suggest"
-          title={<><b>Suggestion.</b> {s.to!.name} needs {s.bestLegs} leg
-            {s.bestLegs === 1 ? '' : 's'}, but these stops nearby are quicker to reach.</>}
+          title={<><b>Suggestion.</b> {s.to!.name} takes {s.bestLegs} leg
+            {s.bestLegs === 1 ? '' : 's'} from {s.from!.name}. These stops near it take
+            fewer:</>}
           stops={s.betterNearby as unknown as NearStop[]}
           vehicle={ride}
+          nameOf={operators.nameOf}
+          place={s.to!.name}
           onPick={(r) => s.pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}
         />
       )}
@@ -625,7 +651,10 @@ export default function PlanScreen() {
               id: s.referral.from.id, name: s.referral.from.name,
               km: s.referral.from.distance_m / 1000, change: false,
               lat: s.referral.from.lat, lon: s.referral.from.lon,
+              operator_code: only ?? undefined, operator_kind: s.referral.kind,
             }]}
+            nameOf={operators.nameOf}
+            place={s.from!.name}
             /* useAlt, not pickFrom: the destination is the half the rider still wants.
                pickFrom clears it, which is right when somebody starts again from
                somewhere else and wrong here - they would have to retype CAPE TOWN to
@@ -919,6 +948,8 @@ export default function PlanScreen() {
         <NearbyBox
           tone="plain"
           title={<>You can reach these stops near <b>{s.to!.name}</b></>}
+          nameOf={operators.nameOf}
+          place={s.to!.name}
           stops={s.nearbyAlternatives as unknown as NearStop[]}
           vehicle={ride}
           onPick={(r) => s.pickTo({ kind: 'stop', id: r.id, name: r.name, lat: r.lat!, lon: r.lon! })}
