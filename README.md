@@ -140,22 +140,46 @@ MyCiTi is loaded from the 47 timetable PDFs in `data/myciti/`, which ship with t
 repository, so this step needs no internet. Run these **in this order**, from the project
 root, with the database running. Each one is safe to run again.
 
-```bash
-# 1. The tables a third operator needs (the snapshot predates them)
-docker exec -i gabs_pg psql -U gabs -d gabs < sql/operators.sql
+Use the block for the terminal you are in. **Windows PowerShell** (the default terminal on
+Windows, and in VS Code on Windows):
+
+```powershell
+# 1. The tables a third operator needs (the snapshot predates them).
+#    NOTICE lines saying something "already exists, skipping" are fine.
+docker cp sql/operators.sql gabs_pg:/tmp/operators.sql
+docker exec gabs_pg psql -U gabs -d gabs -f /tmp/operators.sql
+
+# Lets python find the project's code. Needed once per terminal window.
+$env:PYTHONPATH = "src"
 
 # 2. The timetables: 47 routes, 521 stops, 151,593 times (~2 minutes)
-PYTHONPATH=src python -m myciti_scraper.pipeline --no-fetch
+python -m myciti_scraper.pipeline --no-fetch
 
 # 3. Split the one stop name MyCiTi uses for two places ("Highlands")
-PYTHONPATH=src python -m myciti_scraper.split_names
+python -m myciti_scraper.split_names
 
 # 4. Put the stops on the map, from OpenStreetMap (uses the cached copy in data/myciti)
-PYTHONPATH=src python -m myciti_scraper.positions
+python -m myciti_scraper.positions
 
 # 5. Make every MyCiTi stop searchable, and record which places MyCiTi serves
+python -m gabs_scraper.areas --from-stops
+```
+
+**Git Bash, macOS or Linux:**
+
+```bash
+docker cp sql/operators.sql gabs_pg:/tmp/operators.sql
+docker exec gabs_pg psql -U gabs -d gabs -f /tmp/operators.sql
+PYTHONPATH=src python -m myciti_scraper.pipeline --no-fetch
+PYTHONPATH=src python -m myciti_scraper.split_names
+PYTHONPATH=src python -m myciti_scraper.positions
 PYTHONPATH=src python -m gabs_scraper.areas --from-stops
 ```
+
+> **Seeing `The '<' operator is reserved for future use`?** That is PowerShell refusing bash
+> syntax. Every `PYTHONPATH=src python ...` command elsewhere in this README has the same
+> problem in PowerShell: run `$env:PYTHONPATH = "src"` once, then type the command without
+> the `PYTHONPATH=src` part.
 
 **Do not skip steps 3 to 5.** Without step 4 no MyCiTi stop has a position, so no journey
 can start or end at one. Without step 5 the MyCiTi chip offers no places at all, because
@@ -179,10 +203,6 @@ docker exec gabs_pg psql -U gabs -d gabs -c "SELECT count(*) FILTER (WHERE s.lat
 
 About **479 placed of 522** is right. The rest are stops OpenStreetMap does not have and
 that could not be placed between their neighbours; the planner simply does not use them.
-
-> **On Windows PowerShell** rather than Git Bash, set the path first and drop the prefix:
-> `$env:PYTHONPATH = "src"` then `python -m myciti_scraper.pipeline --no-fetch`, and so on.
-> Step 1 becomes `Get-Content sql/operators.sql | docker exec -i gabs_pg psql -U gabs -d gabs`.
 
 ### Step 4 — Start the API
 
