@@ -32,13 +32,14 @@ public final class CatalogDtos {
                                 String newestTimetable,
                                 long stops) { }
 
-    /** A row of GET /api/routes (carries the timetable count). */
+    /** A row of GET /api/routes (carries the timetable count, and whose route it is). */
     public record RouteSummaryDto(Integer id,
                                   String name,
                                   String origin,
                                   String destination,
                                   String letterGroup,
-                                  Long timetableCount) { }
+                                  Long timetableCount,
+                                  String operatorCode) { }
 
     public record RoutesResponse(List<RouteSummaryDto> routes) { }
 

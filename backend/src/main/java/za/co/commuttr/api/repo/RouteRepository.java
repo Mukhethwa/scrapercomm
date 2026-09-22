@@ -16,6 +16,10 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
      * GET /api/routes. The Python version built the WHERE clause dynamically; the
      * null-guarded predicates below are equivalent and keep the query plan cacheable.
      * {@code namePattern} already carries its % wildcards.
+     *
+     * <p>Each row says whose route it is. Without that, the app had to guess from the ids
+     * it already held, and reloading MyCiTi gave every route a new id: all 47 were filed
+     * under Golden Arrow and the MyCiTi list came up empty.
      */
     @Query(value = """
             SELECT r.id            AS "id",
@@ -23,12 +27,14 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
                    r.origin        AS "origin",
                    r.destination   AS "destination",
                    r.letter_group  AS "letterGroup",
-                   count(t.id)     AS "timetableCount"
+                   count(t.id)     AS "timetableCount",
+                   o.code          AS "operatorCode"
             FROM route r
+            JOIN operator o ON o.id = r.operator_id
             LEFT JOIN timetable t ON t.route_id = r.id
             WHERE (CAST(:namePattern AS text) IS NULL OR r.name ILIKE CAST(:namePattern AS text))
               AND (CAST(:letter AS text) IS NULL OR r.letter_group = CAST(:letter AS text))
-            GROUP BY r.id
+            GROUP BY r.id, o.code
             ORDER BY r.name
             """, nativeQuery = true)
     List<RouteSummaryRow> search(@Param("namePattern") String namePattern,

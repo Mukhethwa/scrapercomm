@@ -104,8 +104,19 @@ public class ConnectionService {
     public ConnectionsResponse connections(Integer fromId, Double fromLat, Double fromLon,
                                            Integer toId, Double toLat, Double toLon,
                                            String operator) {
-        List<StopRow> fromStops = resolve(fromId, fromLat, fromLon, operator);
-        List<StopRow> toStops = resolve(toId, toLat, toLon, operator);
+        return connections(fromId, fromLat, fromLon, null, toId, toLat, toLon, null, operator);
+    }
+
+    /**
+     * @param fromName what the rider called the starting place, if they chose one by name:
+     *                 a stop or station called exactly that is tried first, as in
+     *                 {@link PlannerService}, however far the place's coordinates are from it.
+     */
+    public ConnectionsResponse connections(Integer fromId, Double fromLat, Double fromLon, String fromName,
+                                           Integer toId, Double toLat, Double toLon, String toName,
+                                           String operator) {
+        List<StopRow> fromStops = resolve(fromId, fromLat, fromLon, operator, fromName);
+        List<StopRow> toStops = resolve(toId, toLat, toLon, operator, toName);
         if (fromStops.isEmpty() || toStops.isEmpty()) {
             // Scoped to an operator with nothing within walking distance of one end, the
             // honest answer is "no journey", not "no such stop".
@@ -135,6 +146,25 @@ public class ConnectionService {
     }
 
     /** A stop id as itself, or a point as the stops a rider could walk to. */
+    private List<StopRow> resolve(Integer id, Double lat, Double lon, String operator, String name) {
+        List<StopRow> near = resolve(id, lat, lon, operator);
+        if (id != null || name == null || name.isBlank()) {
+            return near;
+        }
+        List<StopRow> named = new ArrayList<>(stops.findByExactName(name.trim()).stream()
+                .filter(r -> operator == null || operator.equals(r.getOperatorCode()))
+                .filter(r -> lat == null || lon == null
+                        || GeoUtils.haversineM(lat, lon, r.getLat(), r.getLon()) <= PlannerService.NAMED_STOP_M)
+                .toList());
+        if (named.isEmpty()) {
+            return near;
+        }
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
+        named.forEach(r -> seen.add(r.getId()));
+        near.stream().filter(r -> seen.add(r.getId())).forEach(named::add);
+        return named;
+    }
+
     private List<StopRow> resolve(Integer id, Double lat, Double lon, String operator) {
         if (id != null) {
             // A named stop of another operator cannot start or end a journey on this one.
@@ -213,6 +243,86 @@ public class ConnectionService {
         return r == null ? null : r.getLon();
     }
 
+    private static final java.util.regex.Pattern CLOCK =
+            java.util.regex.Pattern.compile("^([0-9]{1,2}):([0-9]{2})");
+
+    /**
+     * Minutes past midnight from a timetable cell: "08:59:00", or "16:30a" with a footnote.
+     * Null for "via", where no time is published.
+     *
+     * The last leg's arrival used to be sent as the cell text alone, with its minutes null,
+     * so every journey with a change said "time not published" at the destination while
+     * the same trip, opened, showed Kalk Bay at 08:59.
+     */
+    static Integer minutesOf(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = CLOCK.matcher(raw.trim());
+        return m.find() ? Integer.parseInt(m.group(1)) * 60 + Integer.parseInt(m.group(2)) : null;
+    }
+
+    /** How MyCiTi fares are priced: by band, from the distance along the route. */
+    private static final String MYCITI = "myciti_distance";
+
+    /**
+     * MyCiTi's distance bands, as {upper km, peak, saver} in cents. The same numbers as
+     * BANDS in src/myciti_scraper/fares.py, which fills journey_fare; change both together.
+     */
+    private static final int[][] MYCITI_BANDS = {
+        {5, 1950, 1500}, {10, 2550, 1950}, {20, 3250, 2550}, {30, 3450, 2950},
+        {40, 3750, 3200}, {50, 4250, 3850}, {60, 4850, 4350}, {Integer.MAX_VALUE, 5250, 4600},
+    };
+
+    /** {peak, saver} for a distance along MyCiTi's routes. */
+    static int[] mycitiBand(double km) {
+        for (int[] b : MYCITI_BANDS) {
+            if (km <= b[0]) {
+                return new int[] { b[1], b[2] };
+            }
+        }
+        throw new IllegalStateException("the last band has no upper bound");
+    }
+
+    static String mycitiBandLabel(double km) {
+        int lower = 0;
+        for (int[] b : MYCITI_BANDS) {
+            if (b[0] == Integer.MAX_VALUE) {
+                return lower + "km+";
+            }
+            if (km <= b[0]) {
+                return lower + "-" + b[0] + "km";
+            }
+            lower = b[0];
+        }
+        throw new IllegalStateException("the last band has no upper bound");
+    }
+
+    /** How Metrorail fares are priced: by zone, from the distance between two stations. */
+    private static final String PRASA_ZONE = "prasa_zone";
+
+    /**
+     * PRASA's distance bands, as {upper km, zone, single, weekly Mon-Fri, monthly} in cents.
+     * The same numbers as ZONES in src/prasa_scraper/fares.py, which fills journey_fare;
+     * change both together.
+     */
+    private static final int[][] PRASA_BANDS = {
+        {15, 1, 1000, 6000, 18000},
+        {40, 2, 1200, 7000, 22000},
+        {60, 3, 1400, 8000, 25000},
+        {Integer.MAX_VALUE, 4, 1500, 9000, 28000},
+    };
+
+    /** {zone, single, weekly, monthly} for a distance by rail. */
+    static int[] prasaBand(double km) {
+        for (int[] b : PRASA_BANDS) {
+            if (km <= b[0]) {
+                return new int[] { b[1], b[2], b[3], b[4] };
+            }
+        }
+        throw new IllegalStateException("the last band has no upper bound");
+    }
+
     /** How many changes of bus a published transfer allowance covers. */
     private static final Map<String, Integer> TRANSFERS =
             Map.of("Zero", 0, "One", 1, "Two", 2);
@@ -259,7 +369,10 @@ public class ConnectionService {
                 r.length > 11 ? (String) r[11] : null,
                 r.length > 12 && r[12] != null ? ((Number) r[12]).intValue() : null,
                 r.length > 13 && r[13] != null ? ((Number) r[13]).intValue() : null,
-                r.length > 14 && r[14] != null ? ((Number) r[14]).doubleValue() : null);
+                r.length > 14 && r[14] != null ? ((Number) r[14]).doubleValue() : null,
+                r.length > 15 && r[15] != null ? ((Number) r[15]).intValue() : null,
+                r.length > 16 && r[16] != null ? ((Number) r[16]).intValue() : null,
+                r.length > 17 && r[17] != null ? ((Number) r[17]).intValue() : null);
     }
 
     /**
@@ -274,6 +387,52 @@ public class ConnectionService {
                                            List<ConnectionLegDto> legs) {
         FareDto through = fareFor(fromId, toId);
         int changes = legs.size() - 1;
+        // MyCiTi charges a journey with a change as one fare for its whole distance: the
+        // City's calculator prices Table View to Kloof Nek, changing at Civic Centre, as a
+        // single 20-30km fare. The legs' distances along the route, added up.
+        boolean allMyciti = legs.stream().allMatch(l -> l.fare() != null && MYCITI.equals(l.fare().basis()));
+        if (allMyciti && legs.stream().allMatch(l -> l.fare().distanceKm() != null)) {
+            double km = legs.stream().mapToDouble(l -> l.fare().distanceKm()).sum();
+            int[] band = mycitiBand(km);
+            FareDto first = legs.get(0).fare();
+            return new ConnectionFareDto("through", 1, null, null, first.weeklyCents(), first.monthlyCents(),
+                    null, null, MYCITI, mycitiBandLabel(km),
+                    String.format(java.util.Locale.ROOT, "%.1f km along the route", km), false,
+                    band[0], first.cashEffectiveFrom(), band[1], first.dayPassCents(), first.threeDayPassCents());
+        }
+        // A Metrorail ticket is for a journey between two stations, priced by the distance
+        // between them, and a change of train on the way does not need another. Its fares
+        // record no transfer allowance and no card price, so the rule below never applied
+        // and every train-only journey with a change came back with no price at all.
+        boolean allTrain = legs.stream().allMatch(l -> l.fare() != null && PRASA_ZONE.equals(l.fare().basis()));
+        if (allTrain && through != null && through.cashCents() != null && PRASA_ZONE.equals(through.basis())) {
+            return new ConnectionFareDto("through", 1, through.perRideCents(),
+                    through.fiveRideCents(), through.weeklyCents(), through.monthlyCents(),
+                    through.code(), through.transfers(), through.basis(),
+                    through.basisFrom(), through.basisTo(), through.zoneApprox(),
+                    through.cashCents(), through.cashEffectiveFrom());
+        }
+        // Stations on different lines have no precomputed fare between them: the fares job
+        // prices pairs on one line by the straight line between them, which across a
+        // change cuts the corner through Cape Town and would undercharge. The legs' own
+        // distances, added up, follow the railway.
+        if (allTrain) {
+            double km = 0;
+            for (ConnectionLegDto leg : legs) {
+                if (leg.fare().distanceKm() == null) {
+                    km = -1;
+                    break;
+                }
+                km += leg.fare().distanceKm();
+            }
+            if (km >= 0) {
+                int[] band = prasaBand(km);
+                return new ConnectionFareDto("through", 1, null, null, band[2], band[3],
+                        "Z" + band[0], null, PRASA_ZONE, "Z" + band[0],
+                        String.format(java.util.Locale.ROOT, "%.1f km by rail", km), false,
+                        band[1], legs.get(0).fare().cashEffectiveFrom());
+            }
+        }
         if (through != null && through.perRideCents() != null
                 && changesCovered(through) >= changes) {
             return new ConnectionFareDto("through", 1, through.perRideCents(),
@@ -334,7 +493,7 @@ public class ConnectionService {
                 r.getChangeId(), r.getChangeName(), lat(c, r.getChangeId()), lon(c, r.getChangeId()),
                 to.getId(), to.getName(), to.getLat(), to.getLon(),
                 r.getRoute2(), r.getTtn2(), ApiFormat.time(r.getDep2()), r.getArrRaw2(),
-                ApiFormat.minutes(r.getDep2()), null,
+                ApiFormat.minutes(r.getDep2()), minutesOf(r.getArrRaw2()),
                 r.getSched2(), r.getTrip2(), r.getFromSeq2(), r.getToSeq2(),
                 fareFor(r.getChangeId(), to.getId()));
 
@@ -365,7 +524,7 @@ public class ConnectionService {
                 r.getChange2Id(), r.getChange2Name(), lat(c, r.getChange2Id()), lon(c, r.getChange2Id()),
                 to.getId(), to.getName(), to.getLat(), to.getLon(),
                 r.getRoute3(), r.getTtn3(), ApiFormat.time(r.getDep3()), r.getArrRaw3(),
-                ApiFormat.minutes(r.getDep3()), null,
+                ApiFormat.minutes(r.getDep3()), minutesOf(r.getArrRaw3()),
                 r.getSched3(), r.getTrip3(), r.getFromSeq3(), r.getToSeq3(),
                 fareFor(r.getChange2Id(), to.getId()));
 

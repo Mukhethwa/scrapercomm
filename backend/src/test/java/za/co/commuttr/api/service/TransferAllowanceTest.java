@@ -54,4 +54,36 @@ class TransferAllowanceTest {
         assertThat(ConnectionService.changesCovered(withTransfers("Three"))).isZero();
         assertThat(ConnectionService.changesCovered(withTransfers(""))).isZero();
     }
+
+    @Test
+    @DisplayName("a train journey with a change is priced as one ticket for the distance by rail")
+    void pricesTrainsByTheBandOfTheWholeDistance() {
+        // Kraaifontein to Kalk Bay changing at Woodstock: 27.3 km and 30.1 km, one Zone 3 ticket.
+        assertThat(ConnectionService.prasaBand(27.3 + 30.1)).containsExactly(3, 1400, 8000, 25000);
+        assertThat(ConnectionService.prasaBand(15.0)).containsExactly(1, 1000, 6000, 18000);
+        assertThat(ConnectionService.prasaBand(15.1)[0]).isEqualTo(2);
+        assertThat(ConnectionService.prasaBand(40.0)[0]).isEqualTo(2);
+        assertThat(ConnectionService.prasaBand(61.3)).containsExactly(4, 1500, 9000, 28000);
+    }
+
+    @Test
+    @DisplayName("the last leg of a journey with a change keeps its published arrival")
+    void readsTheArrivalFromTheCell() {
+        assertThat(ConnectionService.minutesOf("08:59:00")).isEqualTo(539);
+        assertThat(ConnectionService.minutesOf("16:30a")).isEqualTo(990);
+        assertThat(ConnectionService.minutesOf("6:05")).isEqualTo(365);
+        assertThat(ConnectionService.minutesOf("via")).isNull();
+        assertThat(ConnectionService.minutesOf(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("a MyCiTi journey with a change is one fare for its whole distance")
+    void pricesMycitiByTheBandOfTheWholeDistance() {
+        // Table View to Kloof Nek, changing at Civic Centre: the City charges 20-30km.
+        assertThat(ConnectionService.mycitiBand(16.4 + 5.2)).containsExactly(3450, 2950);
+        assertThat(ConnectionService.mycitiBandLabel(21.6)).isEqualTo("20-30km");
+        assertThat(ConnectionService.mycitiBand(5.0)).containsExactly(1950, 1500);
+        assertThat(ConnectionService.mycitiBandLabel(5.01)).isEqualTo("5-10km");
+        assertThat(ConnectionService.mycitiBandLabel(75)).isEqualTo("60km+");
+    }
 }

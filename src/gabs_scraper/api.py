@@ -78,15 +78,17 @@ def list_routes(q: str | None = None, letter: str | None = None):
         if letter:
             where.append("r.letter_group = %s")
             params.append(letter.upper())
+        # operator_code says whose route it is; the app files each route under it.
         sql = """
             SELECT r.id, r.name, r.origin, r.destination, r.letter_group,
-                   count(t.id) AS timetable_count
+                   count(t.id) AS timetable_count, o.code AS operator_code
             FROM route r
+            JOIN operator o ON o.id = r.operator_id
             LEFT JOIN timetable t ON t.route_id = r.id
         """
         if where:
             sql += " WHERE " + " AND ".join(where)
-        sql += " GROUP BY r.id ORDER BY r.name"
+        sql += " GROUP BY r.id, o.code ORDER BY r.name"
         cur.execute(sql, params)
         return {"routes": _rows(cur)}
     finally:

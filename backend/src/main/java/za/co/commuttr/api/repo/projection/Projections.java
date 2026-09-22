@@ -22,6 +22,7 @@ public final class Projections {
         String getDestination();
         String getLetterGroup();
         Long getTimetableCount();
+        String getOperatorCode();
     }
 
     /** GET /api/routes/{id} -> timetables[] row. */

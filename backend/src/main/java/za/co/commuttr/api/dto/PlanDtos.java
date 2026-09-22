@@ -114,7 +114,28 @@ public final class PlanDtos {
                           Integer weeklySatCents,
                           /** How far apart the two stations are, which is what sets the
                            *  band the fare comes from. */
-                          Double distanceKm) { }
+                          Double distanceKm,
+                          /**
+                           * MyCiTi's saver fare; {@code cashCents} is then its peak fare.
+                           * Peak is a journey starting on a weekday 06:45-08:00 or
+                           * 16:15-17:30, saver every other time. Both are myconnect card
+                           * ("Mover") fares: MyCiTi takes no cash. See myciti_scraper.fares.
+                           */
+                          Integer saverCents,
+                          /** MyCiTi's 1-day and 3-day passes; weekly is its 7-day pass. */
+                          Integer dayPassCents,
+                          Integer threeDayPassCents) {
+
+        /** Every fare but MyCiTi's, which is how every caller before MyCiTi built one. */
+        public FareDto(String code, Integer perRideCents, Integer fiveRideCents, Integer weeklyCents,
+                       Integer monthlyCents, String transfers, String basis, String basisFrom,
+                       String basisTo, Boolean zoneApprox, Integer cashCents, String cashEffectiveFrom,
+                       Integer returnCents, Integer weeklySatCents, Double distanceKm) {
+            this(code, perRideCents, fiveRideCents, weeklyCents, monthlyCents, transfers, basis,
+                    basisFrom, basisTo, zoneApprox, cashCents, cashEffectiveFrom, returnCents,
+                    weeklySatCents, distanceKm, null, null, null);
+        }
+    }
 
     public record PlanOptionDto(String timetableNumber,
                                 String routeLabel,

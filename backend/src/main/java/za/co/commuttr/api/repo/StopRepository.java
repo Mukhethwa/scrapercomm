@@ -28,6 +28,15 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
             """, nativeQuery = true)
     List<StopRow> findRowsByIds(@Param("stopIds") Collection<Integer> stopIds);
 
+    /** Every operator's stop called exactly this, ignoring case: KHAYELITSHA for "Khayelitsha". */
+    @Query(value = """
+            SELECT s.id AS "id", s.name AS "name", s.lat AS "lat", s.lon AS "lon",
+                   o.code AS "operatorCode", o.kind AS "operatorKind"
+            FROM stop s LEFT JOIN operator o ON o.id = s.operator_id
+            WHERE upper(s.name) = upper(:name) AND s.lat IS NOT NULL
+            """, nativeQuery = true)
+    List<StopRow> findByExactName(@Param("name") String name);
+
     /**
      * GET /api/stops?q=. Prefix matches float to the top, then alphabetical, exactly
      * as {@code ORDER BY (name ILIKE 'q%') DESC, name} did in FastAPI.
@@ -247,7 +256,10 @@ public interface StopRepository extends JpaRepository<Stop, Integer> {
                    -- Metrorail sells a journey four ways and prices it by distance band,
                    -- so unlike Golden Arrow these are real tickets a rider chooses
                    -- between. See prasa_scraper.fares.
-                   return_cents, weekly_sat_cents, distance_km
+                   return_cents, weekly_sat_cents, distance_km,
+                   -- MyCiTi: saver fare beside the peak one, and its passes. See
+                   -- myciti_scraper.fares.
+                   saver_cents, day_pass_cents, three_day_pass_cents
             FROM journey_fare
             WHERE from_stop_id = :fromId AND to_stop_id = :toId
             """, nativeQuery = true)

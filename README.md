@@ -163,6 +163,9 @@ python -m myciti_scraper.positions
 
 # 5. Make every MyCiTi stop searchable, and record which places MyCiTi serves
 python -m gabs_scraper.areas --from-stops
+
+# 6. MyCiTi fares: peak and saver by distance band, and the day/3-day/7-day/monthly passes
+python -m myciti_scraper.fares
 ```
 
 **Git Bash, macOS or Linux:**
@@ -174,6 +177,7 @@ PYTHONPATH=src python -m myciti_scraper.pipeline --no-fetch
 PYTHONPATH=src python -m myciti_scraper.split_names
 PYTHONPATH=src python -m myciti_scraper.positions
 PYTHONPATH=src python -m gabs_scraper.areas --from-stops
+PYTHONPATH=src python -m myciti_scraper.fares
 ```
 
 > **Seeing `The '<' operator is reserved for future use`?** That is PowerShell refusing bash
@@ -181,7 +185,13 @@ PYTHONPATH=src python -m gabs_scraper.areas --from-stops
 > problem in PowerShell: run `$env:PYTHONPATH = "src"` once, then type the command without
 > the `PYTHONPATH=src` part.
 
-**Do not skip steps 3 to 5.** Without step 4 no MyCiTi stop has a position, so no journey
+**Do not skip steps 3 to 6.** Without step 6 every MyCiTi journey shows no price. It
+reports 12,719 stop pairs priced; the fares are the City's 2026 figures, effective
+1 July 2026, written out in `src/myciti_scraper/fares.py` with where they came from. When
+the City publishes new fares, change them there (and `MYCITI_BANDS` in
+`backend/.../service/ConnectionService.java`) and run step 6 again.
+
+ Without step 4 no MyCiTi stop has a position, so no journey
 can start or end at one. Without step 5 the MyCiTi chip offers no places at all, because
 the search only suggests places an operator is recorded as serving.
 
@@ -700,6 +710,7 @@ PYTHONPATH=src python -m myciti_scraper.pipeline
 PYTHONPATH=src python -m myciti_scraper.split_names
 PYTHONPATH=src python -m myciti_scraper.positions
 PYTHONPATH=src python -m gabs_scraper.areas --from-stops
+PYTHONPATH=src python -m myciti_scraper.fares
 ```
 
 Steps 2 to 5 are **not** part of step 1. Skip 2 and new routes work for stop-to-stop

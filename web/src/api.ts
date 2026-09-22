@@ -338,10 +338,19 @@ function epParams(prefix: string, ep: Endpoint): string {
     : `${prefix}_lat=${ep.lat}&${prefix}_lon=${ep.lon}`
 }
 
+/**
+ * MyCiTi fares are peak and saver prices on a myconnect card (see myciti_scraper.fares),
+ * and every fare screen here reads `cash_cents` as a cash price. Until those screens
+ * learn to show both, a MyCiTi fare is left out rather than shown as "cash": MyCiTi takes
+ * no cash, and off-peak it costs the saver fare, not this one.
+ */
+const shownFare = <F extends { basis?: string | null } | null>(f: F): F | null =>
+  f && f.basis === 'myciti_distance' ? null : f
+
 export const getPlan = (from: Endpoint, to: Endpoint) =>
   getJSON<{ from: unknown; to: unknown; options: PlanOption[] }>(
     `${API}/plan?${epParams('from', from)}&${epParams('to', to)}`,
-  )
+  ).then((r) => ({ ...r, options: r.options.map((o) => ({ ...o, fare: shownFare(o.fare) })) }))
 
 /** Destinations needing one change. Only stops have them; a pin falls back to none. */
 export const connectingFor = (ep: Endpoint) =>
@@ -448,6 +457,14 @@ export const getConnections = (from: Endpoint, to: Endpoint, operator?: string |
     `${API}/connections?${epParams('from', from)}&${epParams('to', to)}`
     + (operator ? `&operator=${encodeURIComponent(operator)}` : ''),
     CONNECTIONS_TIMEOUT_MS)
+    .then((r) => ({
+      ...r,
+      connections: r.connections.map((c) => ({
+        ...c,
+        fare: shownFare(c.fare),
+        legs: c.legs.map((l) => ({ ...l, fare: shownFare(l.fare) })),
+      })),
+    }))
 
 /**
  * The nearest stops of one kind to a point, however far off they are.

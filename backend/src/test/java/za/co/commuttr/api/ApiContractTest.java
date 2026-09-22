@@ -59,16 +59,18 @@ class ApiContractTest {
     @MockitoBean ConnectionService connections;
 
     @Test
-    @DisplayName("GET /api/routes keeps letter_group and timetable_count in snake_case")
+    @DisplayName("GET /api/routes keeps letter_group, timetable_count and operator_code in snake_case")
     void routesKeepSnakeCaseKeys() throws Exception {
         given(catalog.listRoutes(any(), any())).willReturn(new RoutesResponse(List.of(
-                new RouteSummaryDto(7, "AIRPORT IND-BELLVILLE", "AIRPORT IND", "BELLVILLE", "A", 4L))));
+                new RouteSummaryDto(7, "AIRPORT IND-BELLVILLE", "AIRPORT IND", "BELLVILLE", "A", 4L, "gabs"))));
 
         mvc.perform(get("/api/routes").param("q", "bell"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.routes[0].id").value(7))
                 .andExpect(jsonPath("$.routes[0].letter_group").value("A"))
                 .andExpect(jsonPath("$.routes[0].timetable_count").value(4))
+                // The app files each route under this operator; without it, it had to guess.
+                .andExpect(jsonPath("$.routes[0].operator_code").value("gabs"))
                 .andExpect(jsonPath("$.routes[0].letterGroup").doesNotExist());
     }
 
@@ -151,7 +153,7 @@ class ApiContractTest {
                 new FareDto("FYDU", 2530, 12650, 23400, 103000, "Zero",
                         "route", "Cape Town", "Durbanville via Freeway", true, null, null,
                         null, null, null));
-        given(connections.connections(anyInt(), any(), any(), anyInt(), any(), any(), any())).willReturn(new ConnectionsResponse(
+        given(connections.connections(anyInt(), any(), any(), any(), anyInt(), any(), any(), any(), any())).willReturn(new ConnectionsResponse(
                 new StopDto(24696, "MALMESBURY", -33.45, 18.73, "gabs", "bus"),
                 new StopDto(3370, "BUH REIN", -33.82, 18.71, "gabs", "bus"),
                 2,
@@ -190,7 +192,7 @@ class ApiContractTest {
     @Test
     @DisplayName("nothing reachable answers 200 with legs_required null, not an error")
     void connectionsWhenUnreachable() throws Exception {
-        given(connections.connections(anyInt(), any(), any(), anyInt(), any(), any(), any())).willReturn(new ConnectionsResponse(
+        given(connections.connections(anyInt(), any(), any(), any(), anyInt(), any(), any(), any(), any())).willReturn(new ConnectionsResponse(
                 new StopDto(24696, "MALMESBURY", -33.45, 18.73, "gabs", "bus"),
                 new StopDto(9099, "KHAYELITSHA", -34.0, 18.65, "gabs", "bus"),
                 null, List.of()));

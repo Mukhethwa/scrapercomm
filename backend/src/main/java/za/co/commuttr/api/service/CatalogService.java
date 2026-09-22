@@ -127,7 +127,8 @@ public class CatalogService {
 
         List<RouteSummaryDto> rows = routes.search(namePattern, letterGroup).stream()
                 .map(r -> new RouteSummaryDto(r.getId(), r.getName(), r.getOrigin(),
-                        r.getDestination(), r.getLetterGroup(), r.getTimetableCount()))
+                        r.getDestination(), r.getLetterGroup(), r.getTimetableCount(),
+                        r.getOperatorCode()))
                 .toList();
         return new RoutesResponse(rows);
     }

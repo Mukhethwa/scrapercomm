@@ -59,9 +59,13 @@ public class PlannerController {
                              @RequestParam(name = "from_lon", required = false) Double fromLon,
                              @RequestParam(name = "to", required = false) Integer to,
                              @RequestParam(name = "to_lat", required = false) Double toLat,
-                             @RequestParam(name = "to_lon", required = false) Double toLon) {
+                             @RequestParam(name = "to_lon", required = false) Double toLon,
+                             @RequestParam(name = "from_name", required = false) String fromName,
+                             @RequestParam(name = "to_name", required = false) String toName) {
         EndpointRef fromEp = EndpointRef.of(from, fromLat, fromLon);
         EndpointRef toEp = EndpointRef.of(to, toLat, toLon);
+        fromEp = fromEp == null ? null : fromEp.withName(fromName);
+        toEp = toEp == null ? null : toEp.withName(toName);
         if (fromEp == null || toEp == null) {
             throw PlannerService.missingEndpoints();
         }
@@ -85,8 +89,10 @@ public class PlannerController {
             @RequestParam(value = "to", required = false) Integer to,
             @RequestParam(value = "to_lat", required = false) Double toLat,
             @RequestParam(value = "to_lon", required = false) Double toLon,
-            @RequestParam(value = "operator", required = false) String operator) {
-        return connectionService.connections(from, fromLat, fromLon, to, toLat, toLon,
+            @RequestParam(value = "operator", required = false) String operator,
+            @RequestParam(value = "from_name", required = false) String fromName,
+            @RequestParam(value = "to_name", required = false) String toName) {
+        return connectionService.connections(from, fromLat, fromLon, fromName, to, toLat, toLon, toName,
                 operator == null || operator.isBlank() ? null : operator);
     }
 

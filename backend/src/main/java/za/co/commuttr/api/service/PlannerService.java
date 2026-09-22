@@ -122,9 +122,19 @@ public class PlannerService {
      *
      * @param minutes minutes past midnight; an Integer for an exact stop, a Double when
      *                interpolated along a leg, so the JSON keeps Python's number shape
+     * @param arriveMinutes when the bus gets here, for a rider getting OFF. The same as
+     *                {@code minutes} except at a via stop timed on both sides, where
+     *                {@code minutes} is the safe floor for boarding (the time it left the
+     *                stop before) and this is an estimate between the two. Used as an
+     *                arrival, the floor said a bus boarded at 14:50 reached Buh Rein at
+     *                14:50: a 0 min ride of an hour and a half.
      */
     private record Anchor(double position, Number minutes, String raw, boolean approx,
-                          String label, double distanceM) { }
+                          String label, double distanceM, Number arriveMinutes, String arriveRaw) {
+        Anchor(double position, Number minutes, String raw, boolean approx, String label, double distanceM) {
+            this(position, minutes, raw, approx, label, distanceM, minutes, raw);
+        }
+    }
 
     // Column positions in the findStopAnchors select list.
     private static final int A_SCHEDULE_ID = 0;
@@ -133,10 +143,12 @@ public class PlannerService {
     private static final int A_DEPARTURE_TIME = 3;
     private static final int A_RAW_VALUE = 4;
     private static final int A_NAME = 5;
-    /** Only the batched query selects it; the single-stop one has eight columns. */
+    /** Only the batched query fills it; the single-stop one selects it as NULL. */
     private static final int A_STOP_ID = 8;
     private static final int A_PRIOR_TIME = 6;
     private static final int A_NEXT_TIME = 7;
+    private static final int A_PRIOR_SEQ = 9;
+    private static final int A_NEXT_SEQ = 10;
 
     /** JDBC hands a {@code time} column back as {@link java.sql.Time} unless asked otherwise. */
     private static LocalTime asTime(Object value) {
@@ -172,6 +184,8 @@ public class PlannerService {
             Number minutes = ownMinutes;
             String raw = (String) r[A_RAW_VALUE];
             boolean approx = false;
+            Number arrive = null;
+            String arriveRaw = null;
 
             if (ownMinutes == null) {
                 // "via": the timetable gives no time here. The bus cannot arrive before
@@ -185,6 +199,19 @@ public class PlannerService {
                     minutes = prior;
                     raw = "from " + ApiFormat.time(priorTime);
                     approx = true;
+                    // Getting off here: share the gap between the timed stops either side
+                    // out by stop count. The floor stays for getting on, where an estimate
+                    // that runs late makes people miss the bus.
+                    Number priorSeq = r.length > A_NEXT_SEQ ? (Number) r[A_PRIOR_SEQ] : null;
+                    Number nextSeq = r.length > A_NEXT_SEQ ? (Number) r[A_NEXT_SEQ] : null;
+                    double seq = ((Number) r[A_STOP_SEQUENCE]).doubleValue();
+                    if (next != null && priorSeq != null && nextSeq != null
+                            && nextSeq.doubleValue() > priorSeq.doubleValue()) {
+                        double f = (seq - priorSeq.doubleValue())
+                                / (nextSeq.doubleValue() - priorSeq.doubleValue());
+                        arrive = (int) Math.round(prior + f * (next - prior));
+                        arriveRaw = "about " + ApiFormat.minutesToClock(arrive);
+                    }
                 }
             }
 
@@ -199,7 +226,8 @@ public class PlannerService {
                     ((Number) r[A_TRIP_INDEX]).intValue());
             anchors.computeIfAbsent(key, k -> new ArrayList<>())
                     .add(new Anchor(((Number) r[A_STOP_SEQUENCE]).doubleValue(), minutes, raw,
-                            approx, (String) r[A_NAME], walk));
+                            approx, (String) r[A_NAME], walk,
+                            arrive == null ? minutes : arrive, arrive == null ? raw : arriveRaw));
         }
         return anchors;
     }
@@ -212,6 +240,10 @@ public class PlannerService {
     private static final int P_TIME_B = 4;
     private static final int P_NAME_A = 5;
     private static final int P_NAME_B = 6;
+    private static final int P_PRIOR_TIME = 7;
+    private static final int P_PRIOR_SEQ = 8;
+    private static final int P_NEXT_TIME = 9;
+    private static final int P_NEXT_SEQ = 10;
 
     /**
      * How far somebody will walk from a place they named to something they can board.
@@ -237,8 +269,15 @@ public class PlannerService {
      */
     static final double WALK_M = 2500.0;
 
+    /**
+     * How far a stop called what the rider asked for may be from the place and still be
+     * where they mean. Khayelitsha station is 4.5 km from the suburb's point on the map;
+     * a "Main Road" on the other side of the city is not the one they meant.
+     */
+    static final double NAMED_STOP_M = 8000.0;
+
     /** {@code planner._pin_anchors} */
-    private Map<AnchorKey, List<Anchor>> pinAnchors(double lat, double lon, double thresholdM) {
+    private Map<AnchorKey, List<Anchor>> pinAnchors(double lat, double lon, double thresholdM, String name) {
         Map<AnchorKey, List<Anchor>> anchors = new TreeMap<>();
 
         // What stands near the place, as well as the roads through it.
@@ -267,6 +306,18 @@ public class PlannerService {
             for (StopRow near : stops.findNearestOfOperator(lat, lon, code, WALK_M)) {
                 awayByStop.put(near.getId(),
                         GeoUtils.haversineM(lat, lon, near.getLat(), near.getLon()));
+            }
+        }
+        // The stops and stations called what the rider asked for are where they mean, at no
+        // walk at all. The map puts "Khayelitsha" 4.5 km from Khayelitsha station, outside
+        // any walk, so the train was offered from Nonkqubela instead; and "Sea Point" sat
+        // nearer a stretch of road into Sea Point than the Sea Point stop itself.
+        if (name != null) {
+            for (StopRow named : stops.findByExactName(name)) {
+                // Only near the place: "Main Road" is a stop in several suburbs.
+                if (GeoUtils.haversineM(lat, lon, named.getLat(), named.getLon()) <= NAMED_STOP_M) {
+                    awayByStop.put(named.getId(), 0.0);
+                }
             }
         }
         // One query for all of them, not one each. See findStopAnchorsForStops: the CBD
@@ -305,17 +356,40 @@ public class PlannerService {
                 //   both ends timed   an interpolation between them   "about 07:12"
                 //   only the one behind   the bus has left it, not yet arrived   "from 07:05"
                 //   only the one ahead    it gets there later, so this is sooner "by 07:20"
+                // The same point placed between the nearest timed stops on the whole run,
+                // when A or B is itself a via. Null where either side has none.
+                Double estimate = null;
+                Integer mp = ApiFormat.minutes(asTime(r[P_PRIOR_TIME]));
+                Integer mn = ApiFormat.minutes(asTime(r[P_NEXT_TIME]));
+                if (mp != null && mn != null && mp <= mn && r[P_PRIOR_SEQ] != null && r[P_NEXT_SEQ] != null) {
+                    double ps = ((Number) r[P_PRIOR_SEQ]).doubleValue();
+                    double ns = ((Number) r[P_NEXT_SEQ]).doubleValue();
+                    double at = ((Number) r[P_STOP_SEQUENCE]).doubleValue() + f;
+                    if (ns > ps) {
+                        estimate = mp + (at - ps) / (ns - ps) * (mn - mp);
+                    }
+                }
                 Number minutes = null;
                 String raw = "via";
+                Number arrive = null;
+                String arriveRaw = null;
                 if (ma != null && mb != null) {
                     minutes = ma + f * (mb - ma);
                     raw = "about " + ApiFormat.minutesToClock(minutes);
                 } else if (ma != null) {
+                    // Boarding keeps the floor: the bus has left A, so it is here after it.
                     minutes = ma;
                     raw = "from " + ApiFormat.minutesToClock(minutes);
                 } else if (mb != null) {
-                    minutes = mb;
-                    raw = "by " + ApiFormat.minutesToClock(minutes);
+                    // "by B" put boarding at B's own time, and a ride getting off at B then
+                    // took 0 minutes. The estimate is earlier than B, so it is also the
+                    // safer time to tell somebody to be there.
+                    minutes = estimate != null ? estimate : mb;
+                    raw = (estimate != null ? "about " : "by ") + ApiFormat.minutesToClock(minutes);
+                }
+                if (estimate != null && (ma == null || mb == null)) {
+                    arrive = estimate;
+                    arriveRaw = "about " + ApiFormat.minutesToClock(estimate);
                 }
                 AnchorKey key = new AnchorKey(((Number) r[P_SCHEDULE_ID]).intValue(),
                         ((Number) r[P_TRIP_INDEX]).intValue());
@@ -327,7 +401,8 @@ public class PlannerService {
                                 // that is the instruction - where to stand and which way
                                 // to look. Rendered as "Board between A and B".
                                 true, "between " + r[P_NAME_A] + " and " + r[P_NAME_B],
-                                leg.distanceM()));
+                                leg.distanceM(),
+                                arrive == null ? minutes : arrive, arrive == null ? raw : arriveRaw));
             }
         }
         return anchors;
@@ -354,7 +429,7 @@ public class PlannerService {
     private Map<AnchorKey, List<Anchor>> endpointAnchors(EndpointRef ep, double thresholdM) {
         return ep.isStop()
                 ? stopAnchors(ep.stopId())
-                : pinAnchors(ep.lat(), ep.lon(), thresholdM);
+                : pinAnchors(ep.lat(), ep.lon(), thresholdM, ep.name());
     }
 
     // ---------------------------------------------------------- point location
@@ -641,7 +716,10 @@ public class PlannerService {
                 r.length > 11 ? (String) r[11] : null,
                 r.length > 12 && r[12] != null ? ((Number) r[12]).intValue() : null,
                 r.length > 13 && r[13] != null ? ((Number) r[13]).intValue() : null,
-                r.length > 14 && r[14] != null ? ((Number) r[14]).doubleValue() : null);
+                r.length > 14 && r[14] != null ? ((Number) r[14]).doubleValue() : null,
+                r.length > 15 && r[15] != null ? ((Number) r[15]).intValue() : null,
+                r.length > 16 && r[16] != null ? ((Number) r[16]).intValue() : null,
+                r.length > 17 && r[17] != null ? ((Number) r[17]).intValue() : null);
     }
 
     /** {@code planner.resolve_journeys} */
@@ -741,13 +819,18 @@ public class PlannerService {
                     if (walk >= apart) {
                         continue;
                     }
+                    // A point on the road is where the bus passes, not where it is sure to
+                    // stop, so it only wins when no timetable stop on the run is within a
+                    // reasonable walk more. Arriving at "Sea Point" meant getting off between
+                    // Cape Town and Sea Point, 430m short of the Sea Point stop itself.
+                    double rank = walk + unofficialPenalty(b) + unofficialPenalty(a);
                     // Ties go to the earliest ends, which is what this did before and
                     // keeps a single-anchor journey answering exactly as it always has.
-                    if (best == null || walk < leastWalk - 1e-9
-                            || (walk < leastWalk + 1e-9
+                    if (best == null || rank < leastWalk - 1e-9
+                            || (rank < leastWalk + 1e-9
                                 && earlier(b, a, best.board(), best.alight()))) {
                         best = new Candidate(entry.getKey(), b, a);
-                        leastWalk = walk;
+                        leastWalk = rank;
                     }
                 }
             }
@@ -828,10 +911,10 @@ public class PlannerService {
             // means to somebody looking at the screen.
             List<String> signature = Arrays.asList(
                     shownClock(c.board().minutes(), c.board().raw()),
-                    shownClock(c.alight().minutes(), c.alight().raw()));
+                    shownClock(c.alight().arriveMinutes(), c.alight().arriveRaw()));
             PlanDepartureDto candidate = new PlanDepartureDto(
                     c.board().raw(), c.board().approx(), c.board().minutes(),
-                    c.alight().raw(), c.alight().approx(), c.alight().minutes(),
+                    c.alight().arriveRaw(), c.alight().approx(), c.alight().arriveMinutes(),
                     c.key().scheduleId(), c.key().tripIndex(),
                     // source trip + segment range, so the UI can fetch a stop-by-stop breakdown
                     Math.max(0, (int) Math.ceil(c.board().position() - 1e-6)),
@@ -916,6 +999,17 @@ public class PlannerService {
                 .orElse(null);
     }
 
+    /**
+     * How much further a rider would rather walk to a timetable stop than wait at a point on
+     * the road: about ten minutes. Further than that, the point is still offered, with the
+     * warning that the bus is not sure to stop there.
+     */
+    static final double UNOFFICIAL_STOP_PENALTY_M = 800.0;
+
+    private static double unofficialPenalty(Anchor a) {
+        return a.label() != null && a.label().startsWith("between ") ? UNOFFICIAL_STOP_PENALTY_M : 0.0;
+    }
+
     /** Between two equally-short walks, the pair that boards - then alights - soonest. */
     private static boolean earlier(Anchor board, Anchor alight, Anchor thanBoard, Anchor thanAlight) {
         if (board.position() != thanBoard.position()) {
@@ -926,10 +1020,10 @@ public class PlannerService {
 
     /** Alighting must not predate boarding by more than the one-minute rounding slack. */
     private static boolean timeConsistent(Anchor board, Anchor alight) {
-        if (board.minutes() == null || alight.minutes() == null) {
+        if (board.minutes() == null || alight.arriveMinutes() == null) {
             return true;
         }
-        return alight.minutes().doubleValue() >= board.minutes().doubleValue() - 1;
+        return alight.arriveMinutes().doubleValue() >= board.minutes().doubleValue() - 1;
     }
 
     /**

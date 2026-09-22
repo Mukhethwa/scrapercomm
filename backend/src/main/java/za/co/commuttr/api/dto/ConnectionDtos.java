@@ -79,7 +79,20 @@ public final class ConnectionDtos {
                                      * usually null.
                                      */
                                     Integer cashCents,
-                                    String cashEffectiveFrom) { }
+                                    String cashEffectiveFrom,
+                                    /** MyCiTi: saver fare for the whole journey (cash is peak). */
+                                    Integer saverCents,
+                                    Integer dayPassCents,
+                                    Integer threeDayPassCents) {
+
+        public ConnectionFareDto(String kind, Integer tickets, Integer perRideCents, Integer fiveRideCents,
+                                 Integer weeklyCents, Integer monthlyCents, String code, String transfers,
+                                 String basis, String basisFrom, String basisTo, Boolean zoneApprox,
+                                 Integer cashCents, String cashEffectiveFrom) {
+            this(kind, tickets, perRideCents, fiveRideCents, weeklyCents, monthlyCents, code, transfers,
+                    basis, basisFrom, basisTo, zoneApprox, cashCents, cashEffectiveFrom, null, null, null);
+        }
+    }
 
     public record ConnectionDto(String dayType,
                                 List<String> changeAt,

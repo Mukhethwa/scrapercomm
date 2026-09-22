@@ -285,7 +285,15 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time,
                        min(st.departure_time) OVER (
                            PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_time
+                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_time,
+                       -- Where those two timed stops are on the run, so a via between
+                       -- them can be given an estimated arrival rather than only a floor.
+                       max(CASE WHEN st.departure_time IS NOT NULL THEN ss.stop_sequence END) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_seq,
+                       min(CASE WHEN st.departure_time IS NOT NULL THEN ss.stop_sequence END) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_seq
                 FROM my_trips m
                 JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
                 JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
@@ -297,7 +305,10 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                    c.raw_value        AS "rawValue",
                    s.name             AS "name",
                    c.prior_time       AS "priorTime",
-                   c.next_time        AS "nextTime"
+                   c.next_time        AS "nextTime",
+                   NULL               AS "stopId",
+                   c.prior_seq        AS "priorSeq",
+                   c.next_seq         AS "nextSeq"
             FROM ctx c
             JOIN trip tr ON tr.id = c.trip_id
             JOIN stop s  ON s.id = c.stop_id
@@ -344,7 +355,15 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time,
                        min(st.departure_time) OVER (
                            PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_time
+                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_time,
+                       -- Where those two timed stops are on the run, so a via between
+                       -- them can be given an estimated arrival rather than only a floor.
+                       max(CASE WHEN st.departure_time IS NOT NULL THEN ss.stop_sequence END) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_seq,
+                       min(CASE WHEN st.departure_time IS NOT NULL THEN ss.stop_sequence END) OVER (
+                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
+                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_seq
                 FROM my_trips m
                 JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
                 JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
@@ -357,7 +376,9 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                    s.name             AS "name",
                    c.prior_time       AS "priorTime",
                    c.next_time        AS "nextTime",
-                   c.stop_id          AS "stopId"
+                   c.stop_id          AS "stopId",
+                   c.prior_seq        AS "priorSeq",
+                   c.next_seq         AS "nextSeq"
             FROM ctx c
             JOIN trip tr ON tr.id = c.trip_id
             JOIN stop s  ON s.id = c.stop_id
@@ -376,7 +397,11 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                    sta.departure_time  AS "timeA",
                    stb.departure_time  AS "timeB",
                    sa.name             AS "nameA",
-                   sb.name             AS "nameB"
+                   sb.name             AS "nameB",
+                   pr.departure_time   AS "priorTime",
+                   pr.stop_sequence    AS "priorSeq",
+                   nx.departure_time   AS "nextTime",
+                   nx.stop_sequence    AS "nextSeq"
             FROM schedule_stop ssA
             JOIN schedule_stop ssB ON ssB.schedule_id = ssA.schedule_id
                                   AND ssB.stop_sequence = ssA.stop_sequence + 1
@@ -388,6 +413,21 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                               AND sta.cell_type <> 'NONE'
             JOIN stop_time stb ON stb.trip_id = tr.id AND stb.schedule_stop_id = ssB.id
                               AND stb.cell_type <> 'NONE'
+            -- The nearest published times at or before A and at or after B, for when A or B
+            -- itself only says via: without them a pin between a timed stop and a via had
+            -- one time to go on, and a ride ending there took 0 minutes.
+            LEFT JOIN LATERAL (
+                SELECT st.departure_time, ss.stop_sequence
+                FROM stop_time st JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+                WHERE st.trip_id = tr.id AND st.departure_time IS NOT NULL
+                  AND ss.stop_sequence <= ssA.stop_sequence
+                ORDER BY ss.stop_sequence DESC LIMIT 1) pr ON true
+            LEFT JOIN LATERAL (
+                SELECT st.departure_time, ss.stop_sequence
+                FROM stop_time st JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+                WHERE st.trip_id = tr.id AND st.departure_time IS NOT NULL
+                  AND ss.stop_sequence >= ssB.stop_sequence
+                ORDER BY ss.stop_sequence ASC LIMIT 1) nx ON true
             WHERE ssA.stop_id = :fromStopId
             """, nativeQuery = true)
     /** Raw rows for the same reason as {@link #findStopAnchors}: a pin near the CBD
