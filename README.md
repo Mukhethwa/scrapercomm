@@ -25,6 +25,7 @@ so a train is planned by the same engine that plans a bus.
 - [Getting it running](#getting-it-running) — start to finish, six steps
 - [Command reference](#command-reference) — every command, what it does, when you need it
 - [Looking inside the database](#looking-inside-the-database)
+- [Stops with no position](#stops-with-no-position)
 - [The operations dashboard](#the-operations-dashboard)
 - [Keeping the data fresh](#keeping-the-data-fresh)
 - [Reading the search analytics](#reading-the-search-analytics)
@@ -592,6 +593,47 @@ Database: gabs       User: gabs       Password: gabs
 ```
 
 ---
+
+## Stops with no position
+
+A stop with no coordinates still plans journeys - a trip is planned by stop id - but it
+anchors no road geometry, appears in no "nearest stops" list and draws nothing on a map.
+48 stops were in that state: 43 MyCiTi and 5 Golden Arrow.
+
+**MyCiTi publishes all of its own.** The City's route and stop map carries every stop and
+station with coordinates in the page itself, and all 43 were in it by name:
+
+```bash
+PYTHONPATH=src python -m myciti_scraper.official_positions --fix
+```
+
+That placed the 43 and moved 47 more that we had only interpolated between their
+neighbours, some by more than a kilometre. It refused one: the City's "Highlands" is in
+Mitchells Plain and ours, from OpenStreetMap, is in Vredehoek between Herzlia and Upper
+Buitenkant - a name collision, and the route says ours is right. **MyCiTi is now 0
+unplaced of 522.**
+
+**Golden Arrow publishes none.** Its timetables print a street name, which is why those
+stops need a geocoder and a route to check the answer against:
+
+```bash
+PYTHONPATH=src python -m gabs_scraper.place_missing --fix
+```
+
+It searches the name inside the box the stop's own neighbours make, and accepts a result
+only if it does not bend the routes the stop serves. TOWN CENTRE - on 1,097 schedules -
+came back as Mitchells Plain Town Centre, which is what its neighbours (Beacon Valley,
+Lentegeur, Rocklands, Clock Tower) had always said. The remaining four are ALVINCO,
+LEAGUES, ROUTE 2 and SPEKENAM: names no geocoder knows, with no published list to check
+against, so they keep no position rather than a guess.
+
+Placing Town Centre made two more misplaced stops measurable, and re-running
+`gabs_scraper.repair_positions` fixed WESTRIDGE (50.9 km off its route, now 1.7). That is
+the tool working as designed - evidence improves as it works.
+
+All three repair tools now delete the road paths they invalidate, because
+`gabs_scraper.geometry` only fetches legs it has nothing for; without that a path drawn to
+the old position would outlive every future run.
 
 ## The operations dashboard
 

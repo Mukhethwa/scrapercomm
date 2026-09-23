@@ -46,13 +46,20 @@ case " ${operators[*]} " in *" gabs "*)
   # Golden Arrow deletes a PDF the day it reissues, so links rot faster than the data.
   step "golden arrow pdf links" python -m gabs_scraper.relink --fix
 ;; esac
-case " ${operators[*]} " in *" myciti "*)    step "myciti"    python -m myciti_scraper.pipeline ;; esac
+case " ${operators[*]} " in *" myciti "*)
+  step "myciti" python -m myciti_scraper.pipeline
+  # The City publishes every MyCiTi stop with its coordinates; none has to be guessed at.
+  step "myciti positions" python -m myciti_scraper.official_positions --fix
+;; esac
 case " ${operators[*]} " in *" metrorail "*) step "metrorail" python -m prasa_scraper.pipeline ;; esac
 
 # Built FROM the stops a load creates, so they come after it.
 step "stop positions" python -m gabs_scraper.repair_positions
+step "stops with no position" python -m gabs_scraper.place_missing --fix
 step "station positions" python -m prasa_scraper.repair_positions --fix
 step "areas" python -m gabs_scraper.areas --from-stops
+# Repairs delete the road paths they invalidate, so this redraws them.
+step "road paths" python -m gabs_scraper.geometry
 
 # The API holds place searches and the operator list for the life of the process, which
 # is right until a load changes them underneath it.

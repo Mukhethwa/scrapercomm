@@ -68,13 +68,21 @@ if ($Operators -contains "gabs") {
     # reissues, so a link loaded last week is a 404 this week.
     Step "golden arrow pdf links" { python -m gabs_scraper.relink --fix }
 }
-if ($Operators -contains "myciti")    { Step "myciti"    { python -m myciti_scraper.pipeline } }
+if ($Operators -contains "myciti") {
+    Step "myciti" { python -m myciti_scraper.pipeline }
+    # The City publishes every MyCiTi stop with its coordinates, so none of them has to
+    # be guessed at: this places the ones OpenStreetMap does not have.
+    Step "myciti positions" { python -m myciti_scraper.official_positions --fix }
+}
 if ($Operators -contains "metrorail") { Step "metrorail" { python -m prasa_scraper.pipeline } }
 
 # Positions and areas are built FROM the stops a load creates, so they come after it.
 Step "stop positions" { python -m gabs_scraper.repair_positions }
+Step "stops with no position" { python -m gabs_scraper.place_missing --fix }
 Step "station positions" { python -m prasa_scraper.repair_positions --fix }
 Step "areas" { python -m gabs_scraper.areas --from-stops }
+# Repairs delete the road paths they invalidate, so this redraws them.
+Step "road paths" { python -m gabs_scraper.geometry }
 
 # The API caches place searches and the operator list for the life of the process, which
 # is right until a load changes them underneath it.

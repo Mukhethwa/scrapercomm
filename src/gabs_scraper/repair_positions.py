@@ -371,6 +371,14 @@ def one_pass(conn, args) -> int:
                         "WHERE id=%s",
                         (nlat, nlon, sid),
                     )
+                    # The road paths drawn to where this stop used to be are now lines to
+                    # somewhere the bus does not go, and gabs_scraper.geometry only fetches
+                    # legs it has nothing for - so without this they would outlive every
+                    # future run.
+                    cur.execute(
+                        "DELETE FROM leg_geometry WHERE from_stop_id = %s OR to_stop_id = %s",
+                        (sid, sid),
+                    )
                     conn.commit()
                 fixed += 1
             else:
