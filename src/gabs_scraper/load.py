@@ -152,12 +152,24 @@ def prune_superseded(conn, entries: list[ManifestEntry]) -> tuple[int, int]:
         [(n,) for n in names],
     )
 
+    # Golden Arrow's timetables only.
+    #
+    # This was written when Golden Arrow was the only operator, and it deletes every
+    # timetable whose filename is not in the manifest it was handed. Once trains and
+    # MyCiTi were loaded alongside, that meant a Golden Arrow load quietly deleted THEM:
+    # their filenames are not in a Golden Arrow manifest and never will be. It took
+    # Metrorail from 16 timetables to 4 on the first scheduled refresh, and MyCiTi
+    # survived only because it happened to be reloaded afterwards.
+    #
+    # A loader may only remove what it is responsible for.
     cur.execute(
         """
         DELETE FROM timetable t
-        WHERE NOT EXISTS (
-            SELECT 1 FROM _current_pdf c WHERE c.pdf_filename = t.pdf_filename
-        )
+        USING route r, operator o
+        WHERE t.route_id = r.id AND r.operator_id = o.id AND o.code = 'gabs'
+          AND NOT EXISTS (
+              SELECT 1 FROM _current_pdf c WHERE c.pdf_filename = t.pdf_filename
+          )
         """
     )
     timetables = cur.rowcount or 0
@@ -165,7 +177,9 @@ def prune_superseded(conn, entries: list[ManifestEntry]) -> tuple[int, int]:
     cur.execute(
         """
         DELETE FROM route r
-        WHERE NOT EXISTS (SELECT 1 FROM timetable t WHERE t.route_id = r.id)
+        USING operator o
+        WHERE r.operator_id = o.id AND o.code = 'gabs'
+          AND NOT EXISTS (SELECT 1 FROM timetable t WHERE t.route_id = r.id)
         """
     )
     routes = cur.rowcount or 0

@@ -23,13 +23,14 @@ file="$out/commuttr-$(date +%Y-%m-%d-%H%M).sql.gz"
 # every copy of the file.
 docker exec "$container" pg_dump -U gabs -d gabs --no-owner --no-privileges \
   --exclude-table=search_analytics --exclude-table=search_analytics_option \
-  --exclude-table=place_search | gzip -9 > "$file.tmp"
+  --exclude-table=place_search --exclude-table=app_error | gzip -9 > "$file.tmp"
 
 if [ ! -s "$file.tmp" ] || [ "$(stat -c%s "$file.tmp")" -lt 1000000 ]; then
   echo "The dump is missing or far too small - not replacing anything." >&2
   exit 1
 fi
-if ! gzip -dc "$file.tmp" | tail -5 | grep -q "PostgreSQL database dump complete"; then
+# 20 lines, not 5: this Postgres writes an unrestrict line after the completion marker.
+if ! gzip -dc "$file.tmp" | tail -20 | grep -q "PostgreSQL database dump complete"; then
   echo "The dump does not end cleanly - keeping it as $file.bad and stopping." >&2
   mv "$file.tmp" "$file.bad"
   exit 1

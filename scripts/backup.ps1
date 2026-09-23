@@ -27,28 +27,40 @@ New-Item -ItemType Directory -Force -Path $Out | Out-Null
 
 $stamp = Get-Date -Format "yyyy-MM-dd-HHmm"
 $file = Join-Path $Out "commuttr-$stamp.sql.gz"
+$inside = "/tmp/commuttr-backup.sql.gz"
 
-# The analytics tables are excluded: they are large, they rebuild from use, and a backup
-# that carries them spreads anonymous ids to every copy of the file.
-docker exec $Container pg_dump -U gabs -d gabs --no-owner --no-privileges `
-    --exclude-table=search_analytics --exclude-table=search_analytics_option `
-    --exclude-table=place_search |
-    Set-Content -Path "$file.tmp" -Encoding Byte -ErrorAction Stop
-
-if (-not (Test-Path "$file.tmp") -or (Get-Item "$file.tmp").Length -lt 1MB) {
-    Write-Error "The dump is missing or far too small - not replacing anything."
-    exit 1
-}
+# Dumped, compressed AND checked inside the container, then copied out.
+#
+# Piping a dump through PowerShell corrupts it: the pipeline carries strings, so a gzip
+# stream comes out re-encoded and unreadable, and Set-Content -Encoding Byte refuses it
+# outright. Keeping the bytes inside the container avoids the question, and copying one
+# finished file is faster than streaming a gigabyte through two processes.
+# One line, deliberately: a backtick continuation inside the quoted string is read by
+# PowerShell but not by sh, which then saw the --exclude flags as commands of their own,
+# dumped everything and wrote it to the screen instead of the file.
+$excludes = "--exclude-table=search_analytics --exclude-table=search_analytics_option --exclude-table=place_search --exclude-table=app_error"
+docker exec $Container sh -c "pg_dump -U gabs -d gabs --no-owner --no-privileges $excludes | gzip -9 > $inside"
+if ($LASTEXITCODE -ne 0) { Write-Error "pg_dump failed - nothing was written."; exit 1 }
 
 # Readable and complete, or it is not a backup. pg_dump ends a good file with this line.
-$tail = Get-Content "$file.tmp" -Tail 5 -ErrorAction SilentlyContinue
-if ($tail -notmatch "PostgreSQL database dump complete") {
-    Write-Error "The dump does not end cleanly - keeping it as $file.bad and stopping."
-    Move-Item "$file.tmp" "$file.bad" -Force
+# 20 lines, not 5: this Postgres writes an unrestrict line after the completion
+# marker, so a five-line tail misses the very thing it is checking for.
+$tail = docker exec $Container sh -c "gzip -dc $inside | tail -20"
+# Joined first: -notmatch against an ARRAY returns the lines that do not match, which is
+# nearly all of them, so the test passed as "not complete" on a perfectly good dump.
+if (($tail -join "`n") -notmatch "PostgreSQL database dump complete") {
+    docker exec $Container rm -f $inside
+    Write-Error "The dump does not end cleanly - nothing was kept."
     exit 1
 }
 
-Move-Item "$file.tmp" $file -Force
+docker cp "${Container}:$inside" $file
+docker exec $Container rm -f $inside
+if (-not (Test-Path $file) -or (Get-Item $file).Length -lt 1MB) {
+    Write-Error "The copied file is missing or far too small - not replacing anything."
+    exit 1
+}
+
 $size = "{0:N1} MB" -f ((Get-Item $file).Length / 1MB)
 Write-Host "wrote $file ($size)"
 
@@ -59,4 +71,4 @@ Get-ChildItem $Out -Filter "commuttr-*.sql.gz" |
 
 Write-Host ""
 Write-Host "To restore into an empty database:"
-Write-Host "  docker exec -i $Container psql -U gabs -d gabs < <this file, ungzipped>"
+Write-Host "  gzip -dc <this file> | docker exec -i $Container psql -U gabs -d gabs"
