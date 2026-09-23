@@ -386,11 +386,11 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
             """, nativeQuery = true)
     List<Object[]> findStopAnchorsForStops(@Param("stopIds") String stopIds);
 
-    /**
-     * Planner: anchors for a pin, expressed as the consecutive leg A -> B whose road
-     * path passes near it. The caller interpolates the time between timeA and timeB.
-     */
     @Query(value = """
+            WITH legs AS (
+                SELECT * FROM unnest(CAST(:fromStopIds AS integer[]), CAST(:toStopIds AS integer[]))
+                              WITH ORDINALITY AS l(from_id, to_id, n)
+            )
             SELECT ssA.schedule_id     AS "scheduleId",
                    tr.trip_index       AS "tripIndex",
                    ssA.stop_sequence   AS "stopSequence",
@@ -401,11 +401,13 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                    pr.departure_time   AS "priorTime",
                    pr.stop_sequence    AS "priorSeq",
                    nx.departure_time   AS "nextTime",
-                   nx.stop_sequence    AS "nextSeq"
-            FROM schedule_stop ssA
+                   nx.stop_sequence    AS "nextSeq",
+                   l.n                 AS "leg"
+            FROM legs l
+            JOIN schedule_stop ssA ON ssA.stop_id = l.from_id
             JOIN schedule_stop ssB ON ssB.schedule_id = ssA.schedule_id
                                   AND ssB.stop_sequence = ssA.stop_sequence + 1
-                                  AND ssB.stop_id = :toStopId
+                                  AND ssB.stop_id = l.to_id
             JOIN stop sa ON sa.id = ssA.stop_id
             JOIN stop sb ON sb.id = ssB.stop_id
             JOIN trip tr ON tr.schedule_id = ssA.schedule_id
@@ -428,12 +430,18 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
                 WHERE st.trip_id = tr.id AND st.departure_time IS NOT NULL
                   AND ss.stop_sequence >= ssB.stop_sequence
                 ORDER BY ss.stop_sequence ASC LIMIT 1) nx ON true
-            WHERE ssA.stop_id = :fromStopId
             """, nativeQuery = true)
-    /** Raw rows for the same reason as {@link #findStopAnchors}: a pin near the CBD
-     *  matches thousands of these, once per leg it sits on. */
-    List<Object[]> findPinAnchors(@Param("toStopId") Integer toStopId,
-                                      @Param("fromStopId") Integer fromStopId);
+    /**
+     * Planner: anchors for a pin, expressed as the consecutive legs A -> B whose road paths
+     * pass near it, for many legs in one query. Each row carries which leg (1-based, in the
+     * order given) it belongs to; the caller interpolates the time between timeA and timeB.
+     * A place in the city sits near hundreds of legs, and asking one at a time was 710 round
+     * trips and about three seconds of a search. Raw rows rather than a projection, for the
+     * same reason as {@link #findStopAnchors}.
+     */
+    List<Object[]> findPinAnchorsForLegs(@Param("fromStopIds") String fromStopIds,
+                                         @Param("toStopIds") String toStopIds);
+
 
     /** Planner: distinct stops a given trip serves after a fractional position. */
     @Query(value = """

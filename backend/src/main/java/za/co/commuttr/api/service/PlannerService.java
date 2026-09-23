@@ -244,6 +244,8 @@ public class PlannerService {
     private static final int P_PRIOR_SEQ = 8;
     private static final int P_NEXT_TIME = 9;
     private static final int P_NEXT_SEQ = 10;
+    /** Only the batched query selects it: which leg, 1-based, the row belongs to. */
+    private static final int P_LEG = 11;
 
     /**
      * How far somebody will walk from a place they named to something they can board.
@@ -275,6 +277,23 @@ public class PlannerService {
      * a "Main Road" on the other side of the city is not the one they meant.
      */
     static final double NAMED_STOP_M = 8000.0;
+
+    /**
+     * The longest hop between two stops that a rider may be told they board "between".
+     *
+     * <p>Standing beside the road a bus drives is a real way to catch it when the next
+     * stop is a few streets away. On a long run between stops it is not: the vehicle is
+     * moving, there is nowhere to wait, and the two names the rider is given are nowhere
+     * near them. Woodstock to Steenberg was offered "between ROUTE 2 and HARARE" on a leg
+     * that swept 34 km across the city, and a sweep of 25 random place pairs found 16 such
+     * boardings out of 27 - so the misplaced stops behind that one route were a sample,
+     * not the fault. 464 of the network's 2,775 legs are longer than this.
+     *
+     * <p>The stops themselves stay: a leg this long still carries riders between its two
+     * ends, and a journey that boards at either of them is unaffected. Only the claim that
+     * the kerb in the middle is a place to get on goes away.
+     */
+    static final double MAX_PIN_LEG_M = 15_000.0;
 
     /** {@code planner._pin_anchors} */
     private Map<AnchorKey, List<Anchor>> pinAnchors(double lat, double lon, double thresholdM, String name) {
@@ -328,9 +347,22 @@ public class PlannerService {
                     anchors.computeIfAbsent(key, k -> new ArrayList<>()).add(a)));
         }
 
-        for (LegHitDto leg : locatePoint(lat, lon, thresholdM)) {
+        // Every leg's anchors in one query, not one query per leg.
+        List<LegHitDto> legs = locatePoint(lat, lon, thresholdM, MAX_PIN_LEG_M);
+        Map<Integer, List<Object[]>> byLeg = new HashMap<>();
+        if (!legs.isEmpty()) {
+            String fromIds = legs.stream().map(l -> String.valueOf(l.fromStopId()))
+                    .collect(Collectors.joining(",", "{", "}"));
+            String toIds = legs.stream().map(l -> String.valueOf(l.toStopId()))
+                    .collect(Collectors.joining(",", "{", "}"));
+            for (Object[] r : stopTimes.findPinAnchorsForLegs(fromIds, toIds)) {
+                byLeg.computeIfAbsent(((Number) r[P_LEG]).intValue(), k -> new ArrayList<>()).add(r);
+            }
+        }
+        for (int li = 0; li < legs.size(); li++) {
+            LegHitDto leg = legs.get(li);
             double f = leg.fraction();
-            for (Object[] r : stopTimes.findPinAnchors(leg.toStopId(), leg.fromStopId())) {
+            for (Object[] r : byLeg.getOrDefault(li + 1, List.of())) {
                 Integer ma = ApiFormat.minutes(asTime(r[P_TIME_A]));
                 Integer mb = ApiFormat.minutes(asTime(r[P_TIME_B]));
 
@@ -439,10 +471,21 @@ public class PlannerService {
      * threshold of the point, nearest first.
      */
     public List<LegHitDto> locatePoint(double lat, double lon, double thresholdM) {
+        return locatePoint(lat, lon, thresholdM, Double.MAX_VALUE);
+    }
+
+    /**
+     * The same, keeping only legs shorter than {@code maxLegM}. See {@link #MAX_PIN_LEG_M}
+     * for why a point on a very long leg is not somewhere a rider can be told to wait.
+     */
+    public List<LegHitDto> locatePoint(double lat, double lon, double thresholdM, double maxLegM) {
         double deg = thresholdM / 111000.0 + 0.001;
 
         List<LegHitDto> hits = new ArrayList<>();
         for (LegGeometryRow row : legGeometry.findNearPoint(deg, lat, lon)) {
+            if (row.getLengthM() != null && row.getLengthM() > maxLegM) {
+                continue;
+            }
             double[][] path = parsePath(row.getPath());
             double[] located = GeoUtils.locateOnPath(path, row.getLengthM(), lat, lon);
             if (located[0] <= thresholdM) {
@@ -491,15 +534,14 @@ public class PlannerService {
                     return true;
                 }
             }
-            return !locatePoint(lat, lon, DEFAULT_THRESHOLD_M).isEmpty();
+            return !locatePoint(lat, lon, DEFAULT_THRESHOLD_M, MAX_PIN_LEG_M).isEmpty();
         }
-        if (!stops.findAnyOfOperator(lat, lon, operator, WALK_M).isEmpty()) {
-            return true;
-        }
-        // A road some service drives is a bus answer, and only Golden Arrow has road
-        // geometry loaded - the leg paths come from their route shapes. So it answers for
-        // them and for nobody else, rather than lending one operator's roads to another.
-        return "gabs".equals(operator) && !locatePoint(lat, lon, DEFAULT_THRESHOLD_M).isEmpty();
+        // A stop within walking distance, and nothing else. A road a bus drives along is
+        // not somewhere a rider can be told to wait: the timetable names no stop there and
+        // the driver need not halt. It used to answer here too, so the Golden Arrow chip
+        // offered Bakoven, whose only claim is that a Hout Bay bus passes along the coast
+        // road. The places table has always meant stops; this is the same question.
+        return !stops.findAnyOfOperator(lat, lon, operator, WALK_M).isEmpty();
     }
 
     /** The JSONB {@code [[lat,lon], ...]} column, decoded defensively. */
@@ -1161,7 +1203,7 @@ public class PlannerService {
             }
         }
 
-        List<LegHitDto> legs = locatePoint(ep.lat(), ep.lon(), thresholdM);
+        List<LegHitDto> legs = locatePoint(ep.lat(), ep.lon(), thresholdM, MAX_PIN_LEG_M);
         if (legs.isEmpty()) {
             return rows;
         }

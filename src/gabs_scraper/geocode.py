@@ -123,6 +123,29 @@ def variants(name: str, kind: str | None = None) -> list[str]:
     return seen
 
 
+# What a geocoder returns when it cannot place a name in the city it was told to search.
+CITY_ANSWERS = {"cape town, south africa", "cape town", "city of cape town"}
+CITY_TYPES = {"locality", "administrative_area_level_1", "administrative_area_level_2"}
+
+
+def is_the_city_itself(name, address, types=None) -> bool:
+    """
+    Whether a result is Cape Town the city rather than a place in it.
+
+    Six stops sat on the CBD because of this: ask Google for TOWN CENTRE or ROUTE 2 in
+    Cape Town and it answers "Cape Town, South Africa", types locality, which is not a bus
+    stop, it is the city. A wrong coordinate is worse than none: it puts the stop into
+    "nearest stops" for places it is nowhere near, and draws routes across the peninsula
+    that the planner then offers to riders. CAPE TOWN the stop is the one name for which
+    this answer is the right one.
+    """
+    if (name or "").strip().upper().replace(".", "") in {"CAPE TOWN", "CAPETOWN"}:
+        return False
+    if (address or "").strip().lower() in CITY_ANSWERS:
+        return True
+    return bool(set(types or ()) & CITY_TYPES) and (address or "").strip().lower() in CITY_ANSWERS
+
+
 def geocode_google(session, name, key):
     params = {
         "address": f"{name}, Cape Town, South Africa",
@@ -136,7 +159,10 @@ def geocode_google(session, name, key):
     js = r.json()
     status = js.get("status")
     if status == "OK" and js.get("results"):
-        loc = js["results"][0]["geometry"]["location"]
+        top = js["results"][0]
+        if is_the_city_itself(name, top.get("formatted_address"), top.get("types")):
+            return None
+        loc = top["geometry"]["location"]
         return float(loc["lat"]), float(loc["lng"])
     if status == "ZERO_RESULTS":
         return None
@@ -158,7 +184,11 @@ def geocode_nominatim(session, name):
     r.raise_for_status()
     js = r.json()
     if js:
-        return float(js[0]["lat"]), float(js[0]["lon"])
+        # The same refusal as Google: "Cape Town" the city is not a stop in it.
+        top = js[0]
+        if is_the_city_itself(name, top.get("display_name"), [top.get("type")]):
+            return None
+        return float(top["lat"]), float(top["lon"])
     return None
 
 
