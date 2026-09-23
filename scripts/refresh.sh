@@ -34,6 +34,13 @@ if ! docker exec gabs_pg psql -U gabs -d gabs -c "SELECT 1" >/dev/null 2>&1; the
   exit 1
 fi
 
+sql() { docker exec gabs_pg psql -U gabs -d gabs -At -c "$1"; }
+
+# On the record before it starts, so the dashboard shows a run in progress and an
+# interrupted load leaves an unfinished row rather than silence.
+run_id=$(sql "INSERT INTO refresh_run (operators) VALUES ('${operators[*]}') RETURNING id")
+echo "run $run_id" | tee -a "$log"
+
 case " ${operators[*]} " in *" gabs "*)
   step "golden arrow" python -m gabs_scraper.pipeline
   # Golden Arrow deletes a PDF the day it reissues, so links rot faster than the data.
@@ -50,6 +57,15 @@ step "areas" python -m gabs_scraper.areas --from-stops
 echo "=== freshness ===" | tee -a "$log"
 python -m gabs_scraper.freshness --check 2>&1 | tee -a "$log"
 stale=$?
+
+detail=""
+[ ${#failed[@]} -gt 0 ] && detail="failed: ${failed[*]}"
+[ -z "$detail" ] && [ "$stale" -ne 0 ] && detail="ran, but the data is still older than its limits"
+ok=$([ ${#failed[@]} -eq 0 ] && [ "$stale" -eq 0 ] && echo true || echo false)
+
+sql "UPDATE refresh_run SET finished_at = now(), ok = $ok, detail = nullif('${detail//'/''}', ''), log_path = '$log' WHERE id = $run_id" >/dev/null
+# Whatever the outcome, a request from the dashboard has been acted on; the run row says how.
+sql "UPDATE refresh_request SET done_at = now(), run_id = $run_id WHERE done_at IS NULL" >/dev/null
 
 if [ ${#failed[@]} -gt 0 ]; then
   echo "Steps that failed: ${failed[*]}. Log: $log" | tee -a "$log"

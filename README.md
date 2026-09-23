@@ -25,6 +25,7 @@ so a train is planned by the same engine that plans a bus.
 - [Getting it running](#getting-it-running) — start to finish, six steps
 - [Command reference](#command-reference) — every command, what it does, when you need it
 - [Looking inside the database](#looking-inside-the-database)
+- [The operations dashboard](#the-operations-dashboard)
 - [Keeping the data fresh](#keeping-the-data-fresh)
 - [Reading the search analytics](#reading-the-search-analytics)
 - [Refreshing the bus timetables](#refreshing-the-bus-timetables)
@@ -591,6 +592,41 @@ Database: gabs       User: gabs       Password: gabs
 ```
 
 ---
+
+## The operations dashboard
+
+Everything below was answerable with psql and a query somebody had to remember, which is
+fine while the database is on the same machine as the person asking and no use at all once
+the API is deployed - exactly when "is the data stale" starts mattering, because nobody is
+watching it.
+
+```
+http://localhost:8000/api/admin/page
+```
+
+It shows what we hold (stops, routes, timetables, fares, road paths), each operator's last
+load and expired share, the recent refresh runs, what riders searched, what they searched
+for and never found, and every route with whether it still has a current timetable. There
+is a button to ask for a refresh.
+
+### Switching it on
+
+```bash
+COMMUTTR_ADMIN_TOKEN=<a long random string> mvn -f backend/pom.xml spring-boot:run
+```
+
+Without the variable every admin route answers 503 and says so, so a deployment that was
+never configured exposes nothing. The page asks for the token once and keeps it in the
+browser. **Do not commit a token**; generate one per environment, for example
+`python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+
+### The refresh button does not run anything
+
+It writes a row in `refresh_request`. The scheduled script picks it up at its next run,
+does the reload, records what happened in `refresh_run` and marks the request done. A web
+endpoint that starts a process on the server is a much bigger door than this needs, and a
+reload takes many minutes - not something a browser should sit waiting on. To reload
+immediately, run `scripts/refresh.ps1` on the API machine.
 
 ## Keeping the data fresh
 

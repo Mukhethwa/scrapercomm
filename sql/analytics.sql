@@ -67,3 +67,35 @@ CREATE TABLE IF NOT EXISTS place_search (
 
 CREATE INDEX IF NOT EXISTS idx_place_search_at    ON place_search(searched_at);
 CREATE INDEX IF NOT EXISTS idx_place_search_query ON place_search(lower(query));
+
+-- ---------------------------------------------------------------------------
+-- What the admin dashboard needs: when a reload last ran, and when one is wanted.
+--
+-- The refresh scripts write a run row so "when was this last loaded, and did it work"
+-- is a question the dashboard can answer rather than a log somebody has to find. The
+-- button on the dashboard writes a request; the scheduled script picks it up at its next
+-- run and marks it done. Nothing here executes anything by itself - a web page that can
+-- start a process on the server is a bigger door than this needs.
+CREATE TABLE IF NOT EXISTS refresh_run (
+    id          BIGSERIAL PRIMARY KEY,
+    operators   TEXT        NOT NULL,          -- 'gabs myciti metrorail'
+    started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at TIMESTAMPTZ,
+    ok          BOOLEAN,                       -- null while running
+    detail      TEXT,                          -- which steps failed, or what was stale
+    log_path    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_run_started ON refresh_run(started_at DESC);
+
+CREATE TABLE IF NOT EXISTS refresh_request (
+    id           BIGSERIAL PRIMARY KEY,
+    operators    TEXT        NOT NULL,         -- 'all', or one operator's code
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    requested_by TEXT,                         -- whoever was signed in to the dashboard
+    done_at      TIMESTAMPTZ,
+    run_id       BIGINT REFERENCES refresh_run(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_request_pending
+    ON refresh_request(requested_at) WHERE done_at IS NULL;

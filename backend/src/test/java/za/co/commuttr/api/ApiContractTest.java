@@ -51,6 +51,9 @@ class ApiContractTest {
     @Autowired
     MockMvc mvc;
 
+    // The dashboard reads the database directly, which a web slice has none of. It is
+    // not what this test is about; it only has to exist so the context starts.
+    @MockitoBean jakarta.persistence.EntityManager entityManager;
     @MockitoBean CatalogService catalog;
     @MockitoBean StopService stops;
     @MockitoBean JourneyService journeys;

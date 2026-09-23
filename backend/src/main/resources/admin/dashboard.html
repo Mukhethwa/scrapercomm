@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Commuttr operations</title>
+<style>
+  :root {
+    --ink: #10131a;
+    --muted: #5d6675;
+    --line: #e6e9ef;
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --accent: #ff4a1c;
+    --good: #0f7b46;
+    --good-ink: #0f7b46;
+    --warn: #b45309;
+    --warn-bg: #fff8ec;
+    --bad: #b42318;
+    --bad-bg: #fff4f3;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(16, 19, 26, .04), 0 8px 24px rgba(16, 19, 26, .06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    padding: 18px 16px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .bar { max-width: 1100px; margin: 0 auto; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .brand { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+  .brand span { color: var(--accent); }
+  .grow { flex: 1; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+       margin: 32px 0 12px; font-weight: 600; }
+  h2:first-of-type { margin-top: 8px; }
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .card .label { color: var(--muted); font-size: 13px; }
+  .card .value { font-size: 26px; font-weight: 640; letter-spacing: -.02em; margin-top: 4px; }
+  .card .sub { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card);
+          border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+          box-shadow: var(--shadow); }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.ok   { background: #ecfdf3; color: var(--good-ink); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.bad  { background: var(--bad-bg); color: var(--bad); }
+  button {
+    font: inherit; font-weight: 600; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); padding: 9px 14px; cursor: pointer;
+  }
+  button:hover { border-color: #d6dae3; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(.95); }
+  button:disabled { opacity: .5; cursor: default; }
+  input, select {
+    font: inherit; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--ink); min-width: 0;
+  }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid #ffd9cf; outline-offset: 1px; }
+  .note { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .gate { max-width: 420px; margin: 12vh auto; }
+  .gate .card { padding: 24px; }
+  .gate h1 { font-size: 20px; margin: 0 0 6px; }
+  .hidden { display: none; }
+  .two { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .msg { padding: 11px 14px; border-radius: 10px; font-size: 13.5px; margin-top: 12px; }
+  .msg.ok  { background: #ecfdf3; color: var(--good-ink); }
+  .msg.bad { background: var(--bad-bg); color: var(--bad); }
+  @media (max-width: 560px) { .card .value { font-size: 22px; } }
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <div class="card">
+    <h1>Commuttr operations</h1>
+    <p class="note" style="margin-bottom:16px">
+      This dashboard reads the live database. Enter the dashboard token set on the API as
+      <code>COMMUTTR_ADMIN_TOKEN</code>.
+    </p>
+    <div class="row">
+      <input id="token" type="password" placeholder="Dashboard token" style="flex:1" autocomplete="current-password">
+      <button class="primary" onclick="signIn()">Open</button>
+    </div>
+    <div id="gateMsg"></div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <div class="bar">
+      <div class="brand">commuttr<span>.</span> operations</div>
+      <div class="grow"></div>
+      <span id="freshness"></span>
+      <button onclick="loadAll()">Reload page</button>
+      <button onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <h2>Right now</h2>
+    <div id="totals" class="cards"></div>
+
+    <h2>Operators</h2>
+    <table>
+      <thead><tr>
+        <th>Operator</th><th class="num">Routes</th><th class="num">Timetables</th>
+        <th class="num">Stops</th><th class="num">Expired</th><th class="num">No PDF</th>
+        <th>Last loaded</th><th>State</th>
+      </tr></thead>
+      <tbody id="operators"></tbody>
+    </table>
+    <p class="note">
+      "Expired" counts timetables whose last valid day has passed. The planner drops those
+      where a newer version exists, and labels the trip where none does.
+    </p>
+
+    <h2>Refresh</h2>
+    <div class="card">
+      <div class="row">
+        <select id="refreshWhat">
+          <option value="all">Every operator</option>
+          <option value="gabs">Golden Arrow only</option>
+          <option value="myciti">MyCiTi only</option>
+          <option value="metrorail">Metrorail only</option>
+        </select>
+        <button class="primary" onclick="requestRefresh()">Request a refresh</button>
+      </div>
+      <p class="note">
+        This asks for a reload; the scheduled job does it. A reload downloads and parses
+        every timetable PDF and takes many minutes, so it is not something a browser should
+        sit waiting on. To run it immediately on the API machine:
+        <code>scripts/refresh.ps1</code>
+      </p>
+      <div id="refreshMsg"></div>
+      <div id="pending"></div>
+    </div>
+
+    <h2>Recent refreshes</h2>
+    <table>
+      <thead><tr><th>Started</th><th>Operators</th><th>Finished</th><th>Result</th><th>Detail</th></tr></thead>
+      <tbody id="runs"></tbody>
+    </table>
+
+    <h2>What riders searched <span id="demandDays" style="text-transform:none;letter-spacing:0"></span></h2>
+    <div class="two">
+      <table><thead><tr><th>Destination</th><th class="num">Searches</th></tr></thead><tbody id="destinations"></tbody></table>
+      <table><thead><tr><th>Route offered</th><th class="num">Times</th></tr></thead><tbody id="demandRoutes"></tbody></table>
+    </div>
+    <div class="two" style="margin-top:14px">
+      <table><thead><tr><th>Searched and found nothing</th><th class="num">Times</th></tr></thead><tbody id="notFound"></tbody></table>
+      <div class="card">
+        <div class="label">Why this matters</div>
+        <p class="note" style="margin-top:8px">
+          A place people search for and never find is either somewhere the network does not
+          go, or somewhere we spell differently from the people who live there. Both are
+          worth knowing, and neither shows up anywhere else.
+        </p>
+      </div>
+    </div>
+
+    <h2>Routes</h2>
+    <div class="row" style="margin-bottom:12px">
+      <select id="routeOperator" onchange="loadRoutes()">
+        <option value="">Every operator</option>
+        <option value="gabs">Golden Arrow</option>
+        <option value="myciti">MyCiTi</option>
+        <option value="metrorail">Metrorail</option>
+      </select>
+      <input id="routeQuery" placeholder="Search a route by name" oninput="debounceRoutes()" style="flex:1">
+    </div>
+    <table>
+      <thead><tr>
+        <th>Route</th><th>Operator</th><th class="num">Timetables</th>
+        <th class="num">With a PDF</th><th>Newest from</th><th>State</th>
+      </tr></thead>
+      <tbody id="routes"></tbody>
+    </table>
+    <p class="note" id="routeCount"></p>
+  </main>
+</div>
+
+<script>
+  const KEY = 'commuttr-admin-token';
+  let token = localStorage.getItem(KEY) || '';
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+  const num = (n) => (n ?? 0).toLocaleString('en-ZA');
+
+  function when(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d)) return esc(iso);
+    const days = Math.floor((Date.now() - d) / 86400000);
+    const stamp = d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (days <= 0) return stamp + ' (today)';
+    return `${stamp} (${days} day${days === 1 ? '' : 's'} ago)`;
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch('/api/admin' + path, {
+      ...options,
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', ...(options.headers || {}) },
+    });
+    if (res.status === 401) { signOut(); throw new Error('Wrong dashboard token.'); }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || ('Request failed: ' + res.status));
+    return body;
+  }
+
+  function signIn() {
+    token = $('token').value.trim();
+    if (!token) return;
+    localStorage.setItem(KEY, token);
+    open_();
+  }
+
+  function signOut() {
+    localStorage.removeItem(KEY);
+    token = '';
+    $('app').classList.add('hidden');
+    $('gate').classList.remove('hidden');
+  }
+
+  async function open_() {
+    try {
+      await loadAll();
+      $('gate').classList.add('hidden');
+      $('app').classList.remove('hidden');
+    } catch (e) {
+      $('gateMsg').innerHTML = `<div class="msg bad">${esc(e.message)}</div>`;
+    }
+  }
+
+  // Golden Arrow reissues weekly; the other two change a few times a year.
+  const AGE_LIMIT = { gabs: 14, myciti: 120, metrorail: 120 };
+
+  function state(op) {
+    if (op.age_days === null || op.age_days === undefined) return ['bad', 'never loaded'];
+    const limit = AGE_LIMIT[op.code] ?? 120;
+    const share = op.timetables ? op.expired / op.timetables : 0;
+    if (op.age_days > limit) return ['bad', `${op.age_days} days old`];
+    if (share > 0.25) return ['warn', `${Math.round(share * 100)}% expired`];
+    return ['ok', 'current'];
+  }
+
+  async function loadAll() {
+    const s = await api('/summary');
+    const stopsBy = Object.fromEntries((s.stops || []).map(r => [r.code, r]));
+
+    $('totals').innerHTML = [
+      ['Stops and stations', num(s.totals.stops), `${num((s.stops || []).reduce((n, r) => n + (r.unplaced || 0), 0))} without a position`],
+      ['Routes', num(s.totals.routes), `${num(s.totals.timetables)} timetables`],
+      ['Departures held', num(s.totals.stop_times), `${num(s.totals.schedules)} schedules`],
+      ['Fares', num(s.totals.fares), `${num(s.totals.leg_paths)} road paths`],
+      ['Searches, 30 days', num(s.searches.searches), `${num(s.searches.phones)} phones, ${num(s.searches.with_a_change)} with a change`],
+      ['Found nothing', num(s.searches.found_nothing), 'searches with no result'],
+    ].map(([label, value, sub]) => `
+      <div class="card"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>
+    `).join('');
+
+    let worst = 'ok';
+    $('operators').innerHTML = (s.operators || []).map(op => {
+      const [cls, text] = state(op);
+      if (cls === 'bad' || (cls === 'warn' && worst === 'ok')) worst = cls;
+      const st = stopsBy[op.code] || {};
+      return `<tr>
+        <td><strong>${esc(op.name || op.code)}</strong><div class="sub" style="color:var(--muted);font-size:12.5px">${esc(op.kind || '')}</div></td>
+        <td class="num">${num(op.routes)}</td>
+        <td class="num">${num(op.timetables)}</td>
+        <td class="num">${num(st.stops)}${st.unplaced ? ` <span class="sub">(${num(st.unplaced)} unplaced)</span>` : ''}</td>
+        <td class="num">${num(op.expired)}</td>
+        <td class="num">${num(op.without_pdf)}</td>
+        <td>${when(op.last_load)}</td>
+        <td><span class="pill ${cls}">${esc(text)}</span></td>
+      </tr>`;
+    }).join('');
+
+    $('freshness').innerHTML = worst === 'ok'
+      ? '<span class="pill ok">Data is current</span>'
+      : `<span class="pill ${worst}">Data needs a refresh</span>`;
+
+    $('pending').innerHTML = (s.pending || []).length
+      ? `<div class="msg ok">${s.pending.length} refresh request waiting: ${s.pending.map(p => esc(p.operators)).join(', ')}. The next scheduled run will pick it up.</div>`
+      : '';
+
+    await Promise.all([loadRuns(), loadDemand(), loadRoutes()]);
+  }
+
+  async function loadRuns() {
+    const { runs } = await api('/refreshes');
+    $('runs').innerHTML = runs.length ? runs.map(r => `
+      <tr>
+        <td>${when(r.started_at)}</td>
+        <td>${esc(r.operators)}</td>
+        <td>${r.finished_at ? when(r.finished_at) : '<span class="pill warn">running</span>'}</td>
+        <td>${r.ok === null || r.ok === undefined ? '—' : (r.ok ? '<span class="pill ok">worked</span>' : '<span class="pill bad">failed</span>')}</td>
+        <td>${esc(r.detail || '')}</td>
+      </tr>`).join('')
+      : '<tr><td colspan="5" class="note">No refresh has been recorded yet. The scripts write a row from their next run.</td></tr>';
+  }
+
+  async function loadDemand() {
+    const d = await api('/demand?days=30');
+    $('demandDays').textContent = `· last ${d.days} days`;
+    const fill = (id, rows, a, b, empty) => {
+      $(id).innerHTML = rows.length
+        ? rows.map(r => `<tr><td>${esc(r[a])}</td><td class="num">${num(r[b])}</td></tr>`).join('')
+        : `<tr><td colspan="2" class="note">${empty}</td></tr>`;
+    };
+    fill('destinations', d.destinations, 'name', 'searches', 'Nothing yet.');
+    fill('demandRoutes', d.routes, 'name', 'offered', 'Nothing yet.');
+    fill('notFound', d.not_found, 'looked_for', 'times', 'Every search found something.');
+  }
+
+  let routeTimer;
+  function debounceRoutes() {
+    clearTimeout(routeTimer);
+    routeTimer = setTimeout(loadRoutes, 300);
+  }
+
+  async function loadRoutes() {
+    const op = $('routeOperator').value;
+    const q = $('routeQuery').value.trim();
+    const { routes } = await api(`/routes?limit=300${op ? '&operator=' + encodeURIComponent(op) : ''}${q ? '&q=' + encodeURIComponent(q) : ''}`);
+    $('routes').innerHTML = routes.length ? routes.map(r => `
+      <tr>
+        <td>${esc(r.name)}</td>
+        <td>${esc(r.operator)}</td>
+        <td class="num">${num(r.timetables)}</td>
+        <td class="num">${num(r.with_pdf)}</td>
+        <td>${r.newest_from ? esc(r.newest_from) : '—'}</td>
+        <td>${r.current ? '<span class="pill ok">current</span>' : '<span class="pill warn">all expired</span>'}</td>
+      </tr>`).join('')
+      : '<tr><td colspan="6" class="note">No route matches.</td></tr>';
+    $('routeCount').textContent = `${routes.length} route${routes.length === 1 ? '' : 's'} shown.`;
+  }
+
+  async function requestRefresh() {
+    const what = $('refreshWhat').value;
+    try {
+      const r = await api('/refresh', { method: 'POST', body: JSON.stringify({ operators: what, by: 'dashboard' }) });
+      $('refreshMsg').innerHTML = `<div class="msg ok">${esc(r.detail)}</div>`;
+      await loadAll();
+    } catch (e) {
+      $('refreshMsg').innerHTML = `<div class="msg bad">${esc(e.message)}</div>`;
+    }
+  }
+
+  $('token').addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
+  if (token) open_();
+</script>
+</body>
+</html>

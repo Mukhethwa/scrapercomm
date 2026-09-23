@@ -48,6 +48,15 @@ if ($failed.Count -gt 0) {
     exit 1
 }
 
+function Sql($statement) {
+    docker exec gabs_pg psql -U gabs -d gabs -At -c $statement
+}
+
+# The run goes on the record before it starts, so the dashboard can show one in progress
+# and, if this machine dies mid-load, an unfinished row rather than silence.
+$runId = (Sql "INSERT INTO refresh_run (operators) VALUES ('$($Operators -join " ")') RETURNING id") | Select-Object -Last 1
+"run $runId" | Tee-Object -FilePath $log -Append
+
 if ($Operators -contains "gabs") {
     Step "golden arrow" { python -m gabs_scraper.pipeline }
     # The PDF links rot faster than anything else: Golden Arrow deletes a file the day it
@@ -65,6 +74,16 @@ Step "areas" { python -m gabs_scraper.areas --from-stops }
 "=== freshness ===" | Tee-Object -FilePath $log -Append
 python -m gabs_scraper.freshness --check 2>&1 | Tee-Object -FilePath $log -Append
 $stale = $LASTEXITCODE -ne 0
+
+$detail = ""
+if ($failed.Count -gt 0) { $detail = "failed: $($failed -join ', ')" }
+elseif ($stale)          { $detail = "ran, but the data is still older than its limits" }
+$ok = if ($failed.Count -eq 0 -and -not $stale) { "true" } else { "false" }
+
+Sql "UPDATE refresh_run SET finished_at = now(), ok = $ok, detail = nullif('$($detail -replace "'", "''")', ''), log_path = '$($log -replace "'", "''")' WHERE id = $runId" | Out-Null
+# Anything asked for from the dashboard has now been done, whatever the outcome: the
+# request was for a reload attempt, and the row above says how it went.
+Sql "UPDATE refresh_request SET done_at = now(), run_id = $runId WHERE done_at IS NULL" | Out-Null
 
 if ($failed.Count -gt 0) {
     "`nSteps that failed: $($failed -join ', '). Log: $log" | Tee-Object -FilePath $log -Append
