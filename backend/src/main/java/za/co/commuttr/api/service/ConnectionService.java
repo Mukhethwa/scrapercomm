@@ -16,6 +16,7 @@ import za.co.commuttr.api.repo.projection.Projections.TwoLegRow;
 import za.co.commuttr.api.web.ApiException;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -72,6 +73,21 @@ public class ConnectionService {
     private static final double WALK_M = PlannerService.WALK_M;
 
     /**
+     * How far to reach for an operator with nothing inside {@link #WALK_M}.
+     *
+     * The direct search already does this, in the app: where a place has no stop of some
+     * operator within walking distance it asks that operator's nearest stop up to five
+     * kilometres out and names it, so a rider can judge whether the walk is worth it. The
+     * search with a change did not, so the two disagreed about what exists.
+     *
+     * Buh Rein is the case. Its nearest station, Kraaifontein, is 3,451m away - past the
+     * walk, inside this - so a rider asking for Kalk Bay was offered three buses and no
+     * train, while the same rider asking for a direct trip was offered the Northern Line.
+     * Nothing about the network changed between those two questions.
+     */
+    private static final double FURTHER_M = 5000.0;
+
+    /**
      * How many nearby stops of EACH OPERATOR to try for a place, nearest first.
      *
      * Per operator, because the lists are gathered one after another and a flat cap
@@ -82,6 +98,39 @@ public class ConnectionService {
      * being crowded out matters most.
      */
     private static final int NEAR_TRIED = 5;
+
+    /**
+     * How many stop pairs to try for one operator before accepting it has no journey.
+     *
+     * Asking every operator rather than whoever is nearest multiplies this search, and it
+     * is not a cheap one: Cape Town to Khayelitsha took 137 seconds trying five stops
+     * against five for each of three operators, against about eight before - and the app
+     * gives up at thirty. Nearly all of that was spent proving a negative, pair 20 of an
+     * operator that has nothing.
+     *
+     * A rider walks to an operator's nearest stop. If that one cannot make the journey the
+     * next nearest might; the twentieth is not an answer anybody would use, so the wait
+     * for it buys nothing. Three pairs per operator holds the usual search at one query
+     * each and the worst at nine.
+     */
+    private static final int PAIRS_TRIED = 3;
+
+    /**
+     * How long to keep asking further operators once the nearest has answered.
+     *
+     * These queries are not cheap where the network is dense: Cape Town to Khayelitsha
+     * takes about 45 seconds on Golden Arrow's stops alone, and the app gives up at
+     * thirty. Asking three operators there took over two minutes, so a rider who used to
+     * get buses got "you're offline" instead - a worse answer than the incomplete one.
+     *
+     * So the operator nearest the rider is always searched, however long it takes, which
+     * is exactly what this did before. Every operator after that has to start inside this
+     * budget. Most searches are seconds and get all three; the slowest get what they used
+     * to get, on time.
+     *
+     * The real fix is the query. This is the guard, not the cure.
+     */
+    private static final long EXTRA_OPERATOR_BUDGET_MS = 10_000;
 
     public ConnectionsResponse connections(Integer fromId, Double fromLat, Double fromLon,
                                            Integer toId, Double toLat, Double toLon) {
@@ -126,23 +175,71 @@ public class ConnectionService {
             throw ApiException.notFound("stop not found");
         }
 
-        // Nearest first, and the first pair that connects wins.
+        // Nearest first, and the first pair that connects wins - PER OPERATOR.
         //
         // A place is not one stop, and trying every pair would run this query nine times
         // to no purpose: the nearest stop that can make the journey is the one a rider
         // would use. Trying the next only when the nearer one connects to nothing keeps
         // the usual case at one query and still answers where the closest stop happens to
         // be on the wrong route.
+        //
+        // But one answer for the whole place was one answer for whoever happened to be
+        // nearest. From Buh Rein the bus stop is at the door, so three buses to Kalk Bay
+        // were found and the search stopped there - the train was never asked about. The
+        // home screen was taught to show a way on each operator; this is the same
+        // question asked of journeys with a change, and it was still answering with one.
+        //
+        // A change happens at a single stop row and no row belongs to two operators, so
+        // each operator's journeys are found within its own ends, and the results merge.
+        Map<String, List<StopRow>> starts = byOperator(fromStops);
+        Map<String, List<StopRow>> finishes = byOperator(toStops);
+        List<ConnectionDto> found = new ArrayList<>();
+        Integer legs = null;
+        long started = System.currentTimeMillis();
+        boolean nearest = true;
+        for (Map.Entry<String, List<StopRow>> start : starts.entrySet()) {
+            List<StopRow> ends = finishes.get(start.getKey());
+            if (ends == null) {
+                continue;
+            }
+            // The nearest operator is always answered. See EXTRA_OPERATOR_BUDGET_MS.
+            if (!nearest && System.currentTimeMillis() - started > EXTRA_OPERATOR_BUDGET_MS) {
+                break;
+            }
+            nearest = false;
+            ConnectionsResponse answer = firstThatConnects(start.getValue(), ends);
+            if (!answer.connections().isEmpty()) {
+                found.addAll(answer.connections());
+                legs = legs == null ? answer.legsRequired() : Math.min(legs, answer.legsRequired());
+            }
+        }
+        return new ConnectionsResponse(StopService.toDto(fromStops.get(0)),
+                StopService.toDto(toStops.get(0)), legs, found);
+    }
+
+    /** Candidate ends grouped by whose stops they are, each still nearest first. */
+    private Map<String, List<StopRow>> byOperator(List<StopRow> rows) {
+        Map<String, List<StopRow>> byCode = new LinkedHashMap<>();
+        for (StopRow r : rows) {
+            byCode.computeIfAbsent(r.getOperatorCode(), k -> new ArrayList<>()).add(r);
+        }
+        return byCode;
+    }
+
+    private ConnectionsResponse firstThatConnects(List<StopRow> fromStops, List<StopRow> toStops) {
+        int tried = 0;
         for (StopRow from : fromStops) {
             for (StopRow to : toStops) {
+                if (tried++ >= PAIRS_TRIED) {
+                    return new ConnectionsResponse(null, null, null, List.of());
+                }
                 ConnectionsResponse found = between(from, to);
                 if (!found.connections().isEmpty()) {
                     return found;
                 }
             }
         }
-        return new ConnectionsResponse(StopService.toDto(fromStops.get(0)),
-                StopService.toDto(toStops.get(0)), null, List.of());
+        return new ConnectionsResponse(null, null, null, List.of());
     }
 
     /** A stop id as itself, or a point as the stops a rider could walk to. */
@@ -178,8 +275,13 @@ public class ConnectionService {
         List<StopRow> near = new ArrayList<>();
         List<String> codes = operator == null ? stops.operatorCodesWithStops() : List.of(operator);
         for (String code : codes) {
-            near.addAll(stops.findNearestOfOperator(lat, lon, code, WALK_M).stream()
-                    .limit(NEAR_TRIED).toList());
+            List<StopRow> walkable = stops.findNearestOfOperator(lat, lon, code, WALK_M).stream()
+                    .limit(NEAR_TRIED).toList();
+            // Nothing of theirs within the walk: their nearest one, named, so the rider
+            // decides. See FURTHER_M - the direct search has always answered this way.
+            near.addAll(walkable.isEmpty()
+                    ? stops.findNearestOfOperator(lat, lon, code, FURTHER_M).stream().limit(1).toList()
+                    : walkable);
         }
         // Nearest first ACROSS both kinds, not trains and then buses.
         //
