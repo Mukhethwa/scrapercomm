@@ -150,12 +150,15 @@ The run exits non-zero if a step failed and 2 if everything ran but the data is 
 stale, so a scheduler that reports failures reports both. Every run is also a row in
 `refresh_run`, visible on the dashboard.
 
-One operator is not actually automatic. `prasa_scraper.sheets` reads the spreadsheets in
-`data/prasa/xlsx`; nothing downloads them, so a weekly refresh re-reads the same files PRASA
-published in September and writes a new `scraped_at` each time. `/api/status` would then
-report Metrorail as fresh forever. Until something fetches them, put a calendar reminder
-against https://www.prasa.com/train-schedules/cape-town and drop new spreadsheets into that
-folder by hand. Golden Arrow and MyCiTi do fetch their own.
+All three operators fetch their own data. `prasa_scraper.fetch` reads PRASA's WordPress
+API (`/admin/wp-json/wp/v2/cape-town-trains`), downloads every Cape Town spreadsheet it
+lists and removes the ones it no longer does, then `prasa_scraper.sheets` loads them.
+
+Files are named from PRASA's titles rather than their published filenames, on purpose: the
+public holiday sheets are published as `PPH-central-line-outbound.xlsx`, and the loader
+reads the day type out of the filename as well as the sheet banner. Named as PRASA names
+them, a public holiday timetable can load as a weekday one — holiday trains on a Tuesday,
+which is worse than not having it at all.
 
 Three things that make this safe to run against a live database:
 
@@ -184,19 +187,33 @@ Three things that make this safe to run against a live database:
 
 Written down so they are decisions rather than surprises:
 
-- **Dense journeys with a change are still seconds, not milliseconds.** Much better than
-  they were — CLAREMONT to KHAYELITSHA did not answer at all inside five minutes and now
-  takes 5.8s — but CAPE TOWN to BELLVILLE is 7.6s, and that one is bounded by the
-  10-second per-operator budget in `ConnectionService` rather than by the database. On a
-  Burstable database tier it will be slower again. Measure before choosing the tier.
+- **Three journeys in 316 answer "no journey" when one exists.** Nothing times out any
+  more — a sweep of 412 journeys has a slowest of 9.6s against the app's 30s limit, where
+  before 14 were over it and the worst was 122s. The bound costs those three: they used to
+  answer at 58s, 57s and 42s, which no rider ever saw because the app had already given up.
+
+  The cause is worth knowing before anyone tunes it: **every slow journey returns zero
+  results.** One that exists returns early; one that does not runs the two-leg query to
+  exhaustion and then the heavier three-leg query. It is not search-space explosion —
+  MACADAMS FACTORY to MOWBRAY has five interchange candidates, found in 48ms. The fix is a
+  reachability table per operator, so "no journey" becomes an index lookup instead of a
+  proof. Post-launch: the launch risk was the timeout, and that is gone.
+
+  On a Burstable database tier everything here will be slower. Measure before choosing it.
 - **Four Golden Arrow stops have no position** (ALVINCO, LEAGUES, ROUTE 2, SPEKENAM) and
   around sixty distort their own route. Journeys through them work; maps and "nearest
   stops" do not.
 - **The React web app** still shows Golden Arrow cash prices and no MyCiTi fares. The
   Flutter app is correct. Either fix it or take it down before launch, because it
   contradicts the app.
-- **Metrorail spreadsheets are fetched by hand** (section 5), so train timetables go stale
-  silently while the status page calls them fresh. A downloader for
-  prasa.com/train-schedules/cape-town is the fix.
+- **PRASA publishes no public holiday Cape Flats outbound sheet.** The other seven exist
+  and are loaded; that one has no file attached to its own listing, so there is no Cape
+  Flats service from Cape Town on a public holiday in the app. It is missing at the source
+  — worth asking PRASA for. (There are no Sunday trains to miss: PRASA publishes none.)
+- **No journey can change between operators.** `stop_interchange` is empty and no Java
+  reads it, and `ConnectionService` searches each operator separately, so bus-to-train and
+  bus-to-MyCiTi journeys do not exist. A rider asking for one is told there is no way to
+  get there, which is a statement about the planner and not about Cape Town. Train and bus
+  stops are separate rows even at the same place — RETREAT is both, about 800m apart.
 - **No second pair of hands.** One person holds the signing key, the admin token, the
   database and the support inbox. Write down where each lives.

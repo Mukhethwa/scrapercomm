@@ -38,6 +38,9 @@ import java.util.Map;
 @Transactional(readOnly = true)
 public class ConnectionService {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(ConnectionService.class);
+
     private final StopRepository stops;
     private final ConnectionRepository connections;
     private final TimetableRepository timetables;
@@ -142,6 +145,21 @@ public class ConnectionService {
      */
     private static final long EXTRA_OPERATOR_BUDGET_MS = 10_000;
 
+    /**
+     * How long the whole search may run before it answers with what it has.
+     *
+     * <p>EXTRA_OPERATOR_BUDGET_MS bounded the operators after the nearest and left the
+     * nearest itself unbounded, "however long it takes". A sweep of 412 journeys showed
+     * what that costs: some took over two minutes against an app that gives up at thirty
+     * seconds, so the rider was told they were offline. That is a false statement about
+     * their phone in place of a true one about our query.
+     *
+     * <p>Twenty seconds, so the plan call that precedes this one also fits inside the
+     * thirty. Each query is separately capped (ConnectionRepository.TIMEOUT_MS), so a
+     * single slow one cannot run past this either.
+     */
+    private static final long TOTAL_BUDGET_MS = 20_000;
+
     public ConnectionsResponse connections(Integer fromId, Double fromLat, Double fromLon,
                                            Integer toId, Double toLat, Double toLon) {
         return connections(fromId, fromLat, fromLon, toId, toLat, toLon, null);
@@ -206,6 +224,7 @@ public class ConnectionService {
         List<ConnectionDto> found = new ArrayList<>();
         Integer legs = null;
         long started = System.currentTimeMillis();
+        long deadline = started + TOTAL_BUDGET_MS;
         boolean nearest = true;
         for (Map.Entry<String, List<StopRow>> start : starts.entrySet()) {
             List<StopRow> ends = finishes.get(start.getKey());
@@ -217,7 +236,7 @@ public class ConnectionService {
                 break;
             }
             nearest = false;
-            ConnectionsResponse answer = firstThatConnects(start.getValue(), ends);
+            ConnectionsResponse answer = firstThatConnects(start.getValue(), ends, deadline);
             if (!answer.connections().isEmpty()) {
                 found.addAll(answer.connections());
                 legs = legs == null ? answer.legsRequired() : Math.min(legs, answer.legsRequired());
@@ -236,13 +255,20 @@ public class ConnectionService {
         return byCode;
     }
 
-    private ConnectionsResponse firstThatConnects(List<StopRow> fromStops, List<StopRow> toStops) {
+    private ConnectionsResponse firstThatConnects(List<StopRow> fromStops, List<StopRow> toStops,
+                                                  long deadline) {
         int tried = 0;
         for (StopRow from : fromStops) {
             for (StopRow to : toStops) {
-                if (tried++ >= PAIRS_TRIED) {
+                if (tried >= PAIRS_TRIED) {
                     return new ConnectionsResponse(null, null, null, List.of());
                 }
+                // The first pair is always tried, so a search that is already late still
+                // answers something rather than returning empty without looking.
+                if (tried > 0 && System.currentTimeMillis() > deadline) {
+                    return new ConnectionsResponse(null, null, null, List.of());
+                }
+                tried++;
                 ConnectionsResponse found = between(from, to);
                 if (!found.connections().isEmpty()) {
                     return found;
@@ -344,6 +370,21 @@ public class ConnectionService {
     }
 
     private ConnectionsResponse between(StopRow from, StopRow to) {
+        try {
+            return betweenOrThrow(from, to);
+        } catch (org.springframework.dao.QueryTimeoutException
+                 | jakarta.persistence.QueryTimeoutException e) {
+            // The database cancelled it at ConnectionRepository.TIMEOUT_MS. Treat this pair
+            // as having found nothing: the rest of the search, and the other operators,
+            // still answer, and the rider gets those instead of an error or a hang.
+            log.info("connections {} -> {} gave up at the query timeout",
+                    from.getId(), to.getId());
+            return new ConnectionsResponse(StopService.toDto(from), StopService.toDto(to),
+                    null, List.of());
+        }
+    }
+
+    private ConnectionsResponse betweenOrThrow(StopRow from, StopRow to) {
         Integer fromId = from.getId();
         Integer toId = to.getId();
 

@@ -1,6 +1,8 @@
 package za.co.commuttr.api.repo;
 
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import za.co.commuttr.api.domain.Stop;
@@ -44,6 +46,9 @@ import java.util.List;
  */
 @Repository
 public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
+
+    /** Milliseconds. A constant because a query hint has to be one. */
+    String TIMEOUT_MS = "8000";
 
     @Query(value = """
             WITH ix AS (
@@ -195,6 +200,18 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                      "waitMinutes", l1.arr
             LIMIT :maxResults
             """, nativeQuery = true)
+    /**
+     * Give up after {@value #TIMEOUT_MS}ms rather than run for as long as it takes.
+     *
+     * <p>Unbounded, these answer correctly and far too late. A sweep of 412 journeys found
+     * some taking over two minutes, against an app that gives up at thirty seconds - so the
+     * rider was shown "you appear to be offline", which is false, instead of an answer.
+     *
+     * <p>A cancelled query is caught in ConnectionService and treated as "this pair of
+     * stops found nothing", so the search moves on and the other operators still answer. An
+     * incomplete result inside the app's patience beats a complete one it never displays.
+     */
+    @QueryHints(@QueryHint(name = "jakarta.persistence.query.timeout", value = TIMEOUT_MS))
     List<TwoLegRow> findTwoLegConnections(@Param("fromId") Integer fromId,
                                           @Param("toId") Integer toId,
                                           @Param("bufferMinutes") int bufferMinutes,
@@ -382,6 +399,18 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                      "waitMinutes", l1.arr
             LIMIT :maxResults
             """, nativeQuery = true)
+    /**
+     * Give up after {@value #TIMEOUT_MS}ms rather than run for as long as it takes.
+     *
+     * <p>Unbounded, these answer correctly and far too late. A sweep of 412 journeys found
+     * some taking over two minutes, against an app that gives up at thirty seconds - so the
+     * rider was shown "you appear to be offline", which is false, instead of an answer.
+     *
+     * <p>A cancelled query is caught in ConnectionService and treated as "this pair of
+     * stops found nothing", so the search moves on and the other operators still answer. An
+     * incomplete result inside the app's patience beats a complete one it never displays.
+     */
+    @QueryHints(@QueryHint(name = "jakarta.persistence.query.timeout", value = TIMEOUT_MS))
     List<ThreeLegRow> findThreeLegConnections(@Param("fromId") Integer fromId,
                                               @Param("toId") Integer toId,
                                               @Param("bufferMinutes") int bufferMinutes,
