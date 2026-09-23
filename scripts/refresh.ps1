@@ -59,11 +59,11 @@ function Sql($statement) {
 
 # The run goes on the record before it starts, so the dashboard can show one in progress
 # and, if this machine dies mid-load, an unfinished row rather than silence.
-$runId = (Sql "INSERT INTO refresh_run (operators) VALUES ('$($Operators -join " ")') RETURNING id") | Select-Object -Last 1
+$runId = (Sql "INSERT INTO refresh_run (operators) VALUES ('$($Operators -join " ")') RETURNING id") | Select-Object -First 1
 "run $runId" | Tee-Object -FilePath $log -Append
 
 if ($Operators -contains "gabs") {
-    Step "golden arrow" { python -m gabs_scraper.pipeline }
+    Step "golden arrow" { python -m gabs_scraper.pipeline --all }
     # The PDF links rot faster than anything else: Golden Arrow deletes a file the day it
     # reissues, so a link loaded last week is a 404 this week.
     Step "golden arrow pdf links" { python -m gabs_scraper.relink --fix }

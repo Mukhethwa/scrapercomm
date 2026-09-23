@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import za.co.commuttr.api.analytics.AppErrorEvent;
 import za.co.commuttr.api.analytics.PlaceSearchEvent;
 import za.co.commuttr.api.analytics.SearchAnalyticsEvent;
 import za.co.commuttr.api.service.EndpointRef;
@@ -32,6 +33,10 @@ public class UsageController {
     /** Long enough for a place, short enough that nothing else fits. */
     private static final int MAX_QUERY = 40;
 
+    /** Enough of an error to recognise it; not enough to carry a screen's contents. */
+    private static final int MAX_MESSAGE = 300;
+    private static final int MAX_WHERE = 1200;
+
     private final ApplicationEventPublisher events;
 
     public UsageController(ApplicationEventPublisher events) {
@@ -52,7 +57,19 @@ public class UsageController {
                                String endpoint,
                                String query,
                                @JsonProperty("result_count") Integer resultCount,
-                               @JsonProperty("chosen_stop_id") Integer chosenStopId) { }
+                               @JsonProperty("chosen_stop_id") Integer chosenStopId,
+                               @JsonProperty("app_version") String appVersion,
+                               String platform,
+                               String message,
+                               String where) { }
+
+    private static String trim(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        String clean = value.trim();
+        return clean.length() > max ? clean.substring(0, max) : clean;
+    }
 
     @PostMapping("/usage")
     @ResponseStatus(HttpStatus.ACCEPTED)
@@ -75,6 +92,18 @@ public class UsageController {
                         query.length() > MAX_QUERY ? query.substring(0, MAX_QUERY) : query,
                         body.resultCount() == null ? 0 : body.resultCount(),
                         body.chosenStopId()));
+            }
+            // An app that crashes tells us, because the policy promises riders no
+            // third-party trackers - which rules out the usual crash SDKs and would
+            // otherwise leave a one-star review as the first news of a broken build.
+            case "app_error" -> {
+                String message = body.message() == null ? "" : body.message().trim();
+                if (message.isEmpty()) {
+                    return;
+                }
+                events.publishEvent(AppErrorEvent.of(
+                        body.appVersion(), body.platform(),
+                        trim(message, MAX_MESSAGE), trim(body.where(), MAX_WHERE)));
             }
             default -> { }  // An unknown kind is ignored, never an error a rider can see.
         }

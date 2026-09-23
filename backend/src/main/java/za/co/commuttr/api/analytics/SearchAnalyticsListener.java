@@ -10,7 +10,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.commuttr.api.domain.SearchAnalytics;
 import za.co.commuttr.api.domain.SearchAnalyticsOption;
+import za.co.commuttr.api.domain.AppError;
 import za.co.commuttr.api.domain.PlaceSearch;
+import za.co.commuttr.api.repo.AppErrorRepository;
 import za.co.commuttr.api.repo.PlaceSearchRepository;
 import za.co.commuttr.api.repo.SearchAnalyticsOptionRepository;
 import za.co.commuttr.api.repo.SearchAnalyticsRepository;
@@ -37,16 +39,42 @@ public class SearchAnalyticsListener {
     private final SearchAnalyticsRepository searches;
     private final SearchAnalyticsOptionRepository options;
     private final PlaceSearchRepository placeSearches;
+    private final AppErrorRepository appErrors;
     private final boolean enabled;
 
     public SearchAnalyticsListener(SearchAnalyticsRepository searches,
                                    SearchAnalyticsOptionRepository options,
                                    PlaceSearchRepository placeSearches,
+                                   AppErrorRepository appErrors,
                                    @Value("${commuttr.analytics.enabled:true}") boolean enabled) {
         this.searches = searches;
         this.options = options;
         this.placeSearches = placeSearches;
+        this.appErrors = appErrors;
         this.enabled = enabled;
+    }
+
+    /**
+     * A crash the app could not handle.
+     *
+     * <p>Recorded even when analytics is switched off on the server: knowing the app is
+     * broken is not the same kind of thing as counting how it is used, and a build that
+     * crashes for everybody is worth hearing about however the operator has configured
+     * their counting.
+     */
+    @Async
+    @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onAppError(AppErrorEvent event) {
+        try {
+            appErrors.save(new AppError(event.deviceId(), event.client(), event.appVersion(),
+                    event.platform(), event.kind(), event.message(), event.where(),
+                    event.happenedAt()));
+            log.warn("App error reported ({} {}): {}", event.platform(), event.appVersion(),
+                    event.message());
+        } catch (RuntimeException ex) {
+            log.warn("Could not record an app error: {}", ex.toString());
+        }
     }
 
     /** Same rules as a journey search: off the request thread, and never fatal. */

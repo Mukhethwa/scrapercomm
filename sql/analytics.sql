@@ -99,3 +99,28 @@ CREATE TABLE IF NOT EXISTS refresh_request (
 
 CREATE INDEX IF NOT EXISTS idx_refresh_request_pending
     ON refresh_request(requested_at) WHERE done_at IS NULL;
+
+-- ---------------------------------------------------------------------------
+-- Crashes and errors, reported to us rather than to somebody else.
+--
+-- The privacy policy promises riders "no third-party trackers and no analytics SDKs",
+-- which rules out Sentry, Crashlytics and the rest - and they are how most apps learn
+-- they are broken. Without something, the first news of a crash is a one-star review.
+--
+-- So the app reports its own uncaught errors here, through the same switch and the same
+-- anonymous id as everything else: no name, no account, and nothing from the screen the
+-- rider was on beyond where in the code it broke.
+CREATE TABLE IF NOT EXISTS app_error (
+    id          BIGSERIAL PRIMARY KEY,
+    device_id   TEXT,
+    client      TEXT,                          -- 'app' | 'web'
+    app_version TEXT,
+    platform    TEXT,                          -- 'android' | 'ios' | 'web'
+    kind        TEXT        NOT NULL,          -- 'flutter' | 'zone' | 'api'
+    message     TEXT        NOT NULL,
+    where_at    TEXT,                          -- the top frames, trimmed
+    happened_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_error_at      ON app_error(happened_at DESC);
+CREATE INDEX IF NOT EXISTS idx_app_error_message ON app_error(left(message, 120));
