@@ -73,7 +73,13 @@ case " ${operators[*]} " in *" myciti "*)
 # the PDFs by OCR and is the fallback for services published only as images. The sheets
 # give all 16 timetables both ways including Saturdays, the OCR path 6 inbound-only ones -
 # so a refresh that ran the OCR path would quietly take away every homeward train.
-case " ${operators[*]} " in *" metrorail "*) step "metrorail" python -m prasa_scraper.sheets ;; esac
+case " ${operators[*]} " in *" metrorail "*)
+  # PRASA publishes these as spreadsheets on a WordPress site. Until this existed nothing
+  # fetched them, so a refresh re-read September's files forever while writing a new
+  # scraped_at - the status page called train data fresh for as long as nobody checked.
+  step "metrorail sheets" python -m prasa_scraper.fetch --download
+  step "metrorail" python -m prasa_scraper.sheets
+;; esac
 
 # The planner's precomputed floors and ceilings are a pure function of the departures any
 # of the three loaders just wrote, so they are rebuilt once here rather than recomputed on
