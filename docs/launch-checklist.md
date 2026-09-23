@@ -128,7 +128,23 @@ Fortnightly is one cycle behind Golden Arrow, who reissue weekly. What makes tha
 acceptable rather than sloppy: the planner hides a timetable that has ended when a current
 one for the same route exists, and the freshness check watches the expired share as well as
 the age — so drift shows up as a number rather than as a rider being given a withdrawn bus.
-If that share starts climbing, move back to weekly; the load is cheap now (below).
+If that share starts climbing, move back to weekly.
+
+**What a run actually costs.** A load no longer re-parses a PDF whose bytes have not
+changed, so the cost is set by how much Golden Arrow reissued, not by the size of the
+corpus:
+
+| | |
+| --- | --- |
+| a PDF that has not changed | ~0.3ms — a checksum comparison |
+| a PDF that is new or reissued | **~1.2s** — parse, then write its schedules and times |
+| all 2,874 unchanged (nothing to do) | 2.6s |
+| all 2,874 parsed (`--reparse`) | ~2 hours |
+
+Golden Arrow reissues 30–330 timetables in a normal week, and occasionally far more — the
+week of 21 September was 1,297. So a fortnightly run is **minutes, not seconds and not
+hours**: roughly 2–13 minutes typically, around half an hour after a bulk reissue. Budget
+the job for an hour and do not be alarmed by five minutes.
 
 The run exits non-zero if a step failed and 2 if everything ran but the data is still
 stale, so a scheduler that reports failures reports both. Every run is also a row in

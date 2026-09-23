@@ -74,14 +74,16 @@ def do_load(entries, workers, force, reparse=False):
     loaded_sha = {} if reparse else load_mod.already_loaded(conn)
 
     n_ok = n_fail = n_same = 0
+    unchanged: list[str] = []
     failures: list[tuple[str, str]] = []
     t0 = time.time()
     for i, e in enumerate(entries, 1):
         r = by_name.get(e.pdf_filename)
         if r is not None and r.ok and r.sha256 and loaded_sha.get(e.pdf_filename) == r.sha256:
-            # Checked against the operator today and unchanged, so say so: freshness is
-            # measured from scraped_at and this timetable is as current as a re-parsed one.
-            load_mod.touch_timetable(conn, e.pdf_filename)
+            # Checked against the operator today and unchanged. Collected rather than
+            # written now: freshness is measured from scraped_at, and marking them is one
+            # statement at the end instead of 2,874 round trips.
+            unchanged.append(e.pdf_filename)
             n_same += 1
             continue
         if r is None or not r.ok:
@@ -107,6 +109,7 @@ def do_load(entries, workers, force, reparse=False):
         if i % 200 == 0:
             print(f"   loaded {i}/{len(entries)} ...", flush=True)
 
+    load_mod.touch_timetables(conn, unchanged)
     conn.close()
     print(f"[load] parsed_ok={n_ok} unchanged={n_same} failed={n_fail} "
           f"in {time.time() - t0:.0f}s")

@@ -146,18 +146,27 @@ def already_loaded(conn) -> dict[str, str]:
     return out
 
 
-def touch_timetable(conn, pdf_filename: str) -> None:
-    """Record that we checked this PDF against the operator today and it had not changed.
+def touch_timetables(conn, pdf_filenames: list[str]) -> int:
+    """Record that we checked these PDFs against the operator today and they had not changed.
 
     Without this a skipped timetable keeps its old scraped_at, and freshness - which is
     what /api/status reports and what the age limits are measured against - would call
     data stale that we had just confirmed was current.
+
+    One statement for the lot, not one per file. Updating them one at a time cost 3.3ms
+    each - 9.6s for Golden Arrow's 2,874 - which is all round trip and no work. That is
+    tolerable against a database on the same machine and is not tolerable against a managed
+    one across a network, where the same 2,874 round trips are minutes of waiting.
     """
+    if not pdf_filenames:
+        return 0
     cur = conn.cursor()
-    cur.execute("UPDATE timetable SET scraped_at = %s WHERE pdf_filename = %s",
-                (datetime.now(timezone.utc), pdf_filename))
+    cur.execute("UPDATE timetable SET scraped_at = %s WHERE pdf_filename = ANY(%s)",
+                (datetime.now(timezone.utc), list(pdf_filenames)))
+    n = cur.rowcount
     cur.close()
     conn.commit()
+    return n
 
 
 def prune_superseded(conn, entries: list[ManifestEntry]) -> tuple[int, int]:
