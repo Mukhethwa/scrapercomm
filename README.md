@@ -214,6 +214,27 @@ docker exec gabs_pg psql -U gabs -d gabs -c "SELECT count(*) FILTER (WHERE s.lat
 About **479 placed of 522** is right. The rest are stops OpenStreetMap does not have and
 that could not be placed between their neighbours; the planner simply does not use them.
 
+### Step 3b — Point the timetable links at files that still exist
+
+```bash
+PYTHONPATH=src python -m gabs_scraper.relink --fix
+```
+
+Golden Arrow replaces its timetable PDFs and deletes the old ones, so the link stored with
+a timetable rots: two thirds of ours were 404 within weeks, and a rider tapping "Official
+timetable (PDF)" got the operator's error page. This matches every timetable to what the
+site publishes today, by timetable number, and clears the link where the service is no
+longer published at all - the app then offers the operator's own list of timetables, which
+does not rot. Run it whenever you reload the data.
+
+```bash
+docker exec gabs_pg psql -U gabs -d gabs -c "SELECT count(*) FILTER (WHERE pdf_url IS NULL) AS no_link, count(*) AS timetables FROM timetable"
+```
+
+About **418 of 2,140** without a link is right: some are services Golden Arrow no
+longer publishes, and some carry a number the site now uses for a different route,
+which is not their timetable.
+
 ### Step 4 — Start the API
 
 ```bash
