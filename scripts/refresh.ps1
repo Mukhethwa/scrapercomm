@@ -81,6 +81,9 @@ Step "stop positions" { python -m gabs_scraper.repair_positions }
 Step "stops with no position" { python -m gabs_scraper.place_missing --fix }
 Step "station positions" { python -m prasa_scraper.repair_positions --fix }
 Step "areas" { python -m gabs_scraper.areas --from-stops }
+# The privacy policy promises the anonymous id is cleared after twelve months. This is
+# the job that keeps that sentence true.
+Step "forget old ids" { python -m gabs_scraper.retention --fix }
 # Repairs delete the road paths they invalidate, so this redraws them.
 Step "road paths" { python -m gabs_scraper.geometry }
 
