@@ -227,7 +227,9 @@ class ApiContractTest {
                         "exact", "Cape Town", "Bellville", false, 4150, "2025-08-11",
                         // Metrorail sells four tickets for one journey; a bus sells none
                         // the app shows, so these are null on the Golden Arrow fixture.
-                        null, null, null));
+                        null, null, null),
+                // The timetable this fixture came from is current, which is the normal case.
+                null);
         given(planner.plan(any(), any())).willReturn(new PlanResponse(
                 new StopDto(3, "NYANGA TERM", -33.98, 18.58, "gabs", "bus"), PinDto.of(-33.90, 18.62),
                 List.of(option)));

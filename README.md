@@ -25,6 +25,7 @@ so a train is planned by the same engine that plans a bus.
 - [Getting it running](#getting-it-running) — start to finish, six steps
 - [Command reference](#command-reference) — every command, what it does, when you need it
 - [Looking inside the database](#looking-inside-the-database)
+- [Keeping the data fresh](#keeping-the-data-fresh)
 - [Reading the search analytics](#reading-the-search-analytics)
 - [Refreshing the bus timetables](#refreshing-the-bus-timetables)
 - [Refreshing the train timetables](#refreshing-the-train-timetables) — the OCR pipeline
@@ -590,6 +591,52 @@ Database: gabs       User: gabs       Password: gabs
 ```
 
 ---
+
+## Keeping the data fresh
+
+Nothing refreshed on its own until September 2026. Golden Arrow reissues its timetables
+weekly and we loaded when somebody remembered, so the data was eighteen days old with a
+third of its timetables already ended - while every screen in the app looked exactly as
+confident as it does with fresh data.
+
+```bash
+PYTHONPATH=src python -m gabs_scraper.freshness
+```
+
+```
+operator      timetables     last load     age   expired
+gabs                1878    2026-09-05     18d   639 (34%)
+```
+
+`--check` exits non-zero when an operator is past its limit (Golden Arrow 14 days, the
+other two 120, and more than a quarter of an operator's timetables ended), which is what
+makes a scheduled job that quietly stopped working visible.
+
+### Run it on a schedule
+
+`scripts/refresh.ps1` (Windows) and `scripts/refresh.sh` (Linux) load every operator,
+refresh the PDF links, repair positions, rebuild areas and then check freshness. They
+write a log per run and exit non-zero if a step failed or the data is still stale.
+
+```powershell
+schtasks /create /tn "Commuttr refresh" /sc weekly /d SUN /st 03:00 /tr "powershell -ExecutionPolicy Bypass -File C:\path	o\scrapercomm\scriptsefresh.ps1"
+```
+
+```bash
+0 3 * * 0 cd /srv/scrapercomm && ./scripts/refresh.sh >> data/refresh-logs/cron.log 2>&1
+```
+
+Weekly matches Golden Arrow's own cycle. MyCiTi and Metrorail change a few times a year,
+so `-Operators gabs` on the weekly run and everything monthly is also reasonable.
+
+### What a rider sees when it has not run
+
+The planner prefers a timetable that is still valid. Where a service has a current version
+AND an expired one, the expired copy is dropped rather than shown beside it - that used to
+mean times which stopped running weeks ago sat next to times that still do, under one
+route, with nothing to tell them apart. Where **every** copy of a timetable has ended
+(35 of 221 numbers in September 2026) the trip is still offered, because it is the only
+answer we hold, and the trip screen says the timetable ended and gives the date.
 
 ## Reading the search analytics
 

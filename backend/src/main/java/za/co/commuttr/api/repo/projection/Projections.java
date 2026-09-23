@@ -188,6 +188,15 @@ public final class Projections {
         String getOperatorName();
         /** 'bus' or 'train', which is all the UI needs to pick an icon. */
         String getOperatorKind();
+        /**
+         * The last day this timetable is valid, or null for "until further notice".
+         *
+         * Golden Arrow reissues weekly and we load when somebody runs the loader, so a
+         * third of what we hold has a date in the past. Nothing used to look: an expired
+         * version's departures were grouped with the current one's and shown as though
+         * the bus still ran at that time.
+         */
+        java.time.LocalDate getEffectiveTo();
     }
 
     /** Distinct downstream stop reachable from an anchor. */

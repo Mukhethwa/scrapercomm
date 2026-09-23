@@ -209,10 +209,14 @@ def load_page(conn, grid: Grid, *, pdf_path: str, page_number: int,
     cur.execute(
         """
         INSERT INTO timetable (route_id, timetable_number, effective_from, pdf_filename,
-                               pdf_sha256, parse_status)
-        VALUES (%s, %s, %s, %s, %s, 'parsed')
+                               pdf_sha256, parse_status, scraped_at)
+        VALUES (%s, %s, %s, %s, %s, 'parsed', now())
         ON CONFLICT (pdf_filename) DO UPDATE SET
-            route_id = EXCLUDED.route_id, parse_status = 'parsed'
+            route_id = EXCLUDED.route_id, parse_status = 'parsed',
+            -- When the data was last taken from the operator. Without it "how fresh is
+            -- this" could not be answered for trains or MyCiTi at all: the column was
+            -- null for every one of their timetables while Golden Arrow's was filled.
+            scraped_at = now()
         RETURNING id
         """,
         (route_id, None, effective_from(grid.heading), filename, sha),

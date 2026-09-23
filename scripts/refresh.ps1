@@ -1,0 +1,77 @@
+# Reload the operators' timetables, and say so loudly when it does not work.
+#
+#   powershell -ExecutionPolicy Bypass -File scripts\refresh.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts\refresh.ps1 -Operators gabs
+#
+# Nothing refreshed on its own until this existed. Golden Arrow reissues weekly, we
+# loaded when somebody remembered, and on 23 September 2026 the data was 18 days old with
+# a third of its timetables already ended - while every screen in the app looked exactly
+# as confident as it does with fresh data.
+#
+# Schedule it weekly (see README, "Keeping the data fresh"):
+#
+#   schtasks /create /tn "Commuttr refresh" /sc weekly /d SUN /st 03:00 ^
+#     /tr "powershell -ExecutionPolicy Bypass -File C:\path\to\scrapercomm\scripts\refresh.ps1"
+#
+# It is safe to run at any time: each loader upserts, and the API reads whatever is
+# committed. It writes a log per run and exits non-zero if the data is still stale
+# afterwards, so a task that silently stopped working shows up as a failed task.
+
+param(
+    [string[]] $Operators = @("gabs", "myciti", "metrorail"),
+    [string] $LogDir = "data/refresh-logs"
+)
+
+$ErrorActionPreference = "Stop"
+Set-Location (Join-Path $PSScriptRoot "..")
+$env:PYTHONPATH = "src"
+
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+$log = Join-Path $LogDir ("refresh-" + (Get-Date -Format "yyyy-MM-dd-HHmm") + ".log")
+$failed = @()
+
+function Step($name, [scriptblock] $work) {
+    "=== $name ===" | Tee-Object -FilePath $log -Append
+    try {
+        & $work 2>&1 | Tee-Object -FilePath $log -Append
+        if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) { throw "exit $LASTEXITCODE" }
+    } catch {
+        "FAILED: $name - $_" | Tee-Object -FilePath $log -Append
+        $script:failed += $name
+    }
+}
+
+# The database has to be up before anything else is worth trying.
+Step "database" { docker exec gabs_pg psql -U gabs -d gabs -c "SELECT 1" }
+if ($failed.Count -gt 0) {
+    "The database container is not running. Start it with: docker compose up -d" | Tee-Object -FilePath $log -Append
+    exit 1
+}
+
+if ($Operators -contains "gabs") {
+    Step "golden arrow" { python -m gabs_scraper.pipeline }
+    # The PDF links rot faster than anything else: Golden Arrow deletes a file the day it
+    # reissues, so a link loaded last week is a 404 this week.
+    Step "golden arrow pdf links" { python -m gabs_scraper.relink --fix }
+}
+if ($Operators -contains "myciti")    { Step "myciti"    { python -m myciti_scraper.pipeline } }
+if ($Operators -contains "metrorail") { Step "metrorail" { python -m prasa_scraper.pipeline } }
+
+# Positions and areas are built FROM the stops a load creates, so they come after it.
+Step "stop positions" { python -m gabs_scraper.repair_positions }
+Step "station positions" { python -m prasa_scraper.repair_positions --fix }
+Step "areas" { python -m gabs_scraper.areas --from-stops }
+
+"=== freshness ===" | Tee-Object -FilePath $log -Append
+python -m gabs_scraper.freshness --check 2>&1 | Tee-Object -FilePath $log -Append
+$stale = $LASTEXITCODE -ne 0
+
+if ($failed.Count -gt 0) {
+    "`nSteps that failed: $($failed -join ', '). Log: $log" | Tee-Object -FilePath $log -Append
+    exit 1
+}
+if ($stale) {
+    "`nEvery step ran, but the data is still older than its limits. Log: $log" | Tee-Object -FilePath $log -Append
+    exit 2
+}
+"`nDone. Log: $log" | Tee-Object -FilePath $log -Append

@@ -8,18 +8,22 @@ import za.co.commuttr.api.dto.ConnectionDtos.ConnectionFareDto;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionDto;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionLegDto;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionsResponse;
+import za.co.commuttr.api.repo.ScheduleRepository;
 import za.co.commuttr.api.repo.ConnectionRepository;
+import za.co.commuttr.api.repo.TimetableRepository;
 import za.co.commuttr.api.repo.StopRepository;
 import za.co.commuttr.api.repo.projection.Projections.StopRow;
 import za.co.commuttr.api.repo.projection.Projections.ThreeLegRow;
 import za.co.commuttr.api.repo.projection.Projections.TwoLegRow;
 import za.co.commuttr.api.web.ApiException;
 
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 
 /**
@@ -36,6 +40,8 @@ public class ConnectionService {
 
     private final StopRepository stops;
     private final ConnectionRepository connections;
+    private final TimetableRepository timetables;
+    private final ScheduleRepository schedules;
     private final int bufferMinutes;
     /**
      * How many journeys to return, now that they are one per departure.
@@ -50,10 +56,14 @@ public class ConnectionService {
 
     public ConnectionService(StopRepository stops,
                              ConnectionRepository connections,
+                             TimetableRepository timetables,
+                             ScheduleRepository schedules,
                              @Value("${commuttr.connections.transfer-buffer-minutes:10}") int bufferMinutes,
                              @Value("${commuttr.connections.max-results:40}") int maxResults) {
         this.stops = stops;
         this.connections = connections;
+        this.timetables = timetables;
+        this.schedules = schedules;
         this.bufferMinutes = bufferMinutes;
         this.maxResults = maxResults;
     }
@@ -299,6 +309,40 @@ public class ConnectionService {
         return near;
     }
 
+    /**
+     * Journeys whose every leg is a timetable worth showing.
+     *
+     * The direct planner drops a leg from a timetable the operator has since replaced;
+     * this does the same, because a journey is only as current as its oldest leg. Where
+     * every copy of a number has expired it stays, since it is the only answer we hold -
+     * the same rule, and for the same reason.
+     */
+    private List<ConnectionDto> current(List<ConnectionDto> found) {
+        List<Integer> scheduleIds = found.stream()
+                .flatMap(c -> c.legs().stream().map(ConnectionLegDto::scheduleId))
+                .filter(java.util.Objects::nonNull)
+                .distinct().toList();
+        if (scheduleIds.isEmpty()) {
+            return found;
+        }
+        LocalDate today = LocalDate.now();
+        Map<Integer, LocalDate> expiredOn = new HashMap<>();
+        for (var m : schedules.findMeta(scheduleIds)) {
+            if (m.getEffectiveTo() != null && m.getEffectiveTo().isBefore(today)) {
+                expiredOn.put(m.getId(), m.getEffectiveTo());
+            }
+        }
+        if (expiredOn.isEmpty()) {
+            return found;
+        }
+        Set<String> haveCurrent = Set.copyOf(timetables.findCurrentTimetableNumbers());
+        return found.stream()
+                .filter(c -> c.legs().stream().noneMatch(
+                        l -> expiredOn.containsKey(l.scheduleId())
+                                && haveCurrent.contains(l.timetableNumber())))
+                .toList();
+    }
+
     private ConnectionsResponse between(StopRow from, StopRow to) {
         Integer fromId = from.getId();
         Integer toId = to.getId();
@@ -307,8 +351,10 @@ public class ConnectionService {
         if (!twoRows.isEmpty()) {
             Map<Integer, StopRow> coords = coordsFor(
                     twoRows.stream().map(TwoLegRow::getChangeId).toList());
-            List<ConnectionDto> two = twoRows.stream().map(r -> toDto(r, from, to, coords)).toList();
-            return new ConnectionsResponse(StopService.toDto(from), StopService.toDto(to), 2, two);
+            List<ConnectionDto> two = current(twoRows.stream().map(r -> toDto(r, from, to, coords)).toList());
+            if (!two.isEmpty()) {
+                return new ConnectionsResponse(StopService.toDto(from), StopService.toDto(to), 2, two);
+            }
         }
 
         var threeRows = connections.findThreeLegConnections(fromId, toId, bufferMinutes, maxResults);
@@ -316,9 +362,11 @@ public class ConnectionService {
             Map<Integer, StopRow> coords = coordsFor(threeRows.stream()
                     .flatMap(r -> java.util.stream.Stream.of(r.getChangeId(), r.getChange2Id()))
                     .toList());
-            List<ConnectionDto> three = threeRows.stream()
-                    .map(r -> toDto(r, from, to, coords)).toList();
-            return new ConnectionsResponse(StopService.toDto(from), StopService.toDto(to), 3, three);
+            List<ConnectionDto> three = current(threeRows.stream()
+                    .map(r -> toDto(r, from, to, coords)).toList());
+            if (!three.isEmpty()) {
+                return new ConnectionsResponse(StopService.toDto(from), StopService.toDto(to), 3, three);
+            }
         }
 
         // Genuinely unreachable within three buses.

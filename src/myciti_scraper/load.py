@@ -145,11 +145,14 @@ def load_run(conn, run: Run, *, pdf_path: str) -> dict:
     cur.execute(
         """
         INSERT INTO timetable (route_id, timetable_number, pdf_filename, pdf_sha256,
-                               page_count, parse_status)
-        VALUES (%s, %s, %s, %s, %s, 'parsed')
+                               page_count, parse_status, scraped_at)
+        VALUES (%s, %s, %s, %s, %s, 'parsed', now())
         ON CONFLICT (pdf_filename) DO UPDATE SET
             route_id = EXCLUDED.route_id, timetable_number = EXCLUDED.timetable_number,
-            parse_status = 'parsed'
+            parse_status = 'parsed',
+            -- See prasa_scraper.load: "how fresh is this" has to be answerable per
+            -- operator, and it was not for this one.
+            scraped_at = now()
         RETURNING id
         """,
         (route_id, run.route, key, sha, len(run.pages)),

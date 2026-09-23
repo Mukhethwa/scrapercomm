@@ -165,7 +165,17 @@ public final class PlanDtos {
                                  */
                                 Long boardAwayM,
                                 Long alightAwayM,
-                                FareDto fare) { }
+                                FareDto fare,
+                                /**
+                                 * The day this timetable stopped being valid, when we
+                                 * hold nothing newer for it. Null means what we hold is
+                                 * current, which is the normal case.
+                                 *
+                                 * A rider can then be told the times are from a
+                                 * timetable the operator has since replaced, instead of
+                                 * being shown them as though the bus still runs.
+                                 */
+                                String timetableExpiredOn) { }
 
     /** from/to is a StopDto for a named stop, or a PinDto for a lat/lon pin. */
     public record PlanResponse(@JsonProperty("from") Object from,

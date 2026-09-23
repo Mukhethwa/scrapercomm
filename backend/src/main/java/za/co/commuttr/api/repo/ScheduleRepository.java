@@ -45,7 +45,8 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Integer> {
                    t.timetable_number AS "timetableNumber",
                    o.code             AS "operatorCode",
                    o.name             AS "operatorName",
-                   o.kind             AS "operatorKind"
+                   o.kind             AS "operatorKind",
+                   t.effective_to     AS "effectiveTo"
             FROM schedule sc
             JOIN timetable t ON t.id = sc.timetable_id
             JOIN route r     ON r.id = t.route_id

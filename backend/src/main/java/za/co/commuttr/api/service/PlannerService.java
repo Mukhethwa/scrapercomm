@@ -39,6 +39,7 @@ import za.co.commuttr.api.repo.projection.Projections.StopRow;
 import za.co.commuttr.api.repo.projection.Projections.TripStopRow;
 import za.co.commuttr.api.web.ApiException;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,6 +49,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.TreeMap;
 
@@ -690,6 +692,8 @@ public class PlannerService {
 
     private static final class PlanGroup {
         String timetableNumber;
+        /** Set only when every version we hold of this timetable has lapsed. */
+        LocalDate expiredOn;
         String routeLabel;
         String operatorCode;
         String operatorName;
@@ -895,6 +899,23 @@ public class PlannerService {
             }
         }
 
+        // Which timetable numbers we hold a version of that is still valid today.
+        //
+        // Golden Arrow reissues weekly; we load when somebody runs the loader. 639 of the
+        // 2,140 timetables in the database have an end date in the past, and nothing here
+        // used to look at it: the old version's departures were grouped with the new
+        // one's under the same number, so a rider saw times that stopped running weeks
+        // ago sitting beside times that still do, with nothing to tell them apart.
+        //
+        // Where a current version exists, the expired one is dropped. Where every version
+        // has expired - 35 of 221 numbers - the service is still the only answer we have,
+        // so it is kept and the option carries the date it lapsed.
+        LocalDate today = LocalDate.now();
+        Set<String> haveCurrent = meta.values().stream()
+                .filter(m -> m.getEffectiveTo() == null || !m.getEffectiveTo().isBefore(today))
+                .map(ScheduleMetaRow::getTimetableNumber)
+                .collect(Collectors.toSet());
+
         Map<GroupKey, PlanGroup> groups = new LinkedHashMap<>();
         Map<Integer, List<PlanSegmentStopDto>> segmentCache = new HashMap<>();
         Map<Long, double[][]> legCache = new HashMap<>();
@@ -902,6 +923,10 @@ public class PlannerService {
         for (Candidate c : candidates) {
             ScheduleMetaRow m = meta.get(c.key().scheduleId());
             if (m == null) {
+                continue;
+            }
+            boolean expired = m.getEffectiveTo() != null && m.getEffectiveTo().isBefore(today);
+            if (expired && haveCurrent.contains(m.getTimetableNumber())) {
                 continue;
             }
             // A departure nobody can be told to be there for is not a departure.
@@ -929,6 +954,7 @@ public class PlannerService {
                         id -> segment(id, c.board().position(), c.alight().position()));
                 g = new PlanGroup();
                 g.timetableNumber = m.getTimetableNumber();
+                g.expiredOn = expired ? m.getEffectiveTo() : null;
                 g.routeLabel = m.getDirectionLabel();
                 // Everything loaded before operators existed is Golden Arrow; the column
                 // is backfilled, but a left join still has to answer for a route that
@@ -987,7 +1013,8 @@ public class PlannerService {
                     // no walk at all and comes through as zero.
                     g.boardAwayM >= 100 ? Math.round(g.boardAwayM) : null,
                     g.alightAwayM >= 100 ? Math.round(g.alightAwayM) : null,
-                    fare));
+                    fare,
+                    g.expiredOn == null ? null : g.expiredOn.toString()));
         }
         options.sort(Comparator
                 .comparingInt((PlanOptionDto o) -> DayTypes.order(o.dayType()))

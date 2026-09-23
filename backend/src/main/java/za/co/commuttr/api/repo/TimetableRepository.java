@@ -14,6 +14,22 @@ import java.util.Optional;
 @Repository
 public interface TimetableRepository extends JpaRepository<Timetable, Integer> {
 
+    /**
+     * The timetable numbers we hold a version of that is still valid today.
+     *
+     * Golden Arrow reissues weekly and the loader runs when somebody runs it, so a third
+     * of what we hold ended weeks ago. A number that appears here has a current
+     * timetable, which makes an expired copy of it a copy nobody should be shown. A
+     * number that does NOT appear has only expired copies, and that is still the best
+     * answer we have for the bus, said with the date it lapsed.
+     */
+    @Query(value = QUERY_CURRENT_NUMBERS, nativeQuery = true)
+    List<String> findCurrentTimetableNumbers();
+
+    String QUERY_CURRENT_NUMBERS = "SELECT DISTINCT timetable_number FROM timetable "
+            + "WHERE timetable_number IS NOT NULL "
+            + "AND (effective_to IS NULL OR effective_to >= current_date)";
+
     /** GET /api/routes/{id} -> timetables[]. raw_text is deliberately not selected. */
     @Query(value = """
             SELECT id                AS "id",
