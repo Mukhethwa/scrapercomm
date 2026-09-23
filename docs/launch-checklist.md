@@ -115,6 +115,13 @@ a year and cost little to include. The run exits non-zero if a step failed and 2
 everything ran but the data is still stale, so a scheduler that reports failures reports
 both. Every run is also a row in `refresh_run`, visible on the dashboard.
 
+One operator is not actually automatic. `prasa_scraper.sheets` reads the spreadsheets in
+`data/prasa/xlsx`; nothing downloads them, so a weekly refresh re-reads the same files PRASA
+published in September and writes a new `scraped_at` each time. `/api/status` would then
+report Metrorail as fresh forever. Until something fetches them, put a calendar reminder
+against https://www.prasa.com/train-schedules/cape-town and drop new spreadsheets into that
+folder by hand. Golden Arrow and MyCiTi do fetch their own.
+
 Three things that make this safe to run against a live database:
 
 - **The app stays up during a load.** Postgres readers do not see a writer's uncommitted
@@ -151,5 +158,8 @@ Written down so they are decisions rather than surprises:
 - **The React web app** still shows Golden Arrow cash prices and no MyCiTi fares. The
   Flutter app is correct. Either fix it or take it down before launch, because it
   contradicts the app.
+- **Metrorail spreadsheets are fetched by hand** (section 5), so train timetables go stale
+  silently while the status page calls them fresh. A downloader for
+  prasa.com/train-schedules/cape-town is the fix.
 - **No second pair of hands.** One person holds the signing key, the admin token, the
   database and the support inbox. Write down where each lives.

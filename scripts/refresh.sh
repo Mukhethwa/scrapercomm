@@ -66,7 +66,12 @@ case " ${operators[*]} " in *" myciti "*)
   # The City publishes every MyCiTi stop with its coordinates; none has to be guessed at.
   step "myciti positions" python -m myciti_scraper.official_positions --fix
 ;; esac
-case " ${operators[*]} " in *" metrorail "*) step "metrorail" python -m prasa_scraper.pipeline ;; esac
+# prasa_scraper.sheets, not prasa_scraper.pipeline. PRASA publishes every Cape Town
+# timetable as a spreadsheet, where the times are real values; the pipeline beside it reads
+# the PDFs by OCR and is the fallback for services published only as images. The sheets
+# give all 16 timetables both ways including Saturdays, the OCR path 6 inbound-only ones -
+# so a refresh that ran the OCR path would quietly take away every homeward train.
+case " ${operators[*]} " in *" metrorail "*) step "metrorail" python -m prasa_scraper.sheets ;; esac
 
 # The planner's precomputed floors and ceilings are a pure function of the departures any
 # of the three loaders just wrote, so they are rebuilt once here rather than recomputed on

@@ -88,7 +88,12 @@ if ($Operators -contains "myciti") {
     # be guessed at: this places the ones OpenStreetMap does not have.
     Step "myciti positions" { python -m myciti_scraper.official_positions --fix }
 }
-if ($Operators -contains "metrorail") { Step "metrorail" { python -m prasa_scraper.pipeline } }
+# prasa_scraper.sheets, not prasa_scraper.pipeline. PRASA publishes every Cape Town
+# timetable as a spreadsheet, where the times are real values; the pipeline beside it reads
+# the PDFs by OCR and is the fallback for services published only as images. The sheets
+# give all 16 timetables both ways including Saturdays, the OCR path 6 inbound-only ones -
+# so a refresh that ran the OCR path would quietly take away every homeward train.
+if ($Operators -contains "metrorail") { Step "metrorail" { python -m prasa_scraper.sheets } }
 
 # The planner's precomputed floors and ceilings are a pure function of the departures any
 # of the three loaders just wrote, so they are rebuilt once here rather than recomputed on
