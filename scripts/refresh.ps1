@@ -46,16 +46,30 @@ function Step($name, [scriptblock] $work) {
     }
 }
 
-# The database has to be up before anything else is worth trying.
-Step "database" { docker exec gabs_pg psql -U gabs -d gabs -c "SELECT 1" }
-if ($failed.Count -gt 0) {
-    "The database container is not running. Start it with: docker compose up -d" | Tee-Object -FilePath $log -Append
-    exit 1
-}
+# Where the database is. On a development machine it is the docker container; in
+# production it is whatever DATABASE_URL points at, which is usually managed Postgres with
+# no container to exec into. Use psql directly when there is a URL and a psql to give it
+# to, and fall back to the container otherwise, so a developer's machine needs no change.
+#
+# The loaders read DATABASE_URL themselves (gabs_scraper.config), so setting that one
+# variable moves this whole script onto the production database.
+$container = if ($env:CONTAINER) { $env:CONTAINER } else { "gabs_pg" }
+$direct = $env:DATABASE_URL -and (Get-Command psql -ErrorAction SilentlyContinue)
+$dbWhere = if ($direct) { "DATABASE_URL" } else { "container $container" }
 
 function Sql($statement) {
-    docker exec gabs_pg psql -U gabs -d gabs -At -c $statement
+    if ($direct) { psql $env:DATABASE_URL -At -c $statement }
+    else { docker exec $container psql -U gabs -d gabs -At -c $statement }
 }
+
+# The database has to be up before anything else is worth trying.
+Step "database" { Sql "SELECT 1" }
+if ($failed.Count -gt 0) {
+    "No database answering at $dbWhere." | Tee-Object -FilePath $log -Append
+    "Locally: docker compose up -d. On a server: set DATABASE_URL and install psql." | Tee-Object -FilePath $log -Append
+    exit 1
+}
+"database: $dbWhere" | Tee-Object -FilePath $log -Append
 
 # The run goes on the record before it starts, so the dashboard can show one in progress
 # and, if this machine dies mid-load, an unfinished row rather than silence.
@@ -75,6 +89,12 @@ if ($Operators -contains "myciti") {
     Step "myciti positions" { python -m myciti_scraper.official_positions --fix }
 }
 if ($Operators -contains "metrorail") { Step "metrorail" { python -m prasa_scraper.pipeline } }
+
+# The planner's precomputed floors and ceilings are a pure function of the departures any
+# of the three loaders just wrote, so they are rebuilt once here rather than recomputed on
+# every search. Stale, it would answer with the last load's times - so it runs every time,
+# whichever operator ran. It reports and does nothing if the view has not been created.
+Step "planner context" { python -m gabs_scraper.context --fix }
 
 # Positions and areas are built FROM the stops a load creates, so they come after it.
 Step "stop positions" { python -m gabs_scraper.repair_positions }

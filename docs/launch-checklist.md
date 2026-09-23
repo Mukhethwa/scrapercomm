@@ -77,18 +77,68 @@ not a developer:
 The policy also now says aggregate counts may be sold. That sentence is what makes the
 data business legal and it is the sentence a regulator would read first. Have it reviewed.
 
-## 5. Watching it once it is live
+## 5. Keeping the production database fed
+
+Nothing about the loaders is tied to this laptop except the database they open. They read
+`DATABASE_URL`, so pointing them at production is one environment variable — but that
+variable has to be set somewhere that runs on a schedule, and that is a decision nobody has
+made yet.
+
+**Run them on the server that holds the database, not from here.** A Golden Arrow load is
+~2,900 PDFs, takes about two hours and writes roughly a million rows. Over a home
+connection to a remote database that is slow and easy to interrupt half way; on the same
+host as Postgres it is the same two hours with nothing in between to drop. The loaders need
+Python, the `requirements.txt`, ~40 MB of PDFs on a disk that survives a redeploy
+(`GABS_DATA_DIR`), and `psql`/`pg_dump` on PATH.
+
+```bash
+export DATABASE_URL=postgresql://user:pass@host:5432/commuttr
+export COMMUTTR_API_URL=https://api.commuttr.co.za
+export COMMUTTR_ADMIN_TOKEN=…        # so the load can tell the API to re-read its caches
+./scripts/refresh.sh                  # all three operators
+```
+
+With `DATABASE_URL` set, `refresh.sh` and `backup.sh` use `psql` directly; without it they
+fall back to the local docker container, which is what a development machine has. Same
+script either way — the production path must not be a second script nobody runs.
+
+In crontab on that host, backup first so there is always a restore point in front of a
+load that rewrites the timetables:
+
+```
+0 2 * * *  cd /srv/scrapercomm && ./scripts/backup.sh  >> data/backups/cron.log 2>&1
+0 3 * * 0  cd /srv/scrapercomm && ./scripts/refresh.sh >> data/refresh-logs/cron.log 2>&1
+```
+
+Weekly is set by Golden Arrow, who reissue weekly; MyCiTi and Metrorail change a few times
+a year and cost little to include. The run exits non-zero if a step failed and 2 if
+everything ran but the data is still stale, so a scheduler that reports failures reports
+both. Every run is also a row in `refresh_run`, visible on the dashboard.
+
+Three things that make this safe to run against a live database:
+
+- **The app stays up during a load.** Postgres readers do not see a writer's uncommitted
+  work, and each loader replaces its own operator inside one transaction. This was tested
+  by deleting every MyCiTi departure in an open transaction — the API kept returning MyCiTi
+  journeys throughout.
+- **A loader may only delete its own operator's data.** It could not always: until 23
+  September a Golden Arrow load pruned every timetable not in *its* manifest, which took
+  Metrorail from 16 timetables to 4. Scheduled weekly, that bug would have run weekly.
+- **The backup runs first and verifies itself**, because the PDFs behind the data are
+  deleted by the operators when they reissue. A lost database is not a re-run; it is gone.
+
+## 6. Watching it once it is live
 
 - `GET /api/status` is public and says whether each operator's data is inside its age
   limit. Point an uptime monitor at it and alert on `status != "ok"` — that catches a
   dead API *and* a loader that quietly stopped, which `/api/health` does not.
-- `scripts/refresh.ps1` weekly (Golden Arrow reissues weekly), `scripts/backup.ps1` daily.
+- The schedule from section 5, on the server. Check `refresh_run` has a row each week.
 - The operations dashboard at `/api/admin/page` shows the same, plus what riders searched
   and what they searched for and never found.
 - `app_error` fills up when a build is broken. Check it after every release; a spike in
   one message is a regression with a stack trace attached.
 
-## 6. Known gaps at launch
+## 7. Known gaps at launch
 
 Written down so they are decisions rather than surprises:
 

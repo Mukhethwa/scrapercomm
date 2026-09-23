@@ -21,9 +21,18 @@ file="$out/commuttr-$(date +%Y-%m-%d-%H%M).sql.gz"
 
 # Analytics is excluded: large, rebuilt by use, and it would spread anonymous ids into
 # every copy of the file.
-docker exec "$container" pg_dump -U gabs -d gabs --no-owner --no-privileges \
-  --exclude-table=search_analytics --exclude-table=search_analytics_option \
-  --exclude-table=place_search --exclude-table=app_error | gzip -9 > "$file.tmp"
+excludes=(--exclude-table=search_analytics --exclude-table=search_analytics_option
+          --exclude-table=place_search --exclude-table=app_error)
+
+# In production the database is whatever DATABASE_URL points at and there is no container
+# to exec into, so use pg_dump directly when there is one. The container is the fallback,
+# which is what a development machine has.
+if [ -n "${DATABASE_URL:-}" ] && command -v pg_dump >/dev/null 2>&1; then
+  pg_dump "$DATABASE_URL" --no-owner --no-privileges "${excludes[@]}" | gzip -9 > "$file.tmp"
+else
+  docker exec "$container" pg_dump -U gabs -d gabs --no-owner --no-privileges \
+    "${excludes[@]}" | gzip -9 > "$file.tmp"
+fi
 
 if [ ! -s "$file.tmp" ] || [ "$(stat -c%s "$file.tmp")" -lt 1000000 ]; then
   echo "The dump is missing or far too small - not replacing anything." >&2

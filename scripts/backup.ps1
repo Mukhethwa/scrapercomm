@@ -14,6 +14,10 @@
 #
 # It verifies each dump by reading it back before it deletes any older one, so a run that
 # quietly produced a broken file cannot be the run that clears the last good copy.
+#
+# This one dumps from a local docker container, which is what a development machine has.
+# The production database has no container to exec into: back that up with scripts/backup.sh
+# on the server, which uses DATABASE_URL when it is set.
 
 param(
     [string] $Out = "data/backups",
