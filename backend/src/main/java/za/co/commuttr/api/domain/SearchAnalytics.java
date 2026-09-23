@@ -61,12 +61,24 @@ public class SearchAnalytics {
     @Column(name = "searched_at", nullable = false)
     private OffsetDateTime searchedAt;
 
+    /** A random value the app made on first launch, or null when sharing is off. */
+    @Column(name = "device_id")
+    private String deviceId;
+
+    @Column(name = "client")
+    private String client;
+
+    /** The app answered this one from its own saved copy and reported it afterwards. */
+    @Column(name = "cached", nullable = false)
+    private boolean cached;
+
     protected SearchAnalytics() { }
 
     public SearchAnalytics(String endpoint,
                            String fromKind, Integer fromStopId, Double fromLat, Double fromLon,
                            String toKind, Integer toStopId, Double toLat, Double toLon,
-                           int optionCount, Long durationMs, OffsetDateTime searchedAt) {
+                           int optionCount, Long durationMs, OffsetDateTime searchedAt,
+                           String deviceId, String client, boolean cached) {
         this.endpoint = endpoint;
         this.fromKind = fromKind;
         this.fromStopId = fromStopId;
@@ -79,10 +91,16 @@ public class SearchAnalytics {
         this.optionCount = optionCount;
         this.durationMs = durationMs;
         this.searchedAt = searchedAt;
+        this.deviceId = deviceId;
+        this.client = client;
+        this.cached = cached;
     }
 
     public Long getId() { return id; }
     public String getEndpoint() { return endpoint; }
     public int getOptionCount() { return optionCount; }
     public OffsetDateTime getSearchedAt() { return searchedAt; }
+    public String getDeviceId() { return deviceId; }
+    public String getClient() { return client; }
+    public boolean isCached() { return cached; }
 }

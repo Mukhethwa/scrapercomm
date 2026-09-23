@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.commuttr.api.domain.SearchAnalytics;
 import za.co.commuttr.api.domain.SearchAnalyticsOption;
+import za.co.commuttr.api.domain.PlaceSearch;
+import za.co.commuttr.api.repo.PlaceSearchRepository;
 import za.co.commuttr.api.repo.SearchAnalyticsOptionRepository;
 import za.co.commuttr.api.repo.SearchAnalyticsRepository;
 import za.co.commuttr.api.service.EndpointRef;
@@ -34,14 +36,33 @@ public class SearchAnalyticsListener {
 
     private final SearchAnalyticsRepository searches;
     private final SearchAnalyticsOptionRepository options;
+    private final PlaceSearchRepository placeSearches;
     private final boolean enabled;
 
     public SearchAnalyticsListener(SearchAnalyticsRepository searches,
                                    SearchAnalyticsOptionRepository options,
+                                   PlaceSearchRepository placeSearches,
                                    @Value("${commuttr.analytics.enabled:true}") boolean enabled) {
         this.searches = searches;
         this.options = options;
+        this.placeSearches = placeSearches;
         this.enabled = enabled;
+    }
+
+    /** Same rules as a journey search: off the request thread, and never fatal. */
+    @Async
+    @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onPlaceSearch(PlaceSearchEvent event) {
+        if (!enabled) {
+            return;
+        }
+        try {
+            placeSearches.save(new PlaceSearch(event.deviceId(), event.client(), event.query(),
+                    event.resultCount(), event.chosenStopId(), event.searchedAt()));
+        } catch (RuntimeException ex) {
+            log.warn("Could not record a place search: {}", ex.toString());
+        }
     }
 
     @Async
@@ -67,7 +88,10 @@ public class SearchAnalyticsListener {
                     to == null ? null : to.lon(),
                     event.optionCount(),
                     event.durationMs(),
-                    event.searchedAt()));
+                    event.searchedAt(),
+                    event.deviceId(),
+                    event.client(),
+                    event.cached()));
 
             // One row per option, so "which routes are people searching for" is a
             // GROUP BY rather than a question the data cannot answer.

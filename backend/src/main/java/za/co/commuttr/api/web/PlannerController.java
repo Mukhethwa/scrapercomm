@@ -1,9 +1,11 @@
 package za.co.commuttr.api.web;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import za.co.commuttr.api.analytics.SearchAnalyticsEvent;
 import za.co.commuttr.api.dto.ConnectionDtos.ConnectionsResponse;
 import za.co.commuttr.api.dto.JourneyDtos.JourneysResponse;
 import za.co.commuttr.api.dto.PlanDtos.GeocodeResponse;
@@ -30,15 +32,18 @@ public class PlannerController {
     private final PlannerService planner;
     private final GeocodeService geocodeService;
     private final ConnectionService connectionService;
+    private final ApplicationEventPublisher events;
 
     public PlannerController(JourneyService journeyService,
                              PlannerService planner,
                              GeocodeService geocodeService,
-                             ConnectionService connectionService) {
+                             ConnectionService connectionService,
+                             ApplicationEventPublisher events) {
         this.journeyService = journeyService;
         this.planner = planner;
         this.geocodeService = geocodeService;
         this.connectionService = connectionService;
+        this.events = events;
     }
 
     /** Direct single-bus journeys, grouped by connecting schedule. */
@@ -92,8 +97,26 @@ public class PlannerController {
             @RequestParam(value = "operator", required = false) String operator,
             @RequestParam(value = "from_name", required = false) String fromName,
             @RequestParam(value = "to_name", required = false) String toName) {
-        return connectionService.connections(from, fromLat, fromLon, fromName, to, toLat, toLon, toName,
+        long started = System.currentTimeMillis();
+        ConnectionsResponse answer = connectionService.connections(
+                from, fromLat, fromLon, fromName, to, toLat, toLon, toName,
                 operator == null || operator.isBlank() ? null : operator);
+
+        // Recorded like a direct search. Journeys with a change were the one question
+        // riders asked that left no trace at all, and they are the answer whenever two
+        // operators have to be compared - so the demand they show is the demand for a
+        // network that does not exist yet.
+        events.publishEvent(SearchAnalyticsEvent.of(
+                "/api/connections",
+                EndpointRef.of(from, fromLat, fromLon).withName(fromName),
+                EndpointRef.of(to, toLat, toLon).withName(toName),
+                answer.connections().stream()
+                        .flatMap(c -> c.legs().stream()
+                                .map(l -> new SearchAnalyticsEvent.OptionSummary(
+                                        l.timetableNumber(), l.routeLabel(), c.dayType(), 1)))
+                        .toList(),
+                System.currentTimeMillis() - started));
+        return answer;
     }
 
     /** Legs whose real road path passes near a point. */

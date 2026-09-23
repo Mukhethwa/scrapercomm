@@ -23,7 +23,10 @@ public record SearchAnalyticsEvent(String endpoint,
                                    EndpointRef to,
                                    List<OptionSummary> options,
                                    long durationMs,
-                                   OffsetDateTime searchedAt) {
+                                   OffsetDateTime searchedAt,
+                                   String deviceId,
+                                   String client,
+                                   boolean cached) {
 
     /**
      * One returned option, reduced to what identifies the physical service. Both
@@ -43,9 +46,28 @@ public record SearchAnalyticsEvent(String endpoint,
         return options.size();
     }
 
+    /**
+     * Built on the request thread, which is why it reads {@link ClientContext} here: the
+     * row is written on another thread, where the request no longer exists.
+     */
     public static SearchAnalyticsEvent of(String endpoint, EndpointRef from, EndpointRef to,
                                           List<OptionSummary> options, long durationMs) {
         return new SearchAnalyticsEvent(endpoint, from, to, options, durationMs,
-                OffsetDateTime.now());
+                OffsetDateTime.now(), ClientContext.deviceId(), ClientContext.client(), false);
+    }
+
+    /**
+     * A trip the app answered from the copy saved on the phone and reported afterwards.
+     *
+     * <p>No options are known - the app did not ask us - so the count stands in for them,
+     * and {@code cached} marks the row so a query can count real demand or server load
+     * without one being mistaken for the other.
+     */
+    public static SearchAnalyticsEvent cached(String endpoint, EndpointRef from, EndpointRef to,
+                                              int optionCount) {
+        List<OptionSummary> options = java.util.Collections.nCopies(
+                Math.max(0, optionCount), new OptionSummary(null, null, null, 0));
+        return new SearchAnalyticsEvent(endpoint, from, to, options, 0L,
+                OffsetDateTime.now(), ClientContext.deviceId(), ClientContext.client(), true);
     }
 }

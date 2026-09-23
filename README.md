@@ -598,18 +598,50 @@ Recording happens in the background and never slows a search down.
 
 ### What gets recorded
 
-Two tables:
+Three tables:
 
 | Table | One row per | Tells you |
 | --- | --- | --- |
-| `search_analytics` | search | where they searched from and to, how many results came back, how long it took |
+| `search_analytics` | search | where they searched from and to, how many results came back, how long it took, which app asked, and whether the phone answered it from its own saved copy |
 | `search_analytics_option` | route offered | **which** routes came back, and how many departures each had |
+| `place_search` | search of the stop list | what somebody typed, how many matches there were, and which stop they picked — including the searches that found nothing |
 
 The second table is what makes "which routes are people searching for?" answerable. The
-first only counts results; it doesn't say which.
+first only counts results; it doesn't say which. The third is the half that used to be
+invisible: stop and place search runs on the phone, so a place nobody can find never
+reached us, and a place nobody can find is either a gap in the network or a name we spell
+differently from the people who use it.
 
-> Nothing is recorded about *who* searched — no names, no accounts, no session tracking.
-> These are counts of searches, not of people.
+`/api/plan`, `/api/journeys` and `/api/connections` are all recorded. Journeys with a
+change were missing until September 2026, which hid every trip that needs two operators —
+exactly the demand that argues for a network that does not exist yet.
+
+> **What is recorded about who searched.** No name, no account, no email, no IP address.
+> The app makes a random id on first launch and sends it as `X-Commuttr-Device`, so ten
+> searches from one phone can be counted as one person rather than ten. A rider turns it
+> off in Preferences → Privacy, which stops it being sent and deletes the id, so coming
+> back counts as a new phone. `device_id` is for counting people, never for following one:
+> keep it out of anything published, and strip it from rows older than a year.
+
+### How many people, not how many searches
+
+```sql
+SELECT count(DISTINCT device_id) AS phones, count(*) AS searches
+FROM search_analytics
+WHERE searched_at > now() - interval '30 days' AND device_id IS NOT NULL;
+```
+
+`cached = true` marks a trip the app answered from the phone while offline and reported
+afterwards. Count it for demand, leave it out when you are measuring the server.
+
+### What people looked for and did not find
+
+```sql
+SELECT lower(query) AS looked_for, count(*) AS times
+FROM place_search
+WHERE result_count = 0 AND searched_at > now() - interval '30 days'
+GROUP BY 1 ORDER BY times DESC LIMIT 20;
+```
 
 ### Which routes are commuters searching for?
 
