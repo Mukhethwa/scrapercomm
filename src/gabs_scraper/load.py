@@ -123,6 +123,43 @@ def _upsert_timetable(
     return cur.fetchone()[0]
 
 
+def already_loaded(conn) -> dict[str, str]:
+    """The sha256 of every PDF whose timetable is fully parsed and in the database.
+
+    A load re-parsed all 2,874 Golden Arrow PDFs every run - two hours - although the
+    operator reissues a handful a week and we already store the checksum of the file each
+    timetable came from. Same bytes, same timetable: there is nothing to work out again.
+
+    Only rows that parsed count. A timetable whose parse failed has its sha256 stored too,
+    and skipping that one would make the failure permanent.
+    """
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT t.pdf_filename, t.pdf_sha256
+        FROM timetable t
+        WHERE t.pdf_sha256 IS NOT NULL
+          AND t.parse_status = 'parsed'
+          AND EXISTS (SELECT 1 FROM schedule s WHERE s.timetable_id = t.id)
+    """)
+    out = {name: sha for name, sha in cur.fetchall()}
+    cur.close()
+    return out
+
+
+def touch_timetable(conn, pdf_filename: str) -> None:
+    """Record that we checked this PDF against the operator today and it had not changed.
+
+    Without this a skipped timetable keeps its old scraped_at, and freshness - which is
+    what /api/status reports and what the age limits are measured against - would call
+    data stale that we had just confirmed was current.
+    """
+    cur = conn.cursor()
+    cur.execute("UPDATE timetable SET scraped_at = %s WHERE pdf_filename = %s",
+                (datetime.now(timezone.utc), pdf_filename))
+    cur.close()
+    conn.commit()
+
+
 def prune_superseded(conn, entries: list[ManifestEntry]) -> tuple[int, int]:
     """Delete timetables GABS no longer publishes, and any route left with none.
 

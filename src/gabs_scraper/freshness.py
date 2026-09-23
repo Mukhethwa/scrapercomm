@@ -23,10 +23,17 @@ from . import db
 
 # How long each operator's data may go without a load before it is called stale.
 #
-# Golden Arrow reissues weekly, so a fortnight is already two cycles behind. The other two
-# change a few times a year and their timetables carry no end date, so the bar is the load
-# itself rather than what it contains.
-MAX_AGE_DAYS = {"gabs": 14, "myciti": 120, "metrorail": 120}
+# These have to sit ABOVE the refresh interval, not on it. With the refresh running
+# fortnightly, a 14-day limit is reached in the hours before the next run, so every
+# fortnight the status page would report stale data that is about to be replaced - and an
+# alert that cries wolf on schedule is an alert nobody reads. 18 days is the fortnight plus
+# four days, which is room for one run to fail and be noticed before anybody is woken.
+#
+# Golden Arrow reissues weekly, so fortnightly is already a cycle behind; what saves it is
+# that the expired-timetable share below is checked too, and the planner hides a timetable
+# that has ended when a current one exists. The other two operators change a few times a
+# year and their timetables carry no end date, so for them the bar is the load itself.
+MAX_AGE_DAYS = {"gabs": 18, "myciti": 120, "metrorail": 120}
 
 # What share of an operator's timetables may have ended before we call it stale.
 #

@@ -8,9 +8,9 @@
 # a third of its timetables already ended - while every screen in the app looked exactly
 # as confident as it does with fresh data.
 #
-# Schedule it weekly (see README, "Keeping the data fresh"):
+# Schedule it fortnightly (see README, "Keeping the data fresh"):
 #
-#   schtasks /create /tn "Commuttr refresh" /sc weekly /d SUN /st 03:00 ^
+#   schtasks /create /tn "Commuttr refresh" /sc weekly /mo 2 /d SUN /st 03:00 ^
 #     /tr "powershell -ExecutionPolicy Bypass -File C:\path\to\scrapercomm\scripts\refresh.ps1"
 #
 # It is safe to run at any time: each loader upserts, and the API reads whatever is

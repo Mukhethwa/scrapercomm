@@ -59,18 +59,31 @@ def do_prune(entries):
     return gone_tt, gone_routes, gone_pdfs
 
 
-def do_load(entries, workers, force):
+def do_load(entries, workers, force, reparse=False):
     results = dl_mod.download_all(entries, workers=workers, force=force)
     by_name = {r.pdf_filename: r for r in results}
 
     conn = db.connect()
     db.apply_schema(conn)  # safety net; schema also applied at container init
 
-    n_ok = n_fail = 0
+    # Golden Arrow reissues a handful of timetables a week and republishes the rest
+    # byte for byte, but every run re-parsed all of them: 2,874 PDFs, 7,288 seconds. The
+    # checksum of the file each timetable came from is already stored, so an unchanged
+    # file has nothing left to work out. --reparse forces the old behaviour, which is
+    # what you want after a change to the parser itself.
+    loaded_sha = {} if reparse else load_mod.already_loaded(conn)
+
+    n_ok = n_fail = n_same = 0
     failures: list[tuple[str, str]] = []
     t0 = time.time()
     for i, e in enumerate(entries, 1):
         r = by_name.get(e.pdf_filename)
+        if r is not None and r.ok and r.sha256 and loaded_sha.get(e.pdf_filename) == r.sha256:
+            # Checked against the operator today and unchanged, so say so: freshness is
+            # measured from scraped_at and this timetable is as current as a re-parsed one.
+            load_mod.touch_timetable(conn, e.pdf_filename)
+            n_same += 1
+            continue
         if r is None or not r.ok:
             try:
                 load_mod.load_failed(conn, e, r, error=(r.error if r else "not downloaded"))
@@ -95,7 +108,8 @@ def do_load(entries, workers, force):
             print(f"   loaded {i}/{len(entries)} ...", flush=True)
 
     conn.close()
-    print(f"[load] parsed_ok={n_ok} failed={n_fail} in {time.time() - t0:.0f}s")
+    print(f"[load] parsed_ok={n_ok} unchanged={n_same} failed={n_fail} "
+          f"in {time.time() - t0:.0f}s")
     for f, err in failures[:25]:
         print(f"   FAILED {f}: {err}")
     return n_ok, n_fail
@@ -110,6 +124,9 @@ def main(argv=None):
     ap.add_argument("--limit", type=int, default=None, help="cap entries (smoke test)")
     ap.add_argument("--workers", type=int, default=12, help="download concurrency")
     ap.add_argument("--force", action="store_true", help="re-download existing PDFs")
+    ap.add_argument("--reparse", action="store_true",
+                    help="parse every PDF again, even ones whose bytes have not "
+                         "changed since they were loaded (use after a parser change)")
     ap.add_argument(
         "--no-prune", action="store_true",
         help="keep timetables GABS no longer publishes (default is to delete them)",
@@ -132,7 +149,7 @@ def main(argv=None):
     if do_d and not do_l:
         do_download(entries, args.workers, args.force)
     if do_l:
-        do_load(entries, args.workers, args.force)
+        do_load(entries, args.workers, args.force, reparse=args.reparse)
         # Prune only after a successful full load. With --limit the entry list is a
         # sample, so pruning against it would delete almost the whole database.
         if limited:

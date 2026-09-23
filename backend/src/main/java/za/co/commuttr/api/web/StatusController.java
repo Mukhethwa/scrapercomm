@@ -32,11 +32,17 @@ public class StatusController {
     /**
      * How old each operator's data may be before this reports it stale.
      *
-     * The same numbers as gabs_scraper.freshness, for the same reason: Golden Arrow
-     * reissues weekly, the other two change a few times a year.
+     * The same numbers as gabs_scraper.freshness, and they must stay the same: a monitor
+     * watching this endpoint and an operator running that command should not disagree
+     * about whether the data is current.
+     *
+     * <p>They sit above the refresh interval rather than on it. The refresh runs
+     * fortnightly, so a 14-day limit would be reached in the hours before each run and
+     * this would report stale data every fortnight, on schedule, for data about to be
+     * replaced. 18 days leaves room for one run to fail and be noticed.
      */
     private static final Map<String, Integer> MAX_AGE_DAYS =
-            Map.of("gabs", 14, "myciti", 120, "metrorail", 120);
+            Map.of("gabs", 18, "myciti", 120, "metrorail", 120);
 
     private final EntityManager em;
 

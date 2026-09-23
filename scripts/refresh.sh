@@ -4,9 +4,11 @@
 #   ./scripts/refresh.sh            # every operator
 #   ./scripts/refresh.sh gabs       # one of them
 #
-# Weekly, in crontab, with the output kept:
+# Fortnightly, in crontab, with the output kept. The 1st and the 15th rather than an
+# interval, because cron has no fortnight and */14 on the day of the month restarts every
+# month; these two dates are predictable and never drift:
 #
-#   0 3 * * 0 cd /srv/scrapercomm && ./scripts/refresh.sh >> data/refresh-logs/cron.log 2>&1
+#   0 3 1,15 * * cd /srv/scrapercomm && ./scripts/refresh.sh >> data/refresh-logs/cron.log 2>&1
 #
 # Exits 1 if a step failed and 2 if everything ran but the data is still stale, so a
 # scheduler that reports failures reports this one.

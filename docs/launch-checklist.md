@@ -91,6 +91,10 @@ host as Postgres it is the same two hours with nothing in between to drop. The l
 Python, the `requirements.txt`, ~40 MB of PDFs on a disk that survives a redeploy
 (`GABS_DATA_DIR`), and `psql`/`pg_dump` on PATH.
 
+On a new database, apply `sql/schema.sql` once. Everything else the planner needs —
+including the `trip_stop_context` view its searches read — is created by the first refresh,
+because a setup step somebody has to remember is a setup step somebody forgets.
+
 ```bash
 export DATABASE_URL=postgresql://user:pass@host:5432/commuttr
 export COMMUTTR_API_URL=https://api.commuttr.co.za
@@ -106,14 +110,29 @@ In crontab on that host, backup first so there is always a restore point in fron
 load that rewrites the timetables:
 
 ```
-0 2 * * *  cd /srv/scrapercomm && ./scripts/backup.sh  >> data/backups/cron.log 2>&1
-0 3 * * 0  cd /srv/scrapercomm && ./scripts/refresh.sh >> data/refresh-logs/cron.log 2>&1
+0 2 *  * *  cd /srv/scrapercomm && ./scripts/backup.sh  >> data/backups/cron.log 2>&1
+0 3 1,15 * *  cd /srv/scrapercomm && ./scripts/refresh.sh >> data/refresh-logs/cron.log 2>&1
 ```
 
-Weekly is set by Golden Arrow, who reissue weekly; MyCiTi and Metrorail change a few times
-a year and cost little to include. The run exits non-zero if a step failed and 2 if
-everything ran but the data is still stale, so a scheduler that reports failures reports
-both. Every run is also a row in `refresh_run`, visible on the dashboard.
+Backups daily, timetables on the 1st and the 15th — cron has no "fortnightly", and `*/14`
+on the day of the month restarts every month, so two fixed dates are the honest way to say
+it. On Windows, `schtasks /sc weekly /mo 2`.
+
+The age limits in `freshness.py` and `StatusController` are **18 days, not 14**, and that
+is deliberate: a limit equal to the interval is reached in the hours before each run, so
+the status page would report stale data every fortnight on schedule, for data that is about
+to be replaced. An alert that cries wolf to a timetable is an alert nobody reads. 18 days
+leaves room for one run to fail and be noticed.
+
+Fortnightly is one cycle behind Golden Arrow, who reissue weekly. What makes that
+acceptable rather than sloppy: the planner hides a timetable that has ended when a current
+one for the same route exists, and the freshness check watches the expired share as well as
+the age — so drift shows up as a number rather than as a rider being given a withdrawn bus.
+If that share starts climbing, move back to weekly; the load is cheap now (below).
+
+The run exits non-zero if a step failed and 2 if everything ran but the data is still
+stale, so a scheduler that reports failures reports both. Every run is also a row in
+`refresh_run`, visible on the dashboard.
 
 One operator is not actually automatic. `prasa_scraper.sheets` reads the spreadsheets in
 `data/prasa/xlsx`; nothing downloads them, so a weekly refresh re-reads the same files PRASA
@@ -139,7 +158,7 @@ Three things that make this safe to run against a live database:
 - `GET /api/status` is public and says whether each operator's data is inside its age
   limit. Point an uptime monitor at it and alert on `status != "ok"` — that catches a
   dead API *and* a loader that quietly stopped, which `/api/health` does not.
-- The schedule from section 5, on the server. Check `refresh_run` has a row each week.
+- The schedule from section 5, on the server. Check `refresh_run` has a row each fortnight.
 - The operations dashboard at `/api/admin/page` shows the same, plus what riders searched
   and what they searched for and never found.
 - `app_error` fills up when a build is broken. Check it after every release; a spike in
@@ -149,9 +168,11 @@ Three things that make this safe to run against a live database:
 
 Written down so they are decisions rather than surprises:
 
-- **City-centre journeys with a change are slow.** The query takes tens of seconds where
-  the network is dense, against a 30-second timeout in the app, so a rider planning from
-  the CBD can be told they are offline. This is the next engineering job.
+- **Dense journeys with a change are still seconds, not milliseconds.** Much better than
+  they were — CLAREMONT to KHAYELITSHA did not answer at all inside five minutes and now
+  takes 5.8s — but CAPE TOWN to BELLVILLE is 7.6s, and that one is bounded by the
+  10-second per-operator budget in `ConnectionService` rather than by the database. On a
+  Burstable database tier it will be slower again. Measure before choosing the tier.
 - **Four Golden Arrow stops have no position** (ALVINCO, LEAGUES, ROUTE 2, SPEKENAM) and
   around sixty distort their own route. Journeys through them work; maps and "nearest
   stops" do not.
