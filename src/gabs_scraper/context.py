@@ -19,10 +19,12 @@ with an answer.
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from . import db
 
 VIEW = "trip_stop_context"
+SQL_PATH = Path(__file__).resolve().parents[2] / "sql" / "planner_context.sql"
 
 
 def _exists(cur) -> bool:
@@ -43,11 +45,24 @@ def run(fix: bool = False) -> dict:
     cur = conn.cursor()
 
     if not _exists(cur):
-        print(f"{VIEW} does not exist yet. Create it once:")
-        print("  docker exec -i gabs_pg psql -U gabs -d gabs < sql/planner_context.sql")
+        # Create it rather than report it missing. The planner's queries now read this
+        # view, so a database without it answers no searches at all - which makes it part
+        # of the schema, and a setup step somebody has to remember is a setup step
+        # somebody forgets. On a new database this is the whole of "install it".
+        if not fix:
+            print(f"{VIEW} does not exist. Run with --fix to create it.")
+            cur.close()
+            conn.close()
+            return {"exists": False}
+        print(f"{VIEW} does not exist; creating it from {SQL_PATH.name}")
+        conn.rollback()  # the existence check opened one; autocommit needs none open
+        conn.autocommit = True
+        cur.execute(SQL_PATH.read_text(encoding="utf-8"))
+        held, wanted = _counts(cur)
+        print(f"created: {held:,} rows")
         cur.close()
         conn.close()
-        return {"exists": False}
+        return {"exists": True, "rows": held, "expected": wanted, "behind": wanted - held}
 
     held, wanted = _counts(cur)
     behind = wanted - held
@@ -56,7 +71,9 @@ def run(fix: bool = False) -> dict:
 
     if fix:
         # CONCURRENTLY, so searches keep answering from the old rows while this runs
-        # rather than blocking on it. It needs its own transaction.
+        # rather than blocking on it. It cannot run inside a transaction, and the counts
+        # above opened one, so close that first.
+        conn.rollback()
         conn.autocommit = True
         cur.execute(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {VIEW}")
         held, wanted = _counts(cur)

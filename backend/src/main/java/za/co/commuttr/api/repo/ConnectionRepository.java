@@ -59,7 +59,8 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                                     AND b.stop_sequence > a.stop_sequence
                 WHERE b.stop_id = :toId
             ),
-            -- The earliest a bus can reach a stop the timetable gives no time for.
+            -- The earliest a bus can reach a stop the timetable gives no time for is
+            -- precomputed in trip_stop_context; see sql/planner_context.sql.
             --
             -- Golden Arrow prints times at timing points and via everywhere else, and 291
             -- of the 629 stops never get a printed departure at all. BUH REIN is one: all
@@ -67,23 +68,12 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             -- journey with a change from nearly half the network, which is how BUH REIN to
             -- BELLVILLE, a journey that had always worked, became "no way to get there".
             --
-            -- The planner solved this long ago and this query never learned it: a bus
-            -- cannot reach you before it has left the last stop it does have a time for,
-            -- so that time is a lower bound. A floor is not a promise and it is worth far
-            -- more than nothing, being the difference between "from 05:30" and no journey.
-            -- max() ignores NULLs, so a run of vias reaches further back for a real time.
-            floors AS (
-                SELECT st.trip_id, ss.stop_sequence,
-                       max(st.departure_time) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time
-                FROM (SELECT DISTINCT st2.trip_id
-                      FROM stop_time st2
-                      JOIN schedule_stop ss2 ON ss2.id = st2.schedule_stop_id
-                      WHERE ss2.stop_id = :fromId AND st2.cell_type <> 'NONE') m
-                JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
-                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
-            ),
+            -- A bus cannot reach you before it has left the last stop it does have a time
+            -- for, so that time is a lower bound. A floor is not a promise and it is worth
+            -- far more than nothing, being the difference between "from 05:30" and no
+            -- journey. This query used to work it out per request with a window over every
+            -- departure of every trip touching the stop; from a hub that is hundreds of
+            -- thousands of rows on every search.
             leg1 AS (
                 SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
                                     COALESCE(t1.departure_time, f.prior_time),
@@ -107,7 +97,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                                  AND t2.cell_type = 'TIME'
                                  AND (t1.departure_time IS NULL
                                       OR t2.departure_time > t1.departure_time)
-                LEFT JOIN floors f ON f.trip_id = tr.id
+                LEFT JOIN trip_stop_context f ON f.trip_id = tr.id
                                   AND f.stop_sequence = ssa.stop_sequence
                 WHERE ssa.stop_id = :fromId AND ssb.stop_id IN (SELECT id FROM ix)
                 ORDER BY sc.day_type, ssb.stop_id, sc.direction_label,
@@ -235,7 +225,8 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                   AND a.stop_id <> b.stop_id
                   AND a.stop_id <> :toId AND b.stop_id <> :fromId
             ),
-            -- The earliest a bus can reach a stop the timetable gives no time for.
+            -- The earliest a bus can reach a stop the timetable gives no time for is
+            -- precomputed in trip_stop_context; see sql/planner_context.sql.
             --
             -- Golden Arrow prints times at timing points and via everywhere else, and 291
             -- of the 629 stops never get a printed departure at all. BUH REIN is one: all
@@ -243,23 +234,12 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             -- journey with a change from nearly half the network, which is how BUH REIN to
             -- BELLVILLE, a journey that had always worked, became "no way to get there".
             --
-            -- The planner solved this long ago and this query never learned it: a bus
-            -- cannot reach you before it has left the last stop it does have a time for,
-            -- so that time is a lower bound. A floor is not a promise and it is worth far
-            -- more than nothing, being the difference between "from 05:30" and no journey.
-            -- max() ignores NULLs, so a run of vias reaches further back for a real time.
-            floors AS (
-                SELECT st.trip_id, ss.stop_sequence,
-                       max(st.departure_time) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time
-                FROM (SELECT DISTINCT st2.trip_id
-                      FROM stop_time st2
-                      JOIN schedule_stop ss2 ON ss2.id = st2.schedule_stop_id
-                      WHERE ss2.stop_id = :fromId AND st2.cell_type <> 'NONE') m
-                JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
-                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
-            ),
+            -- A bus cannot reach you before it has left the last stop it does have a time
+            -- for, so that time is a lower bound. A floor is not a promise and it is worth
+            -- far more than nothing, being the difference between "from 05:30" and no
+            -- journey. This query used to work it out per request with a window over every
+            -- departure of every trip touching the stop; from a hub that is hundreds of
+            -- thousands of rows on every search.
             leg1 AS (
                 SELECT DISTINCT ON (sc.day_type, ssb.stop_id, sc.direction_label,
                                     COALESCE(t1.departure_time, f.prior_time),
@@ -283,7 +263,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                                  AND t2.cell_type = 'TIME'
                                  AND (t1.departure_time IS NULL
                                       OR t2.departure_time > t1.departure_time)
-                LEFT JOIN floors f ON f.trip_id = tr.id
+                LEFT JOIN trip_stop_context f ON f.trip_id = tr.id
                                   AND f.stop_sequence = ssa.stop_sequence
                 WHERE ssa.stop_id = :fromId
                   AND ssb.stop_id IN (SELECT x FROM mid)

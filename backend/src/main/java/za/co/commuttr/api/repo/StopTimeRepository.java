@@ -268,51 +268,28 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
      * estimate that runs late makes people miss buses.
      */
     @Query(value = """
-            WITH my_trips AS (
-                SELECT DISTINCT st.trip_id
-                FROM stop_time st
-                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
-                WHERE ss.stop_id = :stopId AND st.cell_type <> 'NONE'
-            ),
-            ctx AS (
-                -- One pass over just the trips that touch this stop. max()/min() ignore
-                -- NULLs, so a "via" contributes nothing and the window naturally yields
-                -- the nearest published times on either side.
-                SELECT st.trip_id, ss.schedule_id, ss.stop_id, ss.stop_sequence,
-                       st.departure_time, st.raw_value,
-                       max(st.departure_time) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time,
-                       min(st.departure_time) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_time,
-                       -- Where those two timed stops are on the run, so a via between
-                       -- them can be given an estimated arrival rather than only a floor.
-                       max(CASE WHEN st.departure_time IS NOT NULL THEN ss.stop_sequence END) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_seq,
-                       min(CASE WHEN st.departure_time IS NOT NULL THEN ss.stop_sequence END) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_seq
-                FROM my_trips m
-                JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
-                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
-            )
-            SELECT c.schedule_id      AS "scheduleId",
+            -- The nearest published times either side of a stop, precomputed per load in
+            -- trip_stop_context (sql/planner_context.sql). This used to be a window over
+            -- every departure of every trip touching the stop, recomputed per request:
+            -- CAPE TOWN alone is ~38,000 anchors out of a far larger intermediate.
+            SELECT ss.schedule_id     AS "scheduleId",
                    tr.trip_index      AS "tripIndex",
-                   c.stop_sequence    AS "stopSequence",
-                   c.departure_time   AS "departureTime",
-                   c.raw_value        AS "rawValue",
+                   ss.stop_sequence   AS "stopSequence",
+                   st.departure_time  AS "departureTime",
+                   st.raw_value       AS "rawValue",
                    s.name             AS "name",
                    c.prior_time       AS "priorTime",
                    c.next_time        AS "nextTime",
-                   NULL               AS "stopId",
+                   NULL                      AS "stopId",
                    c.prior_seq        AS "priorSeq",
                    c.next_seq         AS "nextSeq"
-            FROM ctx c
-            JOIN trip tr ON tr.id = c.trip_id
-            JOIN stop s  ON s.id = c.stop_id
-            WHERE c.stop_id = :stopId
+            FROM stop_time st
+            JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+            JOIN trip tr          ON tr.id = st.trip_id
+            JOIN stop s           ON s.id = ss.stop_id
+            LEFT JOIN trip_stop_context c ON c.trip_id = st.trip_id
+                                         AND c.stop_sequence = ss.stop_sequence
+            WHERE ss.stop_id = :stopId AND st.cell_type <> 'NONE'
             """, nativeQuery = true)
     /**
      * Returns raw rows rather than a {@code StopAnchorRow} projection.
@@ -340,49 +317,28 @@ public interface StopTimeRepository extends JpaRepository<StopTime, Integer> {
      * stop each anchor belongs to in order to say how far the rider walks to it.
      */
     @Query(value = """
-            WITH my_trips AS (
-                SELECT DISTINCT st.trip_id
-                FROM stop_time st
-                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
-                WHERE ss.stop_id = ANY(CAST(:stopIds AS integer[]))
-                  AND st.cell_type <> 'NONE'
-            ),
-            ctx AS (
-                SELECT st.trip_id, ss.schedule_id, ss.stop_id, ss.stop_sequence,
-                       st.departure_time, st.raw_value,
-                       max(st.departure_time) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_time,
-                       min(st.departure_time) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_time,
-                       -- Where those two timed stops are on the run, so a via between
-                       -- them can be given an estimated arrival rather than only a floor.
-                       max(CASE WHEN st.departure_time IS NOT NULL THEN ss.stop_sequence END) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior_seq,
-                       min(CASE WHEN st.departure_time IS NOT NULL THEN ss.stop_sequence END) OVER (
-                           PARTITION BY st.trip_id ORDER BY ss.stop_sequence
-                           ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_seq
-                FROM my_trips m
-                JOIN stop_time st ON st.trip_id = m.trip_id AND st.cell_type <> 'NONE'
-                JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
-            )
-            SELECT c.schedule_id      AS "scheduleId",
+            -- The nearest published times either side of a stop, precomputed per load in
+            -- trip_stop_context (sql/planner_context.sql). This used to be a window over
+            -- every departure of every trip touching the stop, recomputed per request:
+            -- CAPE TOWN alone is ~38,000 anchors out of a far larger intermediate.
+            SELECT ss.schedule_id     AS "scheduleId",
                    tr.trip_index      AS "tripIndex",
-                   c.stop_sequence    AS "stopSequence",
-                   c.departure_time   AS "departureTime",
-                   c.raw_value        AS "rawValue",
+                   ss.stop_sequence   AS "stopSequence",
+                   st.departure_time  AS "departureTime",
+                   st.raw_value       AS "rawValue",
                    s.name             AS "name",
                    c.prior_time       AS "priorTime",
                    c.next_time        AS "nextTime",
-                   c.stop_id          AS "stopId",
+                   ss.stop_id                AS "stopId",
                    c.prior_seq        AS "priorSeq",
                    c.next_seq         AS "nextSeq"
-            FROM ctx c
-            JOIN trip tr ON tr.id = c.trip_id
-            JOIN stop s  ON s.id = c.stop_id
-            WHERE c.stop_id = ANY(CAST(:stopIds AS integer[]))
+            FROM stop_time st
+            JOIN schedule_stop ss ON ss.id = st.schedule_stop_id
+            JOIN trip tr          ON tr.id = st.trip_id
+            JOIN stop s           ON s.id = ss.stop_id
+            LEFT JOIN trip_stop_context c ON c.trip_id = st.trip_id
+                                         AND c.stop_sequence = ss.stop_sequence
+            WHERE ss.stop_id = ANY(CAST(:stopIds AS integer[])) AND st.cell_type <> 'NONE'
             """, nativeQuery = true)
     List<Object[]> findStopAnchorsForStops(@Param("stopIds") String stopIds);
 
