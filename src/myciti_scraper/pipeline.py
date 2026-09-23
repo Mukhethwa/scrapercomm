@@ -101,6 +101,9 @@ def main() -> None:
             written["routes"].add(got["route"])
             written["trips"] += got["trips"]
             written["times"] += got["times"]
+        # One commit for the wipe and everything that replaces it: riders see the old
+        # timetables until this moment and the new ones after it, never neither.
+        conn.commit()
         cur = conn.cursor()
         cur.execute("SELECT count(*) FROM stop s JOIN operator o ON o.id = s.operator_id "
                     "WHERE o.code = 'myciti'")

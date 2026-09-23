@@ -113,7 +113,12 @@ def forget_everything(conn) -> dict:
     counts["timetable"] = cur.rowcount
     cur.execute("DELETE FROM route WHERE operator_id = %s", (op,))
     counts["route"] = cur.rowcount
-    conn.commit()
+    # Deliberately NOT committed here. This wipes every MyCiTi route, timetable and
+    # departure before the new ones are read out of the PDFs, and committing it would
+    # publish that gap to the live API: for the minutes the load takes, MyCiTi would
+    # exist in the app with no services at all, and the app would save those empty
+    # answers for offline use. Uncommitted, no reader ever sees it - Postgres shows them
+    # the old data until the new data replaces it in one step. The caller commits.
     return counts
 
 
@@ -219,7 +224,8 @@ def load_run(conn, run: Run, *, pdf_path: str) -> dict:
             )
             written += 1
 
-    conn.commit()
+    # No commit: the whole load is one transaction, so the app never sees MyCiTi
+    # half-loaded. See forget_everything.
     return {"route": name, "route_id": route_id, "timetable_id": timetable_id,
             "schedule_id": schedule_id, "stops": len([s for s in stop_ids if s]),
             "trips": trips, "times": written}

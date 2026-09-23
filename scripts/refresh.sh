@@ -54,6 +54,14 @@ step "stop positions" python -m gabs_scraper.repair_positions
 step "station positions" python -m prasa_scraper.repair_positions --fix
 step "areas" python -m gabs_scraper.areas --from-stops
 
+# The API holds place searches and the operator list for the life of the process, which
+# is right until a load changes them underneath it.
+if [ -n "${COMMUTTR_API_URL:-}" ] && [ -n "${COMMUTTR_ADMIN_TOKEN:-}" ]; then
+  step "api caches" curl -fsS -X POST "$COMMUTTR_API_URL/api/admin/caches/clear"     -H "Authorization: Bearer $COMMUTTR_ADMIN_TOKEN"
+else
+  echo "skipping the API cache clear: set COMMUTTR_API_URL and COMMUTTR_ADMIN_TOKEN to enable it" | tee -a "$log"
+fi
+
 echo "=== freshness ===" | tee -a "$log"
 python -m gabs_scraper.freshness --check 2>&1 | tee -a "$log"
 stale=$?

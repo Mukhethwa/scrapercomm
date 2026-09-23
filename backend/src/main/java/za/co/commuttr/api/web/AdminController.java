@@ -47,10 +47,16 @@ public class AdminController {
 
     private final EntityManager em;
     private final String token;
+    private final za.co.commuttr.api.service.GeocodeService geocode;
+    private final za.co.commuttr.api.service.PlannerService planner;
 
     public AdminController(EntityManager em,
+                           za.co.commuttr.api.service.GeocodeService geocode,
+                           za.co.commuttr.api.service.PlannerService planner,
                            @Value("${commuttr.admin.token:}") String token) {
         this.em = em;
+        this.geocode = geocode;
+        this.planner = planner;
         this.token = token == null ? "" : token.trim();
     }
 
@@ -253,6 +259,27 @@ public class AdminController {
         return ResponseEntity.accepted().body(Map.of(
                 "requested", operators,
                 "detail", "The next scheduled refresh will pick this up. To run it now: scripts/refresh.ps1"));
+    }
+
+    /**
+     * Forget what this process is holding in memory, after a reload has changed it.
+     *
+     * <p>Two things outlive a load: the place searches the geocoder has answered, and the
+     * list of operators that have stops. Both are read once and kept, which is right
+     * while the data underneath is still - and wrong for the minutes after a refresh,
+     * where the app would go on being told a new place does not exist. The refresh
+     * scripts call this at the end, so nobody has to remember to restart the API.
+     */
+    @PostMapping("/caches/clear")
+    public ResponseEntity<Object> clearCaches(
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        ResponseEntity<Object> no = refuse(auth);
+        if (no != null) {
+            return no;
+        }
+        geocode.forget();
+        planner.forgetOperators();
+        return ResponseEntity.ok(Map.of("detail", "Place searches and the operator list will be read again."));
     }
 
     // ------------------------------------------------------------------ plumbing

@@ -450,6 +450,11 @@ public class PlannerService {
      */
     private volatile List<String> operatorCodes;
 
+    /** Ask the database again for who runs stops. See GeocodeService#forget. */
+    public void forgetOperators() {
+        operatorCodes = null;
+    }
+
     private List<String> operatorCodes() {
         List<String> known = operatorCodes;
         if (known == null) {

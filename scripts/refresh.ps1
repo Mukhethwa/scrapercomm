@@ -19,7 +19,12 @@
 
 param(
     [string[]] $Operators = @("gabs", "myciti", "metrorail"),
-    [string] $LogDir = "data/refresh-logs"
+    [string] $LogDir = "data/refresh-logs",
+    # Where the API is, and its dashboard token, so this can tell it to re-read what it
+    # holds in memory. Without them the load still works; the API keeps answering place
+    # searches from before the load until somebody restarts it.
+    [string] $ApiUrl = $env:COMMUTTR_API_URL,
+    [string] $AdminToken = $env:COMMUTTR_ADMIN_TOKEN
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,6 +75,19 @@ if ($Operators -contains "metrorail") { Step "metrorail" { python -m prasa_scrap
 Step "stop positions" { python -m gabs_scraper.repair_positions }
 Step "station positions" { python -m prasa_scraper.repair_positions --fix }
 Step "areas" { python -m gabs_scraper.areas --from-stops }
+
+# The API caches place searches and the operator list for the life of the process, which
+# is right until a load changes them underneath it.
+if ($ApiUrl -and $AdminToken) {
+    Step "api caches" {
+        Invoke-RestMethod -Method Post -Uri "$ApiUrl/api/admin/caches/clear" `
+            -Headers @{ Authorization = "Bearer $AdminToken" } | Out-Null
+        "told the API to re-read places and operators"
+    }
+} else {
+    "skipping the API cache clear: set COMMUTTR_API_URL and COMMUTTR_ADMIN_TOKEN to enable it" |
+        Tee-Object -FilePath $log -Append
+}
 
 "=== freshness ===" | Tee-Object -FilePath $log -Append
 python -m gabs_scraper.freshness --check 2>&1 | Tee-Object -FilePath $log -Append

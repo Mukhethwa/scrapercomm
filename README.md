@@ -648,6 +648,28 @@ gabs                1878    2026-09-05     18d   639 (34%)
 other two 120, and more than a quarter of an operator's timetables ended), which is what
 makes a scheduled job that quietly stopped working visible.
 
+### What the app does while a reload is running
+
+Nothing breaks, and nothing goes blank, because Postgres shows a reader the data as it was
+when their query started. A loader can delete and rewrite a timetable and the app goes on
+answering from the old one until the new one is committed, at which point the next search
+sees it. Tested by deleting every MyCiTi departure inside an open transaction: the API
+still returned 136 options including MyCiTi, and rolling back changed nothing.
+
+That safety depends on the loader keeping its delete and its rewrite in ONE transaction,
+which Golden Arrow's always did, per timetable. MyCiTi's did not: it wiped every MyCiTi
+route, committed, and then spent minutes reading PDFs, so for those minutes the app showed
+MyCiTi as a network with no services - and saved those empty answers to riders' phones for
+offline use. The wipe and the load are now one transaction.
+
+`prasa_scraper.pipeline --fresh` still has that gap by design, which its help now says
+plainly. The scheduled refresh does not use it.
+
+Two things do need saying after a load: the API keeps place searches and the list of
+operators in memory for the life of the process. The refresh scripts call
+`POST /api/admin/caches/clear` at the end when `COMMUTTR_API_URL` and
+`COMMUTTR_ADMIN_TOKEN` are set, which replaces the old advice to restart the API by hand.
+
 ### Run it on a schedule
 
 `scripts/refresh.ps1` (Windows) and `scripts/refresh.sh` (Linux) load every operator,

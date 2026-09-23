@@ -48,7 +48,12 @@ def main() -> None:
     ap.add_argument("--force", action="store_true", help="load tables that failed their checks")
     ap.add_argument("--fresh", action="store_true",
                     help="delete every Metrorail route first, so a page read differently "
-                         "than last time leaves nothing of the old reading behind")
+                         "than last time leaves nothing of the old reading behind. TAKES "
+                         "THE TRAINS OFF THE APP until the load finishes: the delete is "
+                         "committed before the pages are read, so a rider searching in "
+                         "between is told no train runs. Without it a re-read simply "
+                         "replaces each timetable in place, which is what the scheduled "
+                         "refresh does")
     ap.add_argument("--allow-unverified", type=float, default=0.0, metavar="PCT",
                     help="load a table if at most PCT%% of its cells are unverified; "
                          "those cells are still not written. 3 is the measured line "

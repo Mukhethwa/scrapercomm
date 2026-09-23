@@ -118,6 +118,18 @@ public class GeocodeService {
      */
     private static final int CACHE_MAX = 500;
 
+    /**
+     * Emptied after a reload, which is the only time it is wrong.
+     *
+     * <p>A place search answered before MyCiTi was loaded stayed answered for the life of
+     * the process: the README's advice was to restart the API after loading, which is not
+     * advice anybody remembers to follow at three in the morning when the scheduled job
+     * ran.
+     */
+    public void forget() {
+        cache.clear();
+    }
+
     private final Map<String, List<GeoHitDto>> cache =
             Collections.synchronizedMap(new LinkedHashMap<String, List<GeoHitDto>>(64, 0.75f, true) {
                 @Override
