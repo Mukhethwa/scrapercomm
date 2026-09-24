@@ -243,6 +243,10 @@ public class ConnectionService {
             }
             // The nearest operator is always answered. See EXTRA_OPERATOR_BUDGET_MS.
             if (!nearest && System.currentTimeMillis() - started > EXTRA_OPERATOR_BUDGET_MS) {
+                // Whole operators are being dropped here. Saying so is the difference
+                // between "MyCiTi runs nothing between these two" and "we never asked
+                // MyCiTi" - and only one of those is a fact about Cape Town.
+                incomplete = true;
                 break;
             }
             nearest = false;
@@ -290,7 +294,14 @@ public class ConnectionService {
                 ConnectionsResponse found = between(from, to);
                 incomplete |= found.searchIncomplete();
                 if (!found.connections().isEmpty()) {
-                    return found;
+                    // Carry the flag out with the answer. A journey found at the second
+                    // stop does not undo a search that timed out at the first: there may
+                    // be better journeys from the nearer stop that nobody finished
+                    // looking for, and the rider is entitled to know the list is partial.
+                    return incomplete && !found.searchIncomplete()
+                            ? new ConnectionsResponse(found.from(), found.to(),
+                                    found.legsRequired(), found.connections(), true)
+                            : found;
                 }
             }
         }
