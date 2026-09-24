@@ -915,10 +915,20 @@ public class PlannerService {
         // Where a current version exists, the expired one is dropped. Where every version
         // has expired - 35 of 221 numbers - the service is still the only answer we have,
         // so it is kept and the option carries the date it lapsed.
+        // Keyed on the same tuple the journeys are GROUPED by, not on the number alone.
+        //
+        // Keyed on the number, a single current sheet spoke for every day type that number
+        // runs. Golden Arrow's public holiday sheets carry no end date at all, so a route
+        // whose weekday, Saturday and Sunday sheets had all lapsed still counted as
+        // "current" - and every one of those services was dropped, leaving a rider on a
+        // Monday looking at a card that only runs on public holidays.
+        //
+        // It was not firing on the day this was found and it was about to: 7 routes on
+        // 2026-09-26 and 29 more from 2026-09-28.
         LocalDate today = LocalDate.now();
-        Set<String> haveCurrent = meta.values().stream()
+        Set<GroupKey> haveCurrent = meta.values().stream()
                 .filter(m -> m.getEffectiveTo() == null || !m.getEffectiveTo().isBefore(today))
-                .map(ScheduleMetaRow::getTimetableNumber)
+                .map(m -> new GroupKey(m.getTimetableNumber(), m.getDirectionLabel(), m.getDayType()))
                 .collect(Collectors.toSet());
 
         Map<GroupKey, PlanGroup> groups = new LinkedHashMap<>();
@@ -931,7 +941,8 @@ public class PlannerService {
                 continue;
             }
             boolean expired = m.getEffectiveTo() != null && m.getEffectiveTo().isBefore(today);
-            if (expired && haveCurrent.contains(m.getTimetableNumber())) {
+            if (expired && haveCurrent.contains(
+                    new GroupKey(m.getTimetableNumber(), m.getDirectionLabel(), m.getDayType()))) {
                 continue;
             }
             // A departure nobody can be told to be there for is not a departure.

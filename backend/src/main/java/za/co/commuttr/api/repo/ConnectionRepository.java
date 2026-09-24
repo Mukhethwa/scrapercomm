@@ -107,7 +107,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 WHERE ssa.stop_id = :fromId AND ssb.stop_id IN (SELECT id FROM ix)
                 ORDER BY sc.day_type, ssb.stop_id, sc.direction_label,
                          COALESCE(t1.departure_time, f.prior_time), t2.departure_time,
-                         sc.id, tr.trip_index
+                         tt.effective_from DESC NULLS LAST, sc.id, tr.trip_index
             ),
             leg2 AS (
                 SELECT DISTINCT ON (sc.day_type, ssa.stop_id, sc.direction_label,
@@ -131,7 +131,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                                       OR t2.departure_time > t1.departure_time)
                 WHERE ssb.stop_id = :toId AND ssa.stop_id IN (SELECT id FROM ix)
                 ORDER BY sc.day_type, ssa.stop_id, sc.direction_label,
-                         t1.departure_time, t2.raw_value, sc.id, tr.trip_index
+                         t1.departure_time, t2.raw_value, tt.effective_from DESC NULLS LAST, sc.id, tr.trip_index
             )
             -- Ranked WITHIN each day type, and capped within it too.
             --
@@ -331,7 +331,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                   AND ssb.stop_id IN (SELECT x FROM mid)
                 ORDER BY sc.day_type, ssb.stop_id, sc.direction_label,
                          COALESCE(t1.departure_time, f.prior_time), t2.departure_time,
-                         sc.id, tr.trip_index
+                         tt.effective_from DESC NULLS LAST, sc.id, tr.trip_index
             ),
             leg2 AS (
                 SELECT DISTINCT ON (sc.day_type, ssa.stop_id, ssb.stop_id,
@@ -358,7 +358,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                                  AND t2.cell_type = 'TIME'
                                  AND t2.departure_time > t1.departure_time
                 ORDER BY sc.day_type, ssa.stop_id, ssb.stop_id, sc.direction_label,
-                         t1.departure_time, t2.departure_time, sc.id, tr.trip_index
+                         t1.departure_time, t2.departure_time, tt.effective_from DESC NULLS LAST, sc.id, tr.trip_index
             ),
             leg3 AS (
                 SELECT DISTINCT ON (sc.day_type, ssa.stop_id, sc.direction_label,
@@ -383,7 +383,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 WHERE ssb.stop_id = :toId
                   AND ssa.stop_id IN (SELECT y FROM mid)
                 ORDER BY sc.day_type, ssa.stop_id, sc.direction_label,
-                         t1.departure_time, t2.raw_value, sc.id, tr.trip_index
+                         t1.departure_time, t2.raw_value, tt.effective_from DESC NULLS LAST, sc.id, tr.trip_index
             )
             -- Ranked WITHIN each day type, and capped within it too.
             --
