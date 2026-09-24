@@ -178,9 +178,39 @@ public final class PlanDtos {
                                 String timetableExpiredOn) { }
 
     /** from/to is a StopDto for a named stop, or a PinDto for a lat/lon pin. */
+    /**
+     * A stop nearer the rider than the one we are telling them to walk to, which nothing
+     * useful runs from.
+     *
+     * <p>Searching from Woodstock, the planner boarded a rider at ESPLANADE, 756m away,
+     * when WOODSTOCK station is 616m away and on the same named line. It was right: all
+     * 51 trains that reach Chris Hani call at Esplanade and none call at Woodstock. But
+     * the screen said only "Esplanade, 15 min walk", so a rider who had typed Woodstock
+     * concluded the app was broken - and so did I, for twenty minutes.
+     *
+     * <p>This is the fact behind that choice, worked out from the stops the search
+     * actually tried rather than written for any one place: the nearest stop of this
+     * operator, how far it is, and the knowledge that no journey was found from it.
+     */
+    public record NearerStopDto(String operator,
+                                String stopName,
+                                Long metres) { }
+
+    /**
+     * @param nearerStops per operator, a nearer stop that produced no journey. Empty in
+     *                    the ordinary case where the rider is boarding at their closest
+     *                    stop, so a client can show nothing at all.
+     */
     public record PlanResponse(@JsonProperty("from") Object from,
                                @JsonProperty("to") Object to,
-                               List<PlanOptionDto> options) { }
+                               List<PlanOptionDto> options,
+                               @JsonProperty("nearer_stops") List<NearerStopDto> nearerStops) {
+
+        /** The ordinary case: nothing nearer was passed over. */
+        public PlanResponse(Object from, Object to, List<PlanOptionDto> options) {
+            this(from, to, options, List.of());
+        }
+    }
 
     /** GET /api/geocode row (OpenStreetMap Nominatim). */
     public record GeoHitDto(String name, String full, Double lat, Double lon) { }

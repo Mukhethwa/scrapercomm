@@ -16,6 +16,7 @@ import za.co.commuttr.api.dto.PlanDtos.NearbyOriginsResponse;
 import za.co.commuttr.api.dto.PlanDtos.PlanDepartureDto;
 import za.co.commuttr.api.dto.PlanDtos.FareDto;
 import za.co.commuttr.api.dto.PlanDtos.PlanOptionDto;
+import za.co.commuttr.api.dto.PlanDtos.NearerStopDto;
 import za.co.commuttr.api.dto.PlanDtos.PlanResponse;
 import za.co.commuttr.api.dto.PlanDtos.PlanSegmentStopDto;
 import za.co.commuttr.api.dto.PlanDtos.TripNoteDto;
@@ -271,6 +272,12 @@ public class PlannerService {
      * widening this without naming where they board would be answering a question they
      * did not ask.
      */
+    /**
+     * How much nearer a passed-over stop must be before it is worth a sentence. Below a
+     * hundred metres the rider is not walking meaningfully further and it is just noise.
+     */
+    private static final long NEARER_STOP_MARGIN_M = 100;
+
     static final double WALK_M = 2500.0;
 
     /**
@@ -1167,7 +1174,55 @@ public class PlannerService {
                         .toList(),
                 (System.nanoTime() - startedAt) / 1_000_000));
 
-        return new PlanResponse(describe(fromEp), describe(toEp), options);
+        return new PlanResponse(describe(fromEp), describe(toEp), options,
+                nearerStopsWithNoService(fromEp, options));
+    }
+
+    /**
+     * Stops nearer the rider than the ones we are sending them to, which nothing useful
+     * runs from.
+     *
+     * <p>Worked out from the same query the search itself uses, so it holds for any place
+     * and any operator rather than for the one journey that exposed it. Searching from
+     * Woodstock the planner boarded a rider at ESPLANADE, 756m away, while WOODSTOCK
+     * station sat 616m away on the same named line. That was correct - all 51 trains
+     * reaching Chris Hani call at Esplanade and none call at Woodstock - but the screen
+     * said only "Esplanade, 15 min walk", so the rider concluded the app was broken.
+     *
+     * <p>Only for a point or a place: where a rider named the stop themselves there is no
+     * choice to explain.
+     */
+    private List<NearerStopDto> nearerStopsWithNoService(EndpointRef from,
+                                                         List<PlanOptionDto> options) {
+        if (from == null || from.lat() == null || from.lon() == null || options.isEmpty()) {
+            return List.of();
+        }
+        // The closest boarding point we actually offered, per operator.
+        Map<String, Long> boardedAt = new HashMap<>();
+        for (PlanOptionDto o : options) {
+            if (o.boardAwayM() != null) {
+                boardedAt.merge(o.operatorCode(), o.boardAwayM(), Math::min);
+            }
+        }
+        List<NearerStopDto> out = new ArrayList<>();
+        for (Map.Entry<String, Long> e : boardedAt.entrySet()) {
+            StopRow closest = stops.findNearestOfOperator(from.lat(), from.lon(), e.getKey(), WALK_M)
+                    .stream()
+                    .min(Comparator.comparingDouble(r -> GeoUtils.haversineM(
+                            from.lat(), from.lon(), r.getLat(), r.getLon())))
+                    .orElse(null);
+            if (closest == null) {
+                continue;
+            }
+            long metres = Math.round(GeoUtils.haversineM(
+                    from.lat(), from.lon(), closest.getLat(), closest.getLon()));
+            // A margin, because a stop a few paces nearer is not worth a sentence, and
+            // the walk we quote is rounded anyway.
+            if (metres + NEARER_STOP_MARGIN_M < e.getValue()) {
+                out.add(new NearerStopDto(e.getKey(), closest.getName(), metres));
+            }
+        }
+        return out;
     }
 
     /**
