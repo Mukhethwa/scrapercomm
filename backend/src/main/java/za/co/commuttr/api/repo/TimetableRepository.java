@@ -30,6 +30,26 @@ public interface TimetableRepository extends JpaRepository<Timetable, Integer> {
             + "WHERE timetable_number IS NOT NULL "
             + "AND (effective_to IS NULL OR effective_to >= current_date)";
 
+    /**
+     * The same question asked of the group a journey is actually shown as: number,
+     * direction AND day type.
+     *
+     * <p>Asked of the number alone, one current sheet spoke for every day type that number
+     * runs. Golden Arrow's public holiday sheets carry no end date, so a route whose
+     * weekday, Saturday and Sunday sheets had all lapsed still counted as current - and
+     * every one of those services was then dropped as superseded by a version that does
+     * not exist. 171 groups across 29 routes were due to disappear this way on 1 October.
+     *
+     * <p>PlannerService was fixed the same way; this is the connections side of it.
+     */
+    @Query(value = QUERY_CURRENT_GROUPS, nativeQuery = true)
+    List<Object[]> findCurrentTimetableGroups();
+
+    String QUERY_CURRENT_GROUPS = "SELECT DISTINCT t.timetable_number, sc.direction_label, sc.day_type "
+            + "FROM timetable t JOIN schedule sc ON sc.timetable_id = t.id "
+            + "WHERE t.timetable_number IS NOT NULL "
+            + "AND (t.effective_to IS NULL OR t.effective_to >= current_date)";
+
     /** GET /api/routes/{id} -> timetables[]. raw_text is deliberately not selected. */
     @Query(value = """
             SELECT id                AS "id",

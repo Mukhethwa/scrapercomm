@@ -49,14 +49,17 @@ public class AdminController {
     private final String token;
     private final za.co.commuttr.api.service.GeocodeService geocode;
     private final za.co.commuttr.api.service.PlannerService planner;
+    private final za.co.commuttr.api.service.ConnectionService connections;
 
     public AdminController(EntityManager em,
                            za.co.commuttr.api.service.GeocodeService geocode,
                            za.co.commuttr.api.service.PlannerService planner,
+                           za.co.commuttr.api.service.ConnectionService connections,
                            @Value("${commuttr.admin.token:}") String token) {
         this.em = em;
         this.geocode = geocode;
         this.planner = planner;
+        this.connections = connections;
         this.token = token == null ? "" : token.trim();
     }
 
@@ -279,7 +282,11 @@ public class AdminController {
         }
         geocode.forget();
         planner.forgetOperators();
-        return ResponseEntity.ok(Map.of("detail", "Place searches and the operator list will be read again."));
+        // Journeys with a change are remembered once worked out, and a load changes the
+        // answers, so this is the moment to forget them.
+        connections.forgetJourneys();
+        return ResponseEntity.ok(Map.of(
+                "detail", "Place searches, the operator list and worked-out journeys will be read again."));
     }
 
     // ------------------------------------------------------------------ plumbing

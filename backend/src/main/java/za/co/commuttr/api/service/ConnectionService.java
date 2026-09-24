@@ -42,6 +42,40 @@ public class ConnectionService {
     private static final org.slf4j.Logger log =
             org.slf4j.LoggerFactory.getLogger(ConnectionService.class);
 
+    /**
+     * Answers already worked out for a pair of stops, so the same journey is not
+     * recomputed under load.
+     *
+     * <p>CAPE TOWN to BELLVILLE returned 40 journeys one hour and none the next. Nothing
+     * about the network changed; the database was merely busier, and a query that takes
+     * about seven seconds idle crossed the eight-second cancel. A journey that exists or
+     * not depending on how many other people are searching is not a service anybody can
+     * rely on, and a smaller production database will cross that line more often, not less.
+     *
+     * <p>These results are a pure function of the loaded timetable and the date - the
+     * queries carry no clock, and the only thing that varies within a day is which
+     * timetables have expired, which {@link #current} decides from today's date. So the
+     * date is part of the key and the entry ages out by itself at midnight. A load clears
+     * it through /api/admin/caches/clear, which the refresh scripts already call.
+     *
+     * <p>Only COMPLETE searches are kept. Caching a cut-short one would take a single
+     * unlucky moment of load and turn it into a permanent "no journey".
+     */
+    private static final int CACHE_ENTRIES = 400;
+
+    private final Map<String, ConnectionsResponse> answered =
+            java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, ConnectionsResponse> eldest) {
+                    return size() > CACHE_ENTRIES;
+                }
+            });
+
+    /** Forget every worked-out journey: called after a load, when the timetables change. */
+    public void forgetJourneys() {
+        answered.clear();
+    }
+
     private final StopRepository stops;
     private final ConnectionRepository connections;
     private final TimetableRepository timetables;
@@ -375,6 +409,11 @@ public class ConnectionService {
      * every copy of a number has expired it stays, since it is the only answer we hold -
      * the same rule, and for the same reason.
      */
+    /** number|direction|day type - the tuple a journey is grouped and shown by. */
+    private static String groupKey(String number, String direction, String dayType) {
+        return number + "|" + direction + "|" + dayType;
+    }
+
     private List<ConnectionDto> current(List<ConnectionDto> found) {
         List<Integer> scheduleIds = found.stream()
                 .flatMap(c -> c.legs().stream().map(ConnectionLegDto::scheduleId))
@@ -393,17 +432,35 @@ public class ConnectionService {
         if (expiredOn.isEmpty()) {
             return found;
         }
-        Set<String> haveCurrent = Set.copyOf(timetables.findCurrentTimetableNumbers());
+        // Keyed on the group a journey is shown as - number, direction and day type - not
+        // on the number alone. A never-expiring public holiday sheet used to vouch for the
+        // weekday, Saturday and Sunday sheets of the same number, so a lapsed weekday leg
+        // was dropped as superseded by a current version that does not exist. The planner
+        // had the same fault; 171 groups on 29 routes were due to vanish on 1 October.
+        Set<String> haveCurrent = timetables.findCurrentTimetableGroups().stream()
+                .map(r -> groupKey((String) r[0], (String) r[1], (String) r[2]))
+                .collect(Collectors.toSet());
         return found.stream()
                 .filter(c -> c.legs().stream().noneMatch(
                         l -> expiredOn.containsKey(l.scheduleId())
-                                && haveCurrent.contains(l.timetableNumber())))
+                                && haveCurrent.contains(
+                                        groupKey(l.timetableNumber(), l.routeLabel(), c.dayType()))))
                 .toList();
     }
 
     private ConnectionsResponse between(StopRow from, StopRow to) {
+        String key = from.getId() + ">" + to.getId() + "@" + LocalDate.now();
+        ConnectionsResponse hit = answered.get(key);
+        if (hit != null) {
+            return hit;
+        }
         try {
-            return betweenOrThrow(from, to);
+            ConnectionsResponse found = betweenOrThrow(from, to);
+            // Never an unfinished one: see the note on the cache.
+            if (!found.searchIncomplete()) {
+                answered.put(key, found);
+            }
+            return found;
         } catch (org.springframework.dao.QueryTimeoutException
                  | jakarta.persistence.QueryTimeoutException e) {
             // The database cancelled it at ConnectionRepository.TIMEOUT_MS. Treat this pair
