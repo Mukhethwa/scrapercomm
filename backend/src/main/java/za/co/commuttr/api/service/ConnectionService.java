@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.Set;
 import java.util.Map;
 
@@ -226,6 +227,7 @@ public class ConnectionService {
         long started = System.currentTimeMillis();
         long deadline = started + TOTAL_BUDGET_MS;
         boolean nearest = true;
+        boolean incomplete = false;
         for (Map.Entry<String, List<StopRow>> start : starts.entrySet()) {
             List<StopRow> ends = finishes.get(start.getKey());
             if (ends == null) {
@@ -237,13 +239,16 @@ public class ConnectionService {
             }
             nearest = false;
             ConnectionsResponse answer = firstThatConnects(start.getValue(), ends, deadline);
+            incomplete |= answer.searchIncomplete();
             if (!answer.connections().isEmpty()) {
                 found.addAll(answer.connections());
                 legs = legs == null ? answer.legsRequired() : Math.min(legs, answer.legsRequired());
             }
         }
+        // Said out loud, because "no journey" and "we did not finish" are different answers
+        // and only one of them is a fact about Cape Town.
         return new ConnectionsResponse(StopService.toDto(fromStops.get(0)),
-                StopService.toDto(toStops.get(0)), legs, found);
+                StopService.toDto(toStops.get(0)), legs, found, incomplete);
     }
 
     /** Candidate ends grouped by whose stops they are, each still nearest first. */
@@ -258,24 +263,32 @@ public class ConnectionService {
     private ConnectionsResponse firstThatConnects(List<StopRow> fromStops, List<StopRow> toStops,
                                                   long deadline) {
         int tried = 0;
+        boolean incomplete = false;
         for (StopRow from : fromStops) {
             for (StopRow to : toStops) {
                 if (tried >= PAIRS_TRIED) {
-                    return new ConnectionsResponse(null, null, null, List.of());
+                    // Not "incomplete": stopping after PAIRS_TRIED is a decision, not a
+                    // failure. The nearest stop that can make the journey is the one a
+                    // rider would use, and reporting that as an unfinished search would
+                    // cry wolf on ordinary journeys and make the warning worthless.
+                    return new ConnectionsResponse(null, null, null, List.of(), incomplete);
                 }
                 // The first pair is always tried, so a search that is already late still
                 // answers something rather than returning empty without looking.
                 if (tried > 0 && System.currentTimeMillis() > deadline) {
-                    return new ConnectionsResponse(null, null, null, List.of());
+                    return new ConnectionsResponse(null, null, null, List.of(), true);
                 }
                 tried++;
                 ConnectionsResponse found = between(from, to);
+                incomplete |= found.searchIncomplete();
                 if (!found.connections().isEmpty()) {
                     return found;
                 }
             }
         }
-        return new ConnectionsResponse(null, null, null, List.of());
+        // Every pair was tried and none connected. That is an answer, unless one of them
+        // was cut short, in which case it is only most of one.
+        return new ConnectionsResponse(null, null, null, List.of(), incomplete);
     }
 
     /** A stop id as itself, or a point as the stops a rider could walk to. */
@@ -380,7 +393,7 @@ public class ConnectionService {
             log.info("connections {} -> {} gave up at the query timeout",
                     from.getId(), to.getId());
             return new ConnectionsResponse(StopService.toDto(from), StopService.toDto(to),
-                    null, List.of());
+                    null, List.of(), true);
         }
     }
 
@@ -398,7 +411,20 @@ public class ConnectionService {
             }
         }
 
-        var threeRows = connections.findThreeLegConnections(fromId, toId, bufferMinutes, maxResults);
+        // Where a three-bus journey could change, asked first and cheaply. No pairs means
+        // no such journey exists, and the expensive query is never run - which is most of
+        // what used to make "there is no way to get there" the slowest answer we gave.
+        List<Object[]> pairs = connections.findInterchangePairs(fromId, toId);
+        if (pairs.isEmpty()) {
+            return new ConnectionsResponse(StopService.toDto(from), StopService.toDto(to),
+                    null, List.of());
+        }
+        String midX = pairs.stream().map(r -> String.valueOf(((Number) r[0]).intValue()))
+                .collect(Collectors.joining(",", "{", "}"));
+        String midY = pairs.stream().map(r -> String.valueOf(((Number) r[1]).intValue()))
+                .collect(Collectors.joining(",", "{", "}"));
+        var threeRows = connections.findThreeLegConnections(fromId, toId, midX, midY,
+                bufferMinutes, maxResults);
         if (!threeRows.isEmpty()) {
             Map<Integer, StopRow> coords = coordsFor(threeRows.stream()
                     .flatMap(r -> java.util.stream.Stream.of(r.getChangeId(), r.getChange2Id()))

@@ -104,8 +104,29 @@ public final class ConnectionDtos {
     /**
      * @param legsRequired how many buses the best answer needs, or null if none was found
      */
+    /**
+     * @param searchIncomplete true when part of the search was abandoned on time rather
+     *                         than finished.
+     *
+     * <p>An empty list used to mean two different things: "there is no way to make this
+     * journey" and "we ran out of time before we could say". The app showed the same
+     * sentence for both, so it told riders a journey did not exist when nobody had
+     * finished looking - three journeys in a sweep of 316 were exactly that.
+     *
+     * <p>The database cancels a query at ConnectionRepository.TIMEOUT_MS and the service
+     * carries on with the other stop pairs, which is right. What was missing was saying so.
+     * A rider is owed the difference between "there is no bus" and "we could not check".
+     */
     public record ConnectionsResponse(@JsonProperty("from") StopDto from,
                                       @JsonProperty("to") StopDto to,
                                       Integer legsRequired,
-                                      List<ConnectionDto> connections) { }
+                                      List<ConnectionDto> connections,
+                                      @JsonProperty("search_incomplete") boolean searchIncomplete) {
+
+        /** The ordinary case: the search ran to completion. */
+        public ConnectionsResponse(StopDto from, StopDto to, Integer legsRequired,
+                                   List<ConnectionDto> connections) {
+            this(from, to, legsRequired, connections, false);
+        }
+    }
 }

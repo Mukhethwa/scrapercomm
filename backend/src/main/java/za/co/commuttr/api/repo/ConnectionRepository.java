@@ -217,6 +217,20 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                                           @Param("bufferMinutes") int bufferMinutes,
                                           @Param("maxResults") int maxResults);
 
+    /**
+     * The pairs of stops a three-bus journey could change at: somewhere reachable from the
+     * origin, then somewhere that reaches the destination.
+     *
+     * <p>Asked on its own, and the answer handed back to {@link #findThreeLegConnections}
+     * as two arrays, because working it out inside that query was almost all of its cost.
+     * A CTE carries no statistics, so PostgreSQL guessed this at 15,128 rows where MACADAMS
+     * FACTORY to MOWBRAY really has 180. On that guess it built 2.2 million candidate legs
+     * and rescanned the 180-row list once per row - around 398 million comparisons, 69.6
+     * seconds. Given the real pairs it plans the join it was always meant to: 1.05s.
+     *
+     * <p>It is also the cheap way to answer "there is no such journey": no pairs means no
+     * three-bus journey exists, and the expensive query never runs at all.
+     */
     @Query(value = """
             WITH r1 AS (
                 SELECT DISTINCT b.stop_id AS id
@@ -231,16 +245,25 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 JOIN schedule_stop b ON b.schedule_id = a.schedule_id
                                     AND b.stop_sequence > a.stop_sequence
                 WHERE b.stop_id = :toId
-            ),
-            mid AS (
-                SELECT DISTINCT a.stop_id AS x, b.stop_id AS y
-                FROM schedule_stop a
-                JOIN schedule_stop b ON b.schedule_id = a.schedule_id
-                                    AND b.stop_sequence > a.stop_sequence
-                WHERE a.stop_id IN (SELECT id FROM r1)
-                  AND b.stop_id IN (SELECT id FROM r3)
-                  AND a.stop_id <> b.stop_id
-                  AND a.stop_id <> :toId AND b.stop_id <> :fromId
+            )
+            SELECT DISTINCT a.stop_id AS x, b.stop_id AS y
+            FROM schedule_stop a
+            JOIN schedule_stop b ON b.schedule_id = a.schedule_id
+                                AND b.stop_sequence > a.stop_sequence
+            WHERE a.stop_id IN (SELECT id FROM r1)
+              AND b.stop_id IN (SELECT id FROM r3)
+              AND a.stop_id <> b.stop_id
+              AND a.stop_id <> :toId AND b.stop_id <> :fromId
+            """, nativeQuery = true)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.query.timeout", value = TIMEOUT_MS))
+    List<Object[]> findInterchangePairs(@Param("fromId") Integer fromId,
+                                        @Param("toId") Integer toId);
+
+    @Query(value = """
+            WITH mid AS (
+                -- The pairs, worked out by findInterchangePairs and passed in. See there
+                -- for why: computing them here cost 69.6s of a 69.6s query.
+                SELECT * FROM unnest(CAST(:midX AS integer[]), CAST(:midY AS integer[])) AS t(x, y)
             ),
             -- The earliest a bus can reach a stop the timetable gives no time for is
             -- precomputed in trip_stop_context; see sql/planner_context.sql.
@@ -413,6 +436,8 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
     @QueryHints(@QueryHint(name = "jakarta.persistence.query.timeout", value = TIMEOUT_MS))
     List<ThreeLegRow> findThreeLegConnections(@Param("fromId") Integer fromId,
                                               @Param("toId") Integer toId,
+                                              @Param("midX") String midX,
+                                              @Param("midY") String midY,
                                               @Param("bufferMinutes") int bufferMinutes,
                                               @Param("maxResults") int maxResults);
 }
