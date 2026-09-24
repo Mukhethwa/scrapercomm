@@ -48,13 +48,21 @@ public class ConnectionService {
     private final ScheduleRepository schedules;
     private final int bufferMinutes;
     /**
-     * How many journeys to return, now that they are one per departure.
+     * How many journeys to return PER DAY TYPE.
      *
-     * Six was the right number when it meant six to show. It is the wrong number for a
-     * day's departures: the screen filters what it gets by the rider's own leave-time, so
-     * anything not sent is a journey they are told does not exist. Khayelitsha to
-     * Kraaifontein has ten departures, the busiest pairs on these lines have around thirty,
-     * and forty is a whole day with room to spare.
+     * The old comment here said forty was "a whole day with room to spare". It was not,
+     * and the sentence beside it explained exactly why that mattered: the screen filters
+     * what it gets by the rider's own leave-time, so anything not sent is a journey they
+     * are told does not exist.
+     *
+     * Measured on CAPE TOWN to KHAYELITSHA, journeys with a change: 60 weekday departures
+     * run from 03:35 to 19:13. Forty was also shared across day types, so 21 weekday
+     * departures came back and the latest was 09:25. Every rider searching that journey
+     * after about half past nine was told there was no way to make it.
+     *
+     * The cap is now applied within each day type (see ConnectionRepository), and it is
+     * 120 rather than 40 because a day is longer than forty departures on any pair worth
+     * asking about.
      */
     private final int maxResults;
 
@@ -63,7 +71,7 @@ public class ConnectionService {
                              TimetableRepository timetables,
                              ScheduleRepository schedules,
                              @Value("${commuttr.connections.transfer-buffer-minutes:10}") int bufferMinutes,
-                             @Value("${commuttr.connections.max-results:40}") int maxResults) {
+                             @Value("${commuttr.connections.max-results:120}") int maxResults) {
         this.stops = stops;
         this.connections = connections;
         this.timetables = timetables;

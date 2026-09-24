@@ -133,7 +133,25 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 ORDER BY sc.day_type, ssa.stop_id, sc.direction_label,
                          t1.departure_time, t2.raw_value, sc.id, tr.trip_index
             )
-            SELECT DISTINCT ON (COALESCE(l1.dep, l2.arr_time))
+            -- Ranked WITHIN each day type, and capped within it too.
+            --
+            -- This used to be one DISTINCT ON over the departure time alone, then LIMIT
+            -- :maxResults over the whole result. Both halves were wrong:
+            --
+            --   the key left out day_type, so a Saturday journey leaving at 07:15 was
+            --   deleted outright because a weekday journey also left at 07:15;
+            --
+            --   and the LIMIT sat after ORDER BY departure ASC, which makes it a cut at a
+            --   TIME OF DAY rather than a sample across it. Measured on CAPE TOWN to
+            --   KHAYELITSHA: 60 weekday departures run 03:35 to 19:13, and the query
+            --   returned 21 of them, none after 09:25. The forty were shared across day
+            --   types - 21 weekday, 14 Saturday, 5 public holiday. The app then hides
+            --   anything before now, so every rider searching after about 09:40 was told
+            --   the journey does not exist.
+            SELECT r.* FROM (
+                SELECT q.*, row_number() OVER (PARTITION BY q."dayType" ORDER BY q.ord) AS rn
+                FROM (
+            SELECT DISTINCT ON (l1.day_type, COALESCE(l1.dep, l2.arr_time))
                    l1.day_type          AS "dayType",
                    x.id                 AS "changeId",
                    x.name               AS "changeName",
@@ -157,6 +175,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                    CAST(EXTRACT(EPOCH FROM (l2.dep - l1.arr)) / 60 AS integer) AS "waitMinutes",
                    CAST(EXTRACT(EPOCH FROM (COALESCE(l2.arr_time, l2.dep) - l1.dep)) / 60
                         AS integer) AS "totalMinutes"
+                   , COALESCE(l1.dep, l2.arr_time) AS ord
             FROM leg1 l1
             JOIN leg2 l2 ON l2.x = l1.x AND l2.day_type = l1.day_type
                         AND l2.dep >= l1.arr + (:bufferMinutes * interval '1 minute')
@@ -196,9 +215,12 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             -- No apostrophes in here. Spring scans the whole string for quoted ranges
             -- without stripping SQL comments, so one in a comment opens a quote that
             -- never closes and the repository fails to start.
-            ORDER BY COALESCE(l1.dep, l2.arr_time), "totalMinutes" NULLS LAST,
+            ORDER BY l1.day_type, COALESCE(l1.dep, l2.arr_time), "totalMinutes" NULLS LAST,
                      "waitMinutes", l1.arr
-            LIMIT :maxResults
+                ) q
+            ) r
+            WHERE r.rn <= :maxResults
+            ORDER BY r.ord
             """, nativeQuery = true)
     /**
      * Give up after {@value #TIMEOUT_MS}ms rather than run for as long as it takes.
@@ -363,7 +385,25 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                 ORDER BY sc.day_type, ssa.stop_id, sc.direction_label,
                          t1.departure_time, t2.raw_value, sc.id, tr.trip_index
             )
-            SELECT DISTINCT ON (COALESCE(l1.dep, l3.arr_time))
+            -- Ranked WITHIN each day type, and capped within it too.
+            --
+            -- This used to be one DISTINCT ON over the departure time alone, then LIMIT
+            -- :maxResults over the whole result. Both halves were wrong:
+            --
+            --   the key left out day_type, so a Saturday journey leaving at 07:15 was
+            --   deleted outright because a weekday journey also left at 07:15;
+            --
+            --   and the LIMIT sat after ORDER BY departure ASC, which makes it a cut at a
+            --   TIME OF DAY rather than a sample across it. Measured on CAPE TOWN to
+            --   KHAYELITSHA: 60 weekday departures run 03:35 to 19:13, and the query
+            --   returned 21 of them, none after 09:25. The forty were shared across day
+            --   types - 21 weekday, 14 Saturday, 5 public holiday. The app then hides
+            --   anything before now, so every rider searching after about 09:40 was told
+            --   the journey does not exist.
+            SELECT r.* FROM (
+                SELECT q.*, row_number() OVER (PARTITION BY q."dayType" ORDER BY q.ord) AS rn
+                FROM (
+            SELECT DISTINCT ON (l1.day_type, COALESCE(l1.dep, l3.arr_time))
                    l1.day_type   AS "dayType",
                    x1.id         AS "changeId",
                    x1.name       AS "changeName",
@@ -398,6 +438,7 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
                         AS integer) AS "waitMinutes",
                    CAST(EXTRACT(EPOCH FROM (COALESCE(l3.arr_time, l3.dep) - l1.dep)) / 60
                         AS integer) AS "totalMinutes"
+                   , COALESCE(l1.dep, l3.arr_time) AS ord
             FROM leg1 l1
             JOIN leg2 l2 ON l2.x = l1.x AND l2.day_type = l1.day_type
                         AND l2.dep >= l1.arr + (:bufferMinutes * interval '1 minute')
@@ -418,9 +459,12 @@ public interface ConnectionRepository extends JpaRepository<Stop, Integer> {
             -- One option per departure, and the whole day of them: see the two-leg query.
             -- A three-leg journey has even more ways to make the same departure, so
             -- ranking them all together and keeping a handful covered the day even less.
-            ORDER BY COALESCE(l1.dep, l3.arr_time), "totalMinutes" NULLS LAST,
+            ORDER BY l1.day_type, COALESCE(l1.dep, l3.arr_time), "totalMinutes" NULLS LAST,
                      "waitMinutes", l1.arr
-            LIMIT :maxResults
+                ) q
+            ) r
+            WHERE r.rn <= :maxResults
+            ORDER BY r.ord
             """, nativeQuery = true)
     /**
      * Give up after {@value #TIMEOUT_MS}ms rather than run for as long as it takes.
